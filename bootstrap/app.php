@@ -17,5 +17,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->reportable(static function (\Throwable $exception): void {
+            if (env('RENDER')) {
+                error_log((string) $exception);
+            }
+        });
     })->create();
