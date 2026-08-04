@@ -10,6 +10,7 @@ use App\Models\SchoolLevel;
 use App\Models\Section;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -25,14 +26,22 @@ class AcademicController extends Controller
 
     public function storeYear(Request $request): RedirectResponse
     {
-        AcademicYear::create($this->yearData($request) + ['created_by' => $request->user()->id]);
+        $data = $this->yearData($request);
+        DB::transaction(function () use ($data, $request): void {
+            $this->closeOtherOpenYears($data['status']);
+            AcademicYear::create($data + ['created_by' => $request->user()->id]);
+        });
 
         return back()->with('success', 'Academic year created.');
     }
 
     public function updateYear(Request $request, AcademicYear $academicYear): RedirectResponse
     {
-        $academicYear->update($this->yearData($request, $academicYear));
+        $data = $this->yearData($request, $academicYear);
+        DB::transaction(function () use ($data, $academicYear): void {
+            $this->closeOtherOpenYears($data['status'], $academicYear);
+            $academicYear->update($data);
+        });
 
         return back()->with('success', 'Academic year updated.');
     }
@@ -87,6 +96,18 @@ class AcademicController extends Controller
             'ends_on' => ['required', 'date', 'after:starts_on'],
             'status' => ['required', 'in:draft,open,closed'],
         ]);
+    }
+
+    private function closeOtherOpenYears(string $status, ?AcademicYear $except = null): void
+    {
+        if ($status !== 'open') {
+            return;
+        }
+
+        AcademicYear::query()
+            ->where('status', 'open')
+            ->when($except, fn ($query) => $query->where('id', '!=', $except->getKey()))
+            ->update(['status' => 'closed']);
     }
 
     private function levelData(Request $request, ?SchoolLevel $schoolLevel = null): array

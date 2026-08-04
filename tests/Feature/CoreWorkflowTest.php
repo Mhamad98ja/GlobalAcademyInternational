@@ -198,6 +198,34 @@ class CoreWorkflowTest extends TestCase
             ->assertSee('Edit section');
     }
 
+    public function test_dashboard_uses_the_open_academic_year_without_a_manual_selector(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+
+        $this->actingAs($user)->get(route('dashboard', ['academic_year_id' => 999999]))
+            ->assertOk()
+            ->assertSee('Active academic year:')
+            ->assertSee($registration->academicYear->name)
+            ->assertDontSee('All academic years');
+    }
+
+    public function test_opening_a_new_academic_year_closes_the_previous_open_year(): void
+    {
+        $user = $this->administrator();
+        $currentYear = AcademicYear::create(['name' => '2026-2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'open', 'created_by' => $user->id]);
+
+        $this->actingAs($user)->post(route('academic.years.store'), [
+            'name' => '2027-2028',
+            'starts_on' => '2027-09-01',
+            'ends_on' => '2028-06-30',
+            'status' => 'open',
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('academic_years', ['id' => $currentYear->id, 'status' => 'closed']);
+        $this->assertDatabaseHas('academic_years', ['name' => '2027-2028', 'status' => 'open']);
+    }
+
     public function test_disabled_account_cannot_sign_in(): void
     {
         $user=User::factory()->create(['email'=>'disabled@example.test','password'=>'password','is_active'=>false]);
