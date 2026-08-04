@@ -24,6 +24,7 @@ COPY database ./database
 COPY public ./public
 COPY resources ./resources
 COPY routes ./routes
+COPY storage ./storage
 COPY artisan ./artisan
 RUN composer dump-autoload --no-dev --optimize
 
