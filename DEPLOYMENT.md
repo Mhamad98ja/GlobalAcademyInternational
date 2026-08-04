@@ -7,7 +7,7 @@ This project is prepared for a Render Blueprint deployment. It creates a free `o
 1. Push the latest `main` branch to GitHub.
 2. Create a free [Render](https://render.com) account with GitHub.
 3. In Render, choose **New > Blueprint**, select `Mhamad98ja/SBM`, and create the Blueprint.
-4. When prompted, enter `APP_URL` as the generated `https://...onrender.com` address, and provide the admin name, email, and a strong password.
+4. When prompted, provide the administrator name, email, and a strong password. The test address will be `https://sbm-mhamad98ja.onrender.com`.
 5. Wait for the build to complete, then open the service URL and sign in with the account entered in step 4.
 
 The initial database contains only roles/permissions, one administrator, academic years 2026-2027 and 2027-2028, Preschool/KG1/KG2, GR1-GR12, and sections A-D. It does not include demo students, books, suppliers, or transactions.
