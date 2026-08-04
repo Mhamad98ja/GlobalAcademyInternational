@@ -54,7 +54,11 @@ erDiagram
    php artisan serve
    ```
 
-3. Sign in with `admin@school.test` and the development seed password `ChangeMe123!`, then change it immediately. Set `SBM_ADMIN_EMAIL` and `SBM_ADMIN_PASSWORD` before production seeding instead of using the demo values.
+3. Sign in with `admin@school.test` and the development seed password `Password123@`, then change it immediately. Set `SBM_ADMIN_EMAIL` and `SBM_ADMIN_PASSWORD` before production seeding instead of using the demo values.
+
+## Fresh Render test deployment
+
+Create a new web service and PostgreSQL database together with the [Deploy to Render](https://render.com/deploy?repo=https://github.com/Mhamad98ja/SBM) link. Detailed setup is in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Critical workflows
 

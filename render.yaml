@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sbm-vl24
+    name: sbm-school-book-test
     runtime: docker
     plan: free
     healthCheckPath: /health
@@ -13,17 +13,15 @@ services:
         generateValue: true
       - key: SBM_APP_KEY
         generateValue: true
-      - key: APP_URL
-        value: https://sbm-vl24.onrender.com
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_URL
         fromDatabase:
-          name: sbm-mhamad98ja-db
+          name: sbm-school-book-test-db
           property: connectionString
       - key: DATABASE_URL
         fromDatabase:
-          name: sbm-mhamad98ja-db
+          name: sbm-school-book-test-db
           property: connectionString
       - key: DB_SSLMODE
         value: prefer
@@ -47,7 +45,7 @@ services:
         sync: false
 
 databases:
-  - name: sbm-mhamad98ja-db
+  - name: sbm-school-book-test-db
     plan: free
     databaseName: sbm
     user: sbm

@@ -19,6 +19,12 @@ elif [ "${APP_ENV:-production}" = "production" ]; then
     exit 1
 fi
 
+# A fresh Render service receives its public URL at runtime. This avoids
+# storing the URL of an old deployment in the Blueprint configuration.
+if [ -z "${APP_URL:-}" ] && [ -n "${RENDER_EXTERNAL_URL:-}" ]; then
+    export APP_URL="${RENDER_EXTERNAL_URL}"
+fi
+
 # Render's generated secrets are Base64 values. Laravel expects its encryption
 # key to be prefixed with "base64:" so that it is decoded to 32 bytes. The
 # fallback keeps the application bootable while a Blueprint sync is pending.
