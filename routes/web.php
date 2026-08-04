@@ -11,6 +11,7 @@ use App\Http\Controllers\DeferredApprovalsController;
 use App\Http\Controllers\DistributionController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InvoicesController;
+use App\Http\Controllers\OperationsController;
 use App\Http\Controllers\PaymentsController;
 use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\PurchasesController;
@@ -27,6 +28,7 @@ Route::post('/logout',[AuthController::class,'destroy'])->middleware('auth')->na
 
 Route::middleware(['auth'])->group(function (): void {
  Route::get('/dashboard',DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
+ Route::get('/operations',[OperationsController::class,'index'])->middleware('permission:dashboard.view')->name('operations.index');
  Route::middleware('permission:class-lists.manage')->group(function():void{Route::get('/class-book-lists/{classBookList}/edit',[ClassBookListsController::class,'edit'])->name('class-lists.edit');Route::put('/class-book-lists/{classBookList}',[ClassBookListsController::class,'update'])->name('class-lists.update');});
  Route::middleware('permission:reports.view')->group(function():void{Route::get('/reports/print',[ReportsController::class,'print'])->name('reports.print');});
  Route::middleware('permission:admin.manage')->group(function():void{Route::get('/admin/users/{user}/edit',[AdministrationController::class,'editUser'])->name('admin.users.edit');Route::put('/admin/users/{user}',[AdministrationController::class,'updateUser'])->name('admin.users.update');});

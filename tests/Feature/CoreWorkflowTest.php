@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Models\AcademicYear;
 use App\Models\Book;
+use App\Models\BookReturn;
 use App\Models\ClassBookList;
 use App\Models\Grade;
 use App\Models\Invoice;
@@ -16,6 +17,7 @@ use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentRegistration;
 use App\Models\Supplier;
+use App\Models\SupplierPurchase;
 use App\Models\User;
 use App\Services\BookDistributionService;
 use App\Services\InventoryService;
@@ -207,7 +209,10 @@ class CoreWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Active academic year:')
             ->assertSee($registration->academicYear->name)
-            ->assertDontSee('All academic years');
+            ->assertDontSee('All academic years')
+            ->assertDontSee('href="'.route('purchases.index').'"', false)
+            ->assertDontSee('href="'.route('invoices.index').'"', false)
+            ->assertDontSee('href="'.route('returns.index').'"', false);
     }
 
     public function test_opening_a_new_academic_year_closes_the_previous_open_year(): void
@@ -224,6 +229,35 @@ class CoreWorkflowTest extends TestCase
 
         $this->assertDatabaseHas('academic_years', ['id' => $currentYear->id, 'status' => 'closed']);
         $this->assertDatabaseHas('academic_years', ['name' => '2027-2028', 'status' => 'open']);
+    }
+
+    public function test_operations_center_combines_purchases_invoices_and_returns_without_changing_their_workflows(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $supplier = Supplier::create(['code' => 'SUP-OPS', 'name' => 'Operations Press', 'is_active' => true]);
+        SupplierPurchase::create([
+            'purchase_number' => 'PUR-OPS-001', 'supplier_id' => $supplier->id, 'academic_year_id' => $registration->academic_year_id,
+            'purchase_date' => '2026-09-01', 'subtotal' => '100.00', 'discount_total' => '0.00', 'tax_total' => '0.00', 'total' => '100.00',
+            'amount_paid' => '20.00', 'payment_status' => 'partially_paid', 'status' => 'received', 'created_by' => $user->id,
+        ]);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-OPS-001', 'student_id' => $registration->student_id, 'student_registration_id' => $registration->id,
+            'academic_year_id' => $registration->academic_year_id, 'grade_id' => $registration->grade_id, 'section_id' => $registration->section_id,
+            'invoice_date' => '2026-09-02', 'subtotal' => '30.00', 'total' => '30.00', 'balance_due' => '30.00', 'created_by' => $user->id,
+        ]);
+        BookReturn::create(['student_id' => $registration->student_id, 'invoice_id' => $invoice->id, 'returned_on' => '2026-09-03', 'refund_total' => '5.00', 'status' => 'accepted', 'accepted_by' => $user->id]);
+
+        $this->actingAs($user)->get(route('operations.index'))
+            ->assertOk()
+            ->assertSee('Operations Center')
+            ->assertSee('PUR-OPS-001')
+            ->assertSee('INV-OPS-001')
+            ->assertSee('Book return');
+        $this->actingAs($user)->get(route('operations.index', ['type' => 'purchase', 'search' => 'PUR-OPS-001']))
+            ->assertOk()
+            ->assertSee('PUR-OPS-001')
+            ->assertDontSee('INV-OPS-001');
     }
 
     public function test_disabled_account_cannot_sign_in(): void
