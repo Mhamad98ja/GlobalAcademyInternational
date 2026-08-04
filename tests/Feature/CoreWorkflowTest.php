@@ -455,4 +455,20 @@ class CoreWorkflowTest extends TestCase
 
         $this->assertDatabaseHas('users', ['id' => $administrator->id, 'deleted_at' => null]);
     }
+
+    public function test_database_seeder_creates_only_administration_and_academic_structure(): void
+    {
+        $this->seed();
+
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseHas('users', ['email' => 'admin@school.test', 'is_active' => true]);
+        $this->assertDatabaseCount('academic_years', 2);
+        $this->assertDatabaseCount('school_levels', 2);
+        $this->assertDatabaseCount('grades', 14);
+        $this->assertDatabaseCount('sections', 56);
+        $this->assertDatabaseCount('students', 0);
+        $this->assertDatabaseCount('books', 0);
+        $this->assertDatabaseCount('suppliers', 0);
+        $this->assertDatabaseCount('invoices', 0);
+    }
 }

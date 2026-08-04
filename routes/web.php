@@ -24,6 +24,7 @@ use App\Http\Controllers\SupplierReturnsController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
+Route::get('/health', static fn () => response()->json(['status' => 'ok']))->name('health');
 Route::middleware('guest')->group(function (): void { Route::get('/login',[AuthController::class,'create'])->name('login');Route::post('/login',[AuthController::class,'store'])->name('login.store');Route::get('/forgot-password',[AuthController::class,'forgot'])->name('password.request');Route::post('/forgot-password',[AuthController::class,'sendReset'])->middleware('throttle:5,15')->name('password.email');Route::get('/reset-password/whatsapp',[AuthController::class,'whatsappResetForm'])->name('password.whatsapp');Route::post('/reset-password/whatsapp',[AuthController::class,'whatsappReset'])->middleware('throttle:5,15')->name('password.whatsapp.update');Route::get('/reset-password/{token}',[AuthController::class,'resetForm'])->name('password.reset');Route::post('/reset-password',[AuthController::class,'reset'])->name('password.update'); });
 Route::post('/logout',[AuthController::class,'destroy'])->middleware('auth')->name('logout');
 
