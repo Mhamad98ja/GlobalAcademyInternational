@@ -19,10 +19,12 @@ elif [ "${APP_ENV:-production}" = "production" ]; then
     exit 1
 fi
 
-# A fresh Render service receives its public URL at runtime. This avoids
-# storing the URL of an old deployment in the Blueprint configuration.
-if [ -z "${APP_URL:-}" ] && [ -n "${RENDER_EXTERNAL_URL:-}" ]; then
+# Render provides its canonical HTTPS URL at runtime. Always prefer it over
+# an inherited APP_URL so Vite assets and form actions never downgrade to HTTP.
+if [ -n "${RENDER_EXTERNAL_URL:-}" ]; then
     export APP_URL="${RENDER_EXTERNAL_URL}"
+elif [ "${RENDER:-}" = "true" ] && [ -n "${APP_URL:-}" ]; then
+    export APP_URL="$(printf '%s' "${APP_URL}" | sed 's|^http://|https://|')"
 fi
 
 # Render's generated secrets are Base64 values. Laravel expects its encryption
