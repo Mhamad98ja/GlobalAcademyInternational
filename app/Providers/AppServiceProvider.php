@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\User;
 use App\Policies\InvoicePolicy;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -23,6 +24,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Render terminates TLS before forwarding requests to the container.
+        // Force generated Vite assets, form actions, and links to HTTPS so
+        // browsers do not block them as mixed content.
+        if (env('RENDER', false)) {
+            URL::forceScheme('https');
+        }
+
         Gate::before(fn (User $user): ?bool => $user->hasRole('super-administrator') ? true : null);
         Gate::policy(Invoice::class, InvoicePolicy::class);
     }

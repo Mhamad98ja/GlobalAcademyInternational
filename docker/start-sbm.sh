@@ -22,7 +22,7 @@ fi
 # Render provides its canonical HTTPS URL at runtime. Always prefer it over
 # an inherited APP_URL so Vite assets and form actions never downgrade to HTTP.
 if [ -n "${RENDER_EXTERNAL_URL:-}" ]; then
-    export APP_URL="${RENDER_EXTERNAL_URL}"
+    export APP_URL="$(printf '%s' "${RENDER_EXTERNAL_URL}" | sed 's|^http://|https://|')"
 elif [ "${RENDER:-}" = "true" ] && [ -n "${APP_URL:-}" ]; then
     export APP_URL="$(printf '%s' "${APP_URL}" | sed 's|^http://|https://|')"
 fi
