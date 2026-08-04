@@ -11,8 +11,10 @@ services:
         value: "false"
       - key: APP_KEY
         generateValue: true
+      - key: SBM_APP_KEY
+        generateValue: true
       - key: APP_URL
-        value: https://sbm-mhamad98ja.onrender.com
+        value: https://sbm-vl24.onrender.com
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_URL
