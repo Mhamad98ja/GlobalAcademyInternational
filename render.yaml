@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sbm-mhamad98ja
+    name: sbm-vl24
     runtime: docker
     plan: free
     healthCheckPath: /health

@@ -14,6 +14,9 @@ fi
 
 if [ -n "${DB_URL:-}" ]; then
     export DB_CONNECTION="pgsql"
+elif [ "${APP_ENV:-production}" = "production" ]; then
+    echo "ERROR: No Render PostgreSQL connection was supplied. Set DB_URL or DATABASE_URL from the Render database connection string." >&2
+    exit 1
 fi
 
 # Render's generated secrets are Base64 values. Laravel expects its encryption
