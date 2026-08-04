@@ -58,7 +58,7 @@ erDiagram
 
 ## Fresh Render test deployment
 
-Create a new web service and PostgreSQL database together with the [Deploy to Render](https://render.com/deploy?repo=https://github.com/Mhamad98ja/SBM) link. Detailed setup is in [DEPLOYMENT.md](DEPLOYMENT.md).
+Create a new web service and PostgreSQL database together with the [Deploy to Render](https://render.com/deploy?repo=https://github.com/Mhamad98ja/SBM) link. Because this is a private repository, first grant Render access through its [GitHub App](https://github.com/apps/render/installations/new). Detailed setup is in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Critical workflows
 

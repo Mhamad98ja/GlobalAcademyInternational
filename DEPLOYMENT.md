@@ -5,13 +5,14 @@ This project is prepared for a clean Render Blueprint deployment. It creates a n
 ## Deploy
 
 1. Create a free [Render](https://render.com) account with GitHub.
-2. Open the deployment link below and connect the `Mhamad98ja/SBM` repository:
+2. Because this repository is private, install the [Render GitHub App](https://github.com/apps/render/installations/new) and grant it access to `Mhamad98ja/SBM`.
+3. Open the deployment link below:
 
    [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Mhamad98ja/SBM)
 
-3. Select **Create all as new services**. Render will create `sbm-school-book-test` and its `sbm-school-book-test-db` PostgreSQL database together.
-4. Provide the requested administrator name, email, and password. Use `Password123@` only for testing; choose a stronger password for a real school.
-5. Wait for the build to complete, open the generated service URL, and sign in with that administrator account.
+4. Select **Create all as new services**. Render will create `sbm-school-book-test` and its `sbm-school-book-test-db` PostgreSQL database together.
+5. Provide the requested administrator name, email, and password. Use `Password123@` only for testing; choose a stronger password for a real school.
+6. Wait for the build to complete, open the generated service URL, and sign in with that administrator account.
 
 Do not associate the old `sbm-vl24` service with this new Blueprint. It has no database connection.
 
