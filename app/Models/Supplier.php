@@ -41,6 +41,7 @@ class Supplier extends Model
     {
         $purchaseTotal = $this->getAttribute('purchases_total_sum');
         $amountPaid = $this->getAttribute('purchases_paid_sum');
+        $returnCredit = $this->getAttribute('supplier_returns_credit_total_sum');
 
         if ($purchaseTotal === null) {
             $purchaseTotal = $this->purchases()->sum('total');
@@ -50,8 +51,13 @@ class Supplier extends Model
             $amountPaid = $this->purchases()->sum('amount_paid');
         }
 
+        if ($returnCredit === null) {
+            $returnCredit = $this->supplierReturns()->sum('credit_total');
+        }
+
         $balance = Money::cents((string) $this->opening_balance)
             + Money::cents((string) $purchaseTotal)
+            - Money::cents((string) $returnCredit)
             - Money::cents((string) $amountPaid);
 
         return Money::decimal(max(0, $balance));
@@ -60,5 +66,10 @@ class Supplier extends Model
     public function purchases(): HasMany
     {
         return $this->hasMany(SupplierPurchase::class);
+    }
+
+    public function supplierReturns(): HasMany
+    {
+        return $this->hasMany(SupplierReturn::class);
     }
 }

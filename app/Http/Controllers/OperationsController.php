@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\BookReturn;
 use App\Models\Invoice;
 use App\Models\SupplierPurchase;
+use App\Models\SupplierReturn;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
@@ -21,12 +22,14 @@ class OperationsController extends Controller
         $canViewPurchases = $user->hasPermission('purchases.manage');
         $canViewInvoices = $user->hasPermission('invoices.view');
         $canViewReturns = $user->hasPermission('returns.manage');
+        $canViewSupplierReturns = $canViewPurchases;
         $records = collect();
 
         if ($canViewPurchases && in_array($type, ['', 'purchase'], true)) {
             $records = $records->merge(
                 SupplierPurchase::query()
                     ->with('supplier')
+                    ->withSum('supplierReturns as supplier_returns_credit_total_sum', 'credit_total')
                     ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
                         $query->where('purchase_number', 'like', '%'.$search.'%')
                             ->orWhere('supplier_invoice_number', 'like', '%'.$search.'%')
@@ -46,6 +49,33 @@ class OperationsController extends Controller
                         'balance' => $purchase->balance_due,
                         'status' => $purchase->payment_status,
                         'href' => route('purchases.show', $purchase),
+                    ])
+            );
+        }
+
+        if ($canViewSupplierReturns && in_array($type, ['', 'supplier_return'], true)) {
+            $records = $records->merge(
+                SupplierReturn::query()
+                    ->with('supplier', 'purchase')
+                    ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
+                        $query->where('reference_number', 'like', '%'.$search.'%')
+                            ->orWhereHas('purchase', fn ($purchase) => $purchase->where('purchase_number', 'like', '%'.$search.'%'))
+                            ->orWhereHas('supplier', fn ($supplier) => $supplier->where('name', 'like', '%'.$search.'%'));
+                    }))
+                    ->latest('returned_on')
+                    ->take(100)
+                    ->get()
+                    ->map(fn (SupplierReturn $return) => [
+                        'type' => 'supplier_return',
+                        'type_label' => 'Supplier return',
+                        'reference' => $return->reference_number ?: 'Supplier return #'.$return->id,
+                        'detail' => 'For purchase '.$return->purchase->purchase_number,
+                        'party' => $return->supplier->name,
+                        'date' => $return->returned_on,
+                        'total' => $return->credit_total,
+                        'balance' => null,
+                        'status' => $return->status,
+                        'href' => route('supplier-returns.show', $return),
                     ])
             );
         }
@@ -112,6 +142,6 @@ class OperationsController extends Controller
             ['path' => $request->url(), 'query' => $request->query()]
         );
 
-        return view('operations.index', compact('transactions', 'type', 'search', 'canViewPurchases', 'canViewInvoices', 'canViewReturns'));
+        return view('operations.index', compact('transactions', 'type', 'search', 'canViewPurchases', 'canViewInvoices', 'canViewReturns', 'canViewSupplierReturns'));
     }
 }

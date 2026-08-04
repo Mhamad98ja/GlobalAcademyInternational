@@ -1,5 +1,71 @@
 import './bootstrap';
 
+const appShell = document.querySelector('[data-app-shell]');
+const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+const sidebarBackdrop = document.querySelector('[data-sidebar-backdrop]');
+const desktopSidebar = window.matchMedia('(min-width: 1024px)');
+
+if (appShell && sidebarToggle) {
+    const savedCollapsedState = () => {
+        try {
+            return localStorage.getItem('sbm.sidebar.collapsed') === 'true';
+        } catch {
+            return false;
+        }
+    };
+
+    const updateToggleState = () => {
+        const expanded = desktopSidebar.matches
+            ? !appShell.classList.contains('sidebar-collapsed')
+            : appShell.classList.contains('sidebar-open');
+        sidebarToggle.setAttribute('aria-expanded', String(expanded));
+    };
+
+    const setMobileMenu = (isOpen) => {
+        appShell.classList.toggle('sidebar-open', isOpen);
+        updateToggleState();
+    };
+
+    const setDesktopCollapsed = (isCollapsed) => {
+        appShell.classList.toggle('sidebar-collapsed', isCollapsed);
+        try {
+            localStorage.setItem('sbm.sidebar.collapsed', String(isCollapsed));
+        } catch {
+            // The navigation still works when browser storage is unavailable.
+        }
+        updateToggleState();
+    };
+
+    const syncSidebarMode = () => {
+        if (desktopSidebar.matches) {
+            appShell.classList.remove('sidebar-open');
+            appShell.classList.toggle('sidebar-collapsed', savedCollapsedState());
+        } else {
+            appShell.classList.remove('sidebar-collapsed', 'sidebar-open');
+        }
+        updateToggleState();
+    };
+
+    sidebarToggle.addEventListener('click', () => {
+        if (desktopSidebar.matches) {
+            setDesktopCollapsed(!appShell.classList.contains('sidebar-collapsed'));
+        } else {
+            setMobileMenu(!appShell.classList.contains('sidebar-open'));
+        }
+    });
+
+    sidebarBackdrop?.addEventListener('click', () => setMobileMenu(false));
+    document.querySelectorAll('[data-sidebar-close]').forEach((button) => button.addEventListener('click', () => setMobileMenu(false)));
+    document.querySelectorAll('#primary-sidebar a').forEach((link) => link.addEventListener('click', () => {
+        if (!desktopSidebar.matches) setMobileMenu(false);
+    }));
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !desktopSidebar.matches) setMobileMenu(false);
+    });
+    desktopSidebar.addEventListener('change', syncSidebarMode);
+    syncSidebarMode();
+}
+
 document.addEventListener('click', (event) => {
     const button = event.target.closest('[data-add-row]');
     if (!button) return;

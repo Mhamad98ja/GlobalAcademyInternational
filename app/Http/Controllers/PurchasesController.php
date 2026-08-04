@@ -19,7 +19,7 @@ class PurchasesController extends Controller
     public function index(): View
     {
         return view('purchases.index', [
-            'purchases' => SupplierPurchase::with('supplier')->latest('purchase_date')->paginate(15),
+            'purchases' => SupplierPurchase::with('supplier')->withSum('supplierReturns as supplier_returns_credit_total_sum', 'credit_total')->latest('purchase_date')->paginate(15),
         ]);
     }
 
@@ -55,7 +55,7 @@ class PurchasesController extends Controller
 
     public function show(SupplierPurchase $purchase): View
     {
-        $purchase->load('supplier', 'items.book', 'payments.receivedBy');
+        $purchase->load('supplier', 'items.book', 'items.supplierReturnItems', 'payments.receivedBy', 'supplierReturns.items.book');
 
         return view('purchases.show', compact('purchase'));
     }

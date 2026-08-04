@@ -17,11 +17,9 @@ use Illuminate\View\View;
 
 class ClassBookListsController extends Controller
 {
-    public function index(): View
+    public function index(): RedirectResponse
     {
-        return view('class-lists.index', [
-            'lists' => ClassBookList::with('academicYear', 'grade', 'section', 'items.book')->latest()->paginate(15),
-        ]);
+        return redirect()->route('books.index', ['tab' => 'packages']);
     }
 
     public function create(): View

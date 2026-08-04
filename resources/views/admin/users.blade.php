@@ -72,6 +72,13 @@
                                         @csrf
                                         <button class="link text-xs">{{ $user->is_active ? 'Disable' : 'Enable' }}</button>
                                     </form>
+                                    <form class="inline" method="POST" action="{{ route('admin.users.destroy', $user) }}" onsubmit="return confirm('Delete {{ addslashes($user->name) }}? This account can be restored from the recycle bin.');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="text-xs font-medium text-rose-700 hover:text-rose-900 hover:underline">Delete</button>
+                                    </form>
+                                @else
+                                    <span class="text-xs text-slate-400">Current user</span>
                                 @endif
                             </td>
                         </tr>

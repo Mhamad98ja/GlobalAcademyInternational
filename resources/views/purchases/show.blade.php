@@ -8,12 +8,16 @@
         <h1 class="page-title mt-1">{{ $purchase->purchase_number }}</h1>
         <p class="page-subtitle">{{ $purchase->supplier->name }} &middot; {{ $purchase->purchase_date->format('d M Y') }}@if ($purchase->supplier_invoice_number) &middot; Invoice {{ $purchase->supplier_invoice_number }}@endif</p>
     </div>
-    <span class="badge badge-blue">{{ str($purchase->status)->headline() }}</span>
+    <div class="flex flex-wrap items-center gap-2">
+        <a class="btn btn-secondary" href="{{ route('supplier-returns.create', $purchase) }}">Return books to supplier</a>
+        <span class="badge badge-blue">{{ str($purchase->status)->headline() }}</span>
+    </div>
 </div>
 
-<div class="grid gap-4 sm:grid-cols-3">
+<div class="grid gap-4 sm:grid-cols-4">
     <div class="stat"><div class="stat-label">Supplier invoice total</div><div class="stat-value">{{ number_format((float) $purchase->total, 2) }}</div></div>
     <div class="stat"><div class="stat-label">Paid to supplier</div><div class="stat-value text-emerald-700">{{ number_format((float) $purchase->amount_paid, 2) }}</div></div>
+    <div class="stat"><div class="stat-label">Supplier return credit</div><div class="stat-value text-emerald-700">{{ number_format((float) $purchase->return_credit_total, 2) }}</div></div>
     <div class="stat"><div class="stat-label">Remaining balance</div><div class="stat-value {{ $purchase->balance_due > 0 ? 'text-amber-700' : 'text-emerald-700' }}">{{ number_format((float) $purchase->balance_due, 2) }}</div></div>
 </div>
 
@@ -46,6 +50,28 @@
                         <td>{{ number_format((float) $item->line_total, 2) }}</td>
                     </tr>
                 @endforeach
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel mt-6">
+    <div class="panel-header"><h2 class="panel-title">Supplier return history</h2></div>
+    <div class="table-wrap">
+        <table class="data-table min-w-[620px]">
+            <thead><tr><th>Date</th><th>Reference</th><th>Credit</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                @forelse ($purchase->supplierReturns as $supplierReturn)
+                    <tr>
+                        <td>{{ $supplierReturn->returned_on->format('d M Y') }}</td>
+                        <td>{{ $supplierReturn->reference_number ?: 'Supplier return #'.$supplierReturn->id }}</td>
+                        <td class="text-emerald-700">{{ number_format((float) $supplierReturn->credit_total, 2) }}</td>
+                        <td><span class="badge badge-green">{{ str($supplierReturn->status)->headline() }}</span></td>
+                        <td><a class="link text-xs" href="{{ route('supplier-returns.show', $supplierReturn) }}">Open</a></td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5" class="empty">No books have been returned to this supplier.</td></tr>
+                @endforelse
             </tbody>
         </table>
     </div>

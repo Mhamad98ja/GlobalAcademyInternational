@@ -10,6 +10,7 @@ use App\Models\BookReturn;
 use App\Models\ClassBookList;
 use App\Models\Grade;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SchoolLevel;
@@ -18,12 +19,15 @@ use App\Models\Student;
 use App\Models\StudentRegistration;
 use App\Models\Supplier;
 use App\Models\SupplierPurchase;
+use App\Models\SupplierReturn;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\BookDistributionService;
 use App\Services\InventoryService;
 use App\Services\PaymentService;
 use App\Services\SupplierPaymentService;
 use App\Services\SupplierPurchaseService;
+use App\Services\SupplierReturnService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -132,6 +136,62 @@ class CoreWorkflowTest extends TestCase
         ], $user);
     }
 
+    public function test_supplier_return_reduces_stock_and_the_purchase_balance(): void
+    {
+        $user = $this->administrator();
+        $supplier = Supplier::create(['code' => 'SUP-RETURN', 'name' => 'Returnable Books', 'is_active' => true]);
+        $book = Book::create(['sku' => 'B-RETURN', 'barcode' => '978000030', 'title' => 'Returned title', 'selling_price' => '15.00', 'minimum_stock' => 1]);
+        $purchase = app(SupplierPurchaseService::class)->create([
+            'supplier_id' => $supplier->id,
+            'purchase_date' => '2026-09-01',
+            'items' => [[
+                'book_id' => $book->id,
+                'quantity_ordered' => 5,
+                'unit_purchase_price' => '10.00',
+                'discount_percentage' => '0',
+                'tax_rate' => '0',
+            ]],
+        ], $user);
+        $purchaseItem = $purchase->items()->firstOrFail();
+
+        $this->actingAs($user)->get(route('supplier-returns.create', $purchase))
+            ->assertOk()
+            ->assertSee('Return books to supplier')
+            ->assertSee('Available to return');
+
+        $return = app(SupplierReturnService::class)->create($purchase, [[
+            'supplier_purchase_item_id' => $purchaseItem->id,
+            'quantity' => 2,
+            'reason' => 'Wrong edition',
+        ]], [
+            'returned_on' => '2026-09-02',
+            'reference_number' => 'CN-101',
+        ], $user);
+
+        $this->assertDatabaseHas('supplier_returns', ['id' => $return->id, 'credit_total' => '20.00', 'reference_number' => 'CN-101']);
+        $this->assertDatabaseHas('supplier_return_items', ['supplier_return_id' => $return->id, 'book_id' => $book->id, 'quantity' => 2, 'credit_total' => '20.00']);
+        $this->assertDatabaseHas('books', ['id' => $book->id, 'stock_on_hand' => 3]);
+        $this->assertDatabaseHas('stock_movements', ['book_id' => $book->id, 'type' => 'supplier_return', 'quantity_change' => -2]);
+        $this->assertSame('20.00', $purchase->fresh()->return_credit_total);
+        $this->assertSame('30.00', $purchase->fresh()->balance_due);
+        $this->assertSame('30.00', $supplier->fresh()->account_balance);
+        $this->actingAs($user)->get(route('suppliers.show', $supplier))
+            ->assertOk()
+            ->assertSee('Return credits')
+            ->assertSee('20.00');
+        $this->actingAs($user)->get(route('purchases.show', $purchase))
+            ->assertOk()
+            ->assertSee('Supplier return history')
+            ->assertSee('CN-101');
+
+        $this->expectException(ValidationException::class);
+        app(SupplierReturnService::class)->create($purchase->fresh(), [[
+            'supplier_purchase_item_id' => $purchaseItem->id,
+            'quantity' => 4,
+            'reason' => 'Too many',
+        ]], ['returned_on' => '2026-09-03'], $user);
+    }
+
     public function test_paid_package_books_always_use_their_current_catalogue_sale_price(): void
     {
         $user = $this->administrator();
@@ -160,6 +220,111 @@ class CoreWorkflowTest extends TestCase
         $this->assertDatabaseHas('book_distribution_items', ['book_distribution_id' => $distribution->id, 'book_id' => $arabic->id, 'unit_price' => '20.00']);
         $this->assertDatabaseHas('book_distribution_items', ['book_distribution_id' => $distribution->id, 'book_id' => $english->id, 'unit_price' => '2.00']);
         $this->assertDatabaseHas('invoices', ['id' => $distribution->invoice_id, 'total' => '22.00']);
+    }
+
+    public function test_books_and_book_packages_are_available_from_one_management_screen(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $book = Book::create(['sku' => 'B-COMBINED', 'barcode' => '978000031', 'title' => 'Combined catalogue title', 'selling_price' => '12.00', 'minimum_stock' => 1]);
+        $package = ClassBookList::create([
+            'academic_year_id' => $registration->academic_year_id,
+            'grade_id' => $registration->grade_id,
+            'section_id' => $registration->section_id,
+            'name' => 'Combined package',
+            'is_active' => true,
+        ]);
+        $package->items()->create(['book_id' => $book->id, 'quantity' => 1, 'is_mandatory' => true, 'price_type' => 'paid', 'unit_price' => '0.00']);
+
+        $this->actingAs($user)->get(route('books.index'))
+            ->assertOk()
+            ->assertSee('Books & packages')
+            ->assertSee('Combined catalogue title')
+            ->assertSee('Book packages');
+        $this->actingAs($user)->get(route('books.index', ['tab' => 'packages']))
+            ->assertOk()
+            ->assertSee('Combined package')
+            ->assertSee('New package');
+        $this->actingAs($user)->get(route('class-lists.index'))
+            ->assertRedirect(route('books.index', ['tab' => 'packages']));
+    }
+
+    public function test_reports_apply_filters_that_match_the_selected_report(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $otherGrade = Grade::create(['school_level_id' => $registration->grade->school_level_id, 'name' => 'Grade 5', 'sort_order' => 2]);
+        $otherSection = Section::create(['grade_id' => $otherGrade->id, 'name' => 'B']);
+        $otherStudent = Student::create(['student_number' => 'STU-REPORT-002', 'first_name' => 'Omar', 'last_name' => 'Saleh']);
+        $otherRegistration = StudentRegistration::create([
+            'student_id' => $otherStudent->id,
+            'academic_year_id' => $registration->academic_year_id,
+            'grade_id' => $otherGrade->id,
+            'section_id' => $otherSection->id,
+            'status' => 'active',
+            'registered_on' => '2026-09-02',
+            'created_by' => $user->id,
+        ]);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-REPORT-001', 'student_id' => $registration->student_id, 'student_registration_id' => $registration->id,
+            'academic_year_id' => $registration->academic_year_id, 'grade_id' => $registration->grade_id, 'section_id' => $registration->section_id,
+            'invoice_date' => '2026-09-03', 'subtotal' => '20.00', 'total' => '20.00', 'balance_due' => '20.00', 'payment_status' => 'unpaid', 'created_by' => $user->id,
+        ]);
+        $otherInvoice = Invoice::create([
+            'invoice_number' => 'INV-REPORT-002', 'student_id' => $otherStudent->id, 'student_registration_id' => $otherRegistration->id,
+            'academic_year_id' => $registration->academic_year_id, 'grade_id' => $otherGrade->id, 'section_id' => $otherSection->id,
+            'invoice_date' => '2026-09-04', 'subtotal' => '30.00', 'total' => '30.00', 'balance_due' => '30.00', 'payment_status' => 'unpaid', 'created_by' => $user->id,
+        ]);
+        Payment::create([
+            'payment_number' => 'PAY-REPORT-001', 'invoice_id' => $invoice->id, 'student_id' => $registration->student_id,
+            'payment_date' => '2026-09-05', 'amount' => '5.00', 'method' => 'cash', 'status' => 'valid',
+            'idempotency_key' => (string) Str::uuid(), 'received_by' => $user->id,
+        ]);
+        Payment::create([
+            'payment_number' => 'PAY-REPORT-002', 'invoice_id' => $otherInvoice->id, 'student_id' => $otherStudent->id,
+            'payment_date' => '2026-09-06', 'amount' => '6.00', 'method' => 'card', 'status' => 'valid',
+            'idempotency_key' => (string) Str::uuid(), 'received_by' => $user->id,
+        ]);
+        Book::create(['sku' => 'B-REPORT-LOW', 'barcode' => '978000032', 'title' => 'Out of stock report title', 'selling_price' => '10.00', 'minimum_stock' => 1]);
+        $inStockBook = Book::create(['sku' => 'B-REPORT-OK', 'barcode' => '978000033', 'title' => 'In stock report title', 'selling_price' => '10.00', 'minimum_stock' => 1]);
+        app(InventoryService::class)->change($inStockBook, 3, 'opening_stock', null, $registration->academicYear, $user, 'Report test stock');
+
+        $this->actingAs($user)->get(route('reports.index', ['report' => 'students', 'grade_id' => $registration->grade_id]))
+            ->assertOk()->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
+        $this->actingAs($user)->get(route('reports.index', ['report' => 'invoices', 'grade_id' => $registration->grade_id, 'date_from' => '2026-09-03', 'date_to' => '2026-09-03']))
+            ->assertOk()->assertSee('INV-REPORT-001')->assertDontSee('INV-REPORT-002');
+        $this->actingAs($user)->get(route('reports.print', ['report' => 'invoices', 'grade_id' => $registration->grade_id]))
+            ->assertOk()->assertSee('INV-REPORT-001')->assertDontSee('INV-REPORT-002');
+        $this->actingAs($user)->get(route('reports.index', ['report' => 'payments', 'grade_id' => $registration->grade_id, 'payment_method' => 'cash']))
+            ->assertOk()->assertSee('PAY-REPORT-001')->assertDontSee('PAY-REPORT-002');
+        $this->actingAs($user)->get(route('reports.index', ['report' => 'stock', 'stock_level' => 'out_of_stock']))
+            ->assertOk()->assertSee('Out of stock report title')->assertDontSee('In stock report title');
+    }
+
+    public function test_printable_invoices_and_reports_use_the_school_document_layout(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        SystemSetting::updateOrCreate(['key' => 'school_name'], ['value' => 'Cedar Grove School']);
+        SystemSetting::updateOrCreate(['key' => 'school_address'], ['value' => 'Beirut, Lebanon']);
+        SystemSetting::updateOrCreate(['key' => 'school_phone'], ['value' => '+961 1 555 555']);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-PRINT-001', 'student_id' => $registration->student_id, 'student_registration_id' => $registration->id,
+            'academic_year_id' => $registration->academic_year_id, 'grade_id' => $registration->grade_id, 'section_id' => $registration->section_id,
+            'invoice_date' => '2026-09-01', 'subtotal' => '20.00', 'total' => '20.00', 'balance_due' => '20.00', 'created_by' => $user->id,
+        ]);
+        $invoice->items()->create(['description' => 'Mathematics 4', 'quantity' => 1, 'unit_price' => '20.00', 'line_total' => '20.00']);
+
+        $this->actingAs($user)->get(route('invoices.print', $invoice))
+            ->assertOk()
+            ->assertSee('Cedar Grove School')
+            ->assertSee('Student Book Invoice')
+            ->assertSee('Parent / guardian acknowledgement');
+        $this->actingAs($user)->get(route('reports.print', ['report' => 'students']))
+            ->assertOk()
+            ->assertSee('Cedar Grove School')
+            ->assertSee('Official report')
+            ->assertSee('Prepared by');
     }
 
     public function test_academic_years_levels_grades_and_sections_can_be_edited(): void
@@ -236,10 +401,14 @@ class CoreWorkflowTest extends TestCase
         $user = $this->administrator();
         $registration = $this->registration($user);
         $supplier = Supplier::create(['code' => 'SUP-OPS', 'name' => 'Operations Press', 'is_active' => true]);
-        SupplierPurchase::create([
+        $purchase = SupplierPurchase::create([
             'purchase_number' => 'PUR-OPS-001', 'supplier_id' => $supplier->id, 'academic_year_id' => $registration->academic_year_id,
             'purchase_date' => '2026-09-01', 'subtotal' => '100.00', 'discount_total' => '0.00', 'tax_total' => '0.00', 'total' => '100.00',
             'amount_paid' => '20.00', 'payment_status' => 'partially_paid', 'status' => 'received', 'created_by' => $user->id,
+        ]);
+        SupplierReturn::create([
+            'supplier_purchase_id' => $purchase->id, 'supplier_id' => $supplier->id, 'academic_year_id' => $registration->academic_year_id,
+            'returned_on' => '2026-09-04', 'credit_total' => '10.00', 'reference_number' => 'CN-OPS-001', 'status' => 'completed', 'returned_by' => $user->id,
         ]);
         $invoice = Invoice::create([
             'invoice_number' => 'INV-OPS-001', 'student_id' => $registration->student_id, 'student_registration_id' => $registration->id,
@@ -253,7 +422,9 @@ class CoreWorkflowTest extends TestCase
             ->assertSee('Operations Center')
             ->assertSee('PUR-OPS-001')
             ->assertSee('INV-OPS-001')
-            ->assertSee('Book return');
+            ->assertSee('Book return')
+            ->assertSee('Supplier return')
+            ->assertSee('CN-OPS-001');
         $this->actingAs($user)->get(route('operations.index', ['type' => 'purchase', 'search' => 'PUR-OPS-001']))
             ->assertOk()
             ->assertSee('PUR-OPS-001')
@@ -264,5 +435,24 @@ class CoreWorkflowTest extends TestCase
     {
         $user=User::factory()->create(['email'=>'disabled@example.test','password'=>'password','is_active'=>false]);
         $this->post(route('login.store'),['email'=>$user->email,'password'=>'password'])->assertSessionHasErrors('email');$this->assertGuest();
+    }
+
+    public function test_administrator_can_soft_delete_another_user_but_not_their_own_account(): void
+    {
+        $administrator = $this->administrator();
+        $employee = User::factory()->create(['is_active' => true]);
+
+        $this->actingAs($administrator)
+            ->delete(route('admin.users.destroy', $employee))
+            ->assertRedirect(route('admin.users'))
+            ->assertSessionHas('success');
+
+        $this->assertSoftDeleted('users', ['id' => $employee->id]);
+
+        $this->actingAs($administrator)
+            ->delete(route('admin.users.destroy', $administrator))
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('users', ['id' => $administrator->id, 'deleted_at' => null]);
     }
 }

@@ -10,9 +10,10 @@
     <div class="flex gap-2"><a class="btn btn-secondary" href="{{ route('suppliers.edit', $supplier) }}">Edit</a><a class="btn btn-primary" href="{{ route('purchases.create') }}">New purchase</a></div>
 </div>
 
-<div class="grid gap-4 sm:grid-cols-3">
+<div class="grid gap-4 sm:grid-cols-4">
     <div class="stat"><div class="stat-label">Opening balance</div><div class="stat-value">{{ number_format((float) $supplier->opening_balance, 2) }}</div></div>
     <div class="stat"><div class="stat-label">Supplier invoices</div><div class="stat-value">{{ number_format((float) $supplier->purchases->sum('total'), 2) }}</div></div>
+    <div class="stat"><div class="stat-label">Return credits</div><div class="stat-value text-emerald-700">{{ number_format((float) $supplier->supplierReturns->sum('credit_total'), 2) }}</div></div>
     <div class="stat"><div class="stat-label">Balance due to supplier</div><div class="stat-value {{ $supplier->account_balance > 0 ? 'text-amber-700' : 'text-emerald-700' }}">{{ number_format((float) $supplier->account_balance, 2) }}</div></div>
 </div>
 
@@ -29,8 +30,8 @@
     <section class="panel">
         <div class="panel-header"><h2 class="panel-title">Supplier invoice history</h2></div>
         <div class="table-wrap">
-            <table class="data-table min-w-[700px]">
-                <thead><tr><th>Purchase</th><th>Date</th><th>Total</th><th>Paid</th><th>Remaining</th><th>Status</th></tr></thead>
+            <table class="data-table min-w-[820px]">
+                <thead><tr><th>Purchase</th><th>Date</th><th>Total</th><th>Paid</th><th>Return credits</th><th>Remaining</th><th>Status</th></tr></thead>
                 <tbody>
                     @forelse ($supplier->purchases as $purchase)
                         <tr>
@@ -38,11 +39,12 @@
                             <td>{{ $purchase->purchase_date->format('d M Y') }}</td>
                             <td>{{ number_format((float) $purchase->total, 2) }}</td>
                             <td class="text-emerald-700">{{ number_format((float) $purchase->amount_paid, 2) }}</td>
+                            <td class="text-emerald-700">{{ number_format((float) $purchase->return_credit_total, 2) }}</td>
                             <td class="{{ $purchase->balance_due > 0 ? 'text-amber-700' : 'text-emerald-700' }}">{{ number_format((float) $purchase->balance_due, 2) }}</td>
                             <td><span class="badge {{ $purchase->payment_status === 'paid' ? 'badge-green' : 'badge-amber' }}">{{ str($purchase->payment_status)->headline() }}</span></td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="empty">No purchases yet.</td></tr>
+                        <tr><td colspan="7" class="empty">No purchases yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>

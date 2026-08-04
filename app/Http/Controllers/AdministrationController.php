@@ -87,6 +87,25 @@ class AdministrationController extends Controller
         return back()->with('success', 'User status updated.');
     }
 
+    public function destroyUser(User $user): RedirectResponse
+    {
+        abort_if($user->is(auth()->user()), 422, 'You cannot delete your own account.');
+
+        if ($user->hasRole('super-administrator')) {
+            $hasAnotherActiveAdministrator = User::query()
+                ->where('is_active', true)
+                ->whereKeyNot($user->getKey())
+                ->whereHas('roles', fn ($roles) => $roles->where('name', 'super-administrator'))
+                ->exists();
+
+            abort_unless($hasAnotherActiveAdministrator, 422, 'At least one active super administrator must remain.');
+        }
+
+        $user->delete();
+
+        return redirect()->route('admin.users')->with('success', 'User deleted. You can restore the account from the recycle bin.');
+    }
+
     public function roles(): View
     {
         return view('admin.roles', ['roles' => Role::with('permissions')->get(), 'permissions' => \App\Models\Permission::orderBy('label')->get()]);

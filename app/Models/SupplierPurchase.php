@@ -46,7 +46,25 @@ class SupplierPurchase extends Model
 
     public function getBalanceDueAttribute(): string
     {
-        return Money::decimal(max(0, Money::cents((string) $this->total) - Money::cents((string) $this->amount_paid)));
+        return Money::decimal(max(0, Money::cents((string) $this->total) - Money::cents((string) $this->amount_paid) - Money::cents($this->return_credit_total)));
+    }
+
+    public function getReturnCreditTotalAttribute(): string
+    {
+        $credit = $this->getAttribute('supplier_returns_credit_total_sum');
+
+        if ($this->relationLoaded('supplierReturns')) {
+            return Money::decimal($this->supplierReturns->reduce(
+                fn (int $total, SupplierReturn $return) => $total + Money::cents((string) $return->credit_total),
+                0,
+            ));
+        }
+
+        if ($credit === null) {
+            $credit = $this->supplierReturns()->sum('credit_total');
+        }
+
+        return Money::decimal(Money::cents((string) $credit));
     }
 
     public function supplier(): BelongsTo
@@ -67,5 +85,10 @@ class SupplierPurchase extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(SupplierPayment::class);
+    }
+
+    public function supplierReturns(): HasMany
+    {
+        return $this->hasMany(SupplierReturn::class);
     }
 }
