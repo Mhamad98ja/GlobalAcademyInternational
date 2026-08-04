@@ -1,0 +1,29 @@
+<?php
+
+namespace App\Providers;
+
+use App\Models\Invoice;
+use App\Models\User;
+use App\Policies\InvoicePolicy;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\ServiceProvider;
+
+class AppServiceProvider extends ServiceProvider
+{
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        //
+    }
+
+    /**
+     * Bootstrap any application services.
+     */
+    public function boot(): void
+    {
+        Gate::before(fn (User $user): ?bool => $user->hasRole('super-administrator') ? true : null);
+        Gate::policy(Invoice::class, InvoicePolicy::class);
+    }
+}
