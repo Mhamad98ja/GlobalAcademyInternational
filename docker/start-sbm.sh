@@ -4,6 +4,18 @@ set -eu
 
 PORT="${PORT:-10000}"
 
+# Existing Render services may provide the database connection as
+# DATABASE_URL, while this Laravel project conventionally reads DB_URL.
+# Normalize both names and never let a supplied Render PostgreSQL URL fall
+# back to the image's read-only SQLite database.
+if [ -z "${DB_URL:-}" ] && [ -n "${DATABASE_URL:-}" ]; then
+    export DB_URL="${DATABASE_URL}"
+fi
+
+if [ -n "${DB_URL:-}" ]; then
+    export DB_CONNECTION="pgsql"
+fi
+
 # Render's generated secrets are Base64 values. Laravel expects its encryption
 # key to be prefixed with "base64:" so that it is decoded to 32 bytes. The
 # fallback keeps the application bootable while a Blueprint sync is pending.

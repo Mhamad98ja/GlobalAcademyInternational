@@ -21,6 +21,10 @@ services:
         fromDatabase:
           name: sbm-mhamad98ja-db
           property: connectionString
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sbm-mhamad98ja-db
+          property: connectionString
       - key: DB_SSLMODE
         value: prefer
       - key: SESSION_DRIVER
