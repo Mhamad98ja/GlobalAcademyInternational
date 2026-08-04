@@ -43,7 +43,8 @@ COPY --from=frontend /app/public/build ./public/build
 COPY docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
 COPY docker/start-sbm.sh /usr/local/bin/start-sbm
 
-RUN chown -R www-data:www-data storage bootstrap/cache \
+RUN mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
     && chmod +x /usr/local/bin/start-sbm
 
 EXPOSE 10000
