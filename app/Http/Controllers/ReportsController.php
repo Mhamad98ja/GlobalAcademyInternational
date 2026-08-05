@@ -107,8 +107,8 @@ class ReportsController extends Controller
                 }
             } else {
                 fputcsv($output, $report === 'class_sections'
-                    ? ['Academic year', 'Grade', 'Section', 'Student number', 'Registration number', 'Student', 'Gender', 'Status']
-                    : ['Student number', 'Registration number', 'Student', 'Academic year', 'Grade', 'Section', 'Registered on', 'Status']);
+                    ? ['Academic year', 'Grade', 'Section', 'Student number', 'Registration number', 'Student', 'Gender', 'Status', 'Left school on']
+                    : ['Student number', 'Registration number', 'Student', 'Academic year', 'Grade', 'Section', 'Registered on', 'Status', 'Left school on']);
 
                 foreach ($query->lazy() as $registration) {
                     $base = [
@@ -120,10 +120,11 @@ class ReportsController extends Controller
                         $registration->section?->name,
                         $registration->registered_on?->format('Y-m-d'),
                         $registration->status,
+                        $registration->withdrawn_on?->format('Y-m-d'),
                     ];
 
                     fputcsv($output, $report === 'class_sections'
-                        ? [$base[3], $base[4], $base[5], $base[0], $base[1], $base[2], $registration->student?->gender ? (string) str($registration->student->gender)->headline() : '', $base[7]]
+                        ? [$base[3], $base[4], $base[5], $base[0], $base[1], $base[2], $registration->student?->gender ? (string) str($registration->student->gender)->headline() : '', $base[7], $base[8]]
                         : $base);
                 }
             }

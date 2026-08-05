@@ -24,10 +24,12 @@ class StudentsController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
             'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
+            'registration_status' => ['nullable', 'in:active,inactive,withdrawn,completed'],
             'sort' => ['nullable', 'in:asc,desc'],
         ]);
         $gradeId = $filters['grade_id'] ?? null;
         $sectionId = $filters['section_id'] ?? null;
+        $registrationStatus = $filters['registration_status'] ?? null;
         $sort = ($filters['sort'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
 
         $students = Student::query()
@@ -45,6 +47,7 @@ class StudentsController extends Controller
                         ->when($sectionId, fn ($registrationQuery) => $registrationQuery->where('section_id', $sectionId));
                 });
             })
+            ->when($registrationStatus, fn ($query, $status) => $query->whereHas('registrations', fn ($registrations) => $registrations->where('status', $status)))
             ->orderBy('first_name', $sort)
             ->orderBy('last_name', $sort);
 
@@ -106,6 +109,45 @@ class StudentsController extends Controller
         $audit->log('student.deleted', $student);
 
         return redirect()->route('students.index')->with('success', 'Student moved to recycle bin.');
+    }
+
+    public function leaveForm(Student $student): View
+    {
+        $student->load(['registrations' => fn ($registrations) => $registrations
+            ->where('status', 'active')
+            ->with('academicYear', 'grade', 'section')
+            ->latest('registered_on')]);
+
+        return view('students.leave', compact('student'));
+    }
+
+    public function leave(Request $request, Student $student, AuditService $audit): RedirectResponse
+    {
+        $data = $request->validate([
+            'withdrawn_on' => ['required', 'date', 'before_or_equal:today'],
+            'withdrawal_reason' => ['nullable', 'string', 'max:3000'],
+        ]);
+        $registrations = $student->registrations()->where('status', 'active')->get();
+
+        if ($registrations->isEmpty()) {
+            return redirect()->route('students.show', $student)->with('error', 'This student has no active academic registration to mark as withdrawn.');
+        }
+
+        DB::transaction(function () use ($student, $registrations, $data, $audit): void {
+            $registrationIds = $registrations->modelKeys();
+            $student->registrations()->whereIn('id', $registrationIds)->update([
+                'status' => 'withdrawn',
+                'withdrawn_on' => $data['withdrawn_on'],
+                'withdrawal_reason' => $data['withdrawal_reason'] ?? null,
+                'updated_at' => now(),
+            ]);
+            $audit->log('student.left_school', $student, ['active_registration_ids' => $registrationIds], [
+                'withdrawn_on' => $data['withdrawn_on'],
+                'withdrawal_reason' => $data['withdrawal_reason'] ?? null,
+            ]);
+        });
+
+        return redirect()->route('students.show', $student)->with('success', 'Student profile was kept and the active academic registration was marked as withdrawn.');
     }
 
     public function registerForm(Student $student): View

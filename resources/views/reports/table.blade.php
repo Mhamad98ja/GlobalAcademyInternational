@@ -66,7 +66,7 @@
         </table>
     @elseif ($report === 'class_sections')
         <table class="data-table">
-            <thead><tr><th>Academic year</th><th>Grade</th><th>Section</th><th>Student no.</th><th>Registration no.</th><th>Student</th><th>Gender</th><th>Status</th></tr></thead>
+            <thead><tr><th>Academic year</th><th>Grade</th><th>Section</th><th>Student no.</th><th>Registration no.</th><th>Student</th><th>Gender</th><th>Status</th><th>Left school on</th></tr></thead>
             <tbody>
                 @foreach ($rows as $registration)
                     <tr>
@@ -78,13 +78,14 @@
                         <td>{{ $registration->student?->full_name }}</td>
                         <td>{{ $registration->student?->gender ? str($registration->student->gender)->headline() : '—' }}</td>
                         <td>{{ str($registration->status)->headline() }}</td>
+                        <td>{{ $registration->withdrawn_on?->format('d M Y') ?? '—' }}</td>
                     </tr>
                 @endforeach
             </tbody>
         </table>
     @else
         <table class="data-table">
-            <thead><tr><th>Student no.</th><th>Registration no.</th><th>Student</th><th>Academic year</th><th>Grade</th><th>Section</th><th>Registered on</th><th>Status</th></tr></thead>
+            <thead><tr><th>Student no.</th><th>Registration no.</th><th>Student</th><th>Academic year</th><th>Grade</th><th>Section</th><th>Registered on</th><th>Status</th><th>Left school on</th></tr></thead>
             <tbody>
                 @foreach ($rows as $registration)
                     <tr>
@@ -96,6 +97,7 @@
                         <td>{{ $registration->section?->name ?? '—' }}</td>
                         <td>{{ $registration->registered_on?->format('d M Y') }}</td>
                         <td>{{ str($registration->status)->headline() }}</td>
+                        <td>{{ $registration->withdrawn_on?->format('d M Y') ?? '—' }}</td>
                     </tr>
                 @endforeach
             </tbody>

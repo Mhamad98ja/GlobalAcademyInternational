@@ -11,7 +11,7 @@
 
 <section class="panel">
     <div class="panel-header">
-        <form method="GET" class="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_11rem_11rem_9rem_auto_auto]">
+        <form method="GET" class="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_11rem_11rem_10rem_9rem_auto_auto]">
             <input name="search" value="{{ request('search') }}" placeholder="Search name, registration number or phone" aria-label="Search students">
             <select name="grade_id" data-grade-select data-section-target="#student-filter-section" aria-label="Filter by grade">
                 <option value="">All grades</option>
@@ -25,6 +25,12 @@
                     @foreach ($grade->sections as $section)
                         <option value="{{ $section->id }}" data-grade-id="{{ $grade->id }}" @selected(request('section_id') == $section->id)>{{ $grade->name }}.{{ $section->name }}</option>
                     @endforeach
+                @endforeach
+            </select>
+            <select name="registration_status" aria-label="Filter by registration status">
+                <option value="">All student statuses</option>
+                @foreach (['active', 'inactive', 'withdrawn', 'completed'] as $status)
+                    <option value="{{ $status }}" @selected(request('registration_status') === $status)>{{ str($status)->headline() }}</option>
                 @endforeach
             </select>
             <select name="sort" aria-label="Sort students by name">
@@ -44,6 +50,7 @@
                     <th>Student no.</th>
                     <th>Phone</th>
                     <th>Latest registration</th>
+                    <th>Status</th>
                     <th></th>
                 </tr>
             </thead>
@@ -57,11 +64,18 @@
                         <td>{{ $student->student_number }}</td>
                         <td>{{ $student->phone ?: '-' }}</td>
                         <td>{{ $student->registrations->first()?->academicYear?->name ?? 'Not registered' }}</td>
+                        <td>
+                            @if ($student->registrations->first())
+                                <span class="badge {{ $student->registrations->first()->status === 'active' ? 'badge-green' : 'badge-amber' }}">{{ str($student->registrations->first()->status)->headline() }}</span>
+                            @else
+                                —
+                            @endif
+                        </td>
                         <td><a class="link text-xs" href="{{ route('students.edit', $student) }}">Edit</a></td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="empty">No students matched your search.</td>
+                        <td colspan="6" class="empty">No students matched your search.</td>
                     </tr>
                 @endforelse
             </tbody>

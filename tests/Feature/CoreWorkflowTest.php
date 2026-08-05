@@ -318,6 +318,34 @@ class CoreWorkflowTest extends TestCase
         ])->assertSessionHasErrors('gender');
     }
 
+    public function test_leaving_student_preserves_profile_and_withdraws_active_registration(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+
+        $this->actingAs($user)->get(route('students.leave.create', $registration->student))
+            ->assertOk()
+            ->assertSee('Mark as left school')
+            ->assertSee($registration->academicYear->name);
+
+        $this->actingAs($user)->post(route('students.leave.store', $registration->student), [
+            'withdrawn_on' => '2026-08-04',
+            'withdrawal_reason' => 'Transferred to another school',
+        ])->assertRedirect(route('students.show', $registration->student));
+
+        $this->assertDatabaseHas('students', ['id' => $registration->student_id, 'deleted_at' => null]);
+        $this->assertDatabaseHas('student_registrations', [
+            'id' => $registration->id,
+            'status' => 'withdrawn',
+            'withdrawn_on' => '2026-08-04',
+            'withdrawal_reason' => 'Transferred to another school',
+        ]);
+        $this->actingAs($user)->get(route('students.show', $registration->student))
+            ->assertOk()
+            ->assertSee('Transferred to another school')
+            ->assertSee('Withdrawn');
+    }
+
     public function test_printable_invoices_and_reports_use_the_school_document_layout(): void
     {
         $user = $this->administrator();
