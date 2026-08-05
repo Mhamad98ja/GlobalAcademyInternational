@@ -253,6 +253,7 @@ class CoreWorkflowTest extends TestCase
     {
         $user = $this->administrator();
         $registration = $this->registration($user);
+        $registration->student->update(['gender' => 'female', 'phone' => '03 123 456', 'email' => 'lina@example.test']);
         $otherGrade = Grade::create(['school_level_id' => $registration->grade->school_level_id, 'name' => 'Grade 5', 'sort_order' => 2]);
         $otherSection = Section::create(['grade_id' => $otherGrade->id, 'name' => 'B']);
         $otherStudent = Student::create(['student_number' => 'STU-REPORT-002', 'first_name' => 'Omar', 'last_name' => 'Saleh']);
@@ -291,6 +292,10 @@ class CoreWorkflowTest extends TestCase
 
         $this->actingAs($user)->get(route('reports.index', ['report' => 'students', 'grade_id' => $registration->grade_id]))
             ->assertOk()->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
+        $this->actingAs($user)->get(route('reports.index', ['report' => 'student_information', 'gender' => 'female']))
+            ->assertOk()->assertSee('Student general information')->assertSee('03 123 456')->assertDontSee('Omar Saleh');
+        $this->actingAs($user)->get(route('reports.print', ['report' => 'class_sections', 'section_id' => $registration->section_id]))
+            ->assertOk()->assertSee('Students by class and section report')->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
         $this->actingAs($user)->get(route('reports.index', ['report' => 'invoices', 'grade_id' => $registration->grade_id, 'date_from' => '2026-09-03', 'date_to' => '2026-09-03']))
             ->assertOk()->assertSee('INV-REPORT-001')->assertDontSee('INV-REPORT-002');
         $this->actingAs($user)->get(route('reports.print', ['report' => 'invoices', 'grade_id' => $registration->grade_id]))
@@ -299,6 +304,18 @@ class CoreWorkflowTest extends TestCase
             ->assertOk()->assertSee('PAY-REPORT-001')->assertDontSee('PAY-REPORT-002');
         $this->actingAs($user)->get(route('reports.index', ['report' => 'stock', 'stock_level' => 'out_of_stock']))
             ->assertOk()->assertSee('Out of stock report title')->assertDontSee('In stock report title');
+    }
+
+    public function test_student_gender_accepts_only_male_or_female(): void
+    {
+        $user = $this->administrator();
+
+        $this->actingAs($user)->post(route('students.store'), [
+            'student_number' => 'STU-GENDER-001',
+            'first_name' => 'Rami',
+            'last_name' => 'Mansour',
+            'gender' => 'other',
+        ])->assertSessionHasErrors('gender');
     }
 
     public function test_printable_invoices_and_reports_use_the_school_document_layout(): void

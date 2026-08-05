@@ -3,6 +3,8 @@
 @php
     $reportTitles = [
         'students' => 'Student registration report',
+        'student_information' => 'Student general information report',
+        'class_sections' => 'Students by class and section report',
         'stock' => 'Book stock report',
         'invoices' => 'Student invoice report',
         'payments' => 'Payment collection report',

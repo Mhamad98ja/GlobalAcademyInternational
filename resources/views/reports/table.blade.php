@@ -44,16 +44,57 @@
                 @endforeach
             </tbody>
         </table>
-    @else
+    @elseif ($report === 'student_information')
         <table class="data-table">
-            <thead><tr><th>Student</th><th>Academic year</th><th>Grade</th><th>Section</th><th>Status</th></tr></thead>
+            <thead><tr><th>Student no.</th><th>Registration no.</th><th>Student</th><th>Gender</th><th>Date of birth</th><th>Phone</th><th>Email</th><th>Enrollment</th><th>Latest class</th></tr></thead>
+            <tbody>
+                @foreach ($rows as $student)
+                    @php($registration = $student->registrations->first())
+                    <tr>
+                        <td>{{ $student->student_number }}</td>
+                        <td>{{ $student->registration_number ?: '—' }}</td>
+                        <td>{{ $student->full_name }}</td>
+                        <td>{{ $student->gender ? str($student->gender)->headline() : '—' }}</td>
+                        <td>{{ $student->date_of_birth?->format('d M Y') ?? '—' }}</td>
+                        <td>{{ $student->phone ?: '—' }}</td>
+                        <td>{{ $student->email ?: '—' }}</td>
+                        <td>{{ $student->enrollment_date?->format('d M Y') ?? '—' }}</td>
+                        <td>{{ $registration ? collect([$registration->academicYear?->name, $registration->grade?->name, $registration->section?->name])->filter()->implode(' · ') : '—' }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @elseif ($report === 'class_sections')
+        <table class="data-table">
+            <thead><tr><th>Academic year</th><th>Grade</th><th>Section</th><th>Student no.</th><th>Registration no.</th><th>Student</th><th>Gender</th><th>Status</th></tr></thead>
             <tbody>
                 @foreach ($rows as $registration)
                     <tr>
+                        <td>{{ $registration->academicYear?->name }}</td>
+                        <td>{{ $registration->grade?->name }}</td>
+                        <td>{{ $registration->section?->name ?? '—' }}</td>
+                        <td>{{ $registration->student?->student_number }}</td>
+                        <td>{{ $registration->student?->registration_number ?: '—' }}</td>
+                        <td>{{ $registration->student?->full_name }}</td>
+                        <td>{{ $registration->student?->gender ? str($registration->student->gender)->headline() : '—' }}</td>
+                        <td>{{ str($registration->status)->headline() }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @else
+        <table class="data-table">
+            <thead><tr><th>Student no.</th><th>Registration no.</th><th>Student</th><th>Academic year</th><th>Grade</th><th>Section</th><th>Registered on</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach ($rows as $registration)
+                    <tr>
+                        <td>{{ $registration->student?->student_number }}</td>
+                        <td>{{ $registration->student?->registration_number ?: '—' }}</td>
                         <td>{{ $registration->student?->full_name }}</td>
                         <td>{{ $registration->academicYear?->name }}</td>
                         <td>{{ $registration->grade?->name }}</td>
                         <td>{{ $registration->section?->name ?? '—' }}</td>
+                        <td>{{ $registration->registered_on?->format('d M Y') }}</td>
                         <td>{{ str($registration->status)->headline() }}</td>
                     </tr>
                 @endforeach

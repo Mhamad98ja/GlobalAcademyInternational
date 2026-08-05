@@ -10,6 +10,7 @@ use App\Models\Grade;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Section;
+use App\Models\Student;
 use App\Models\StudentRegistration;
 use App\Models\SystemSetting;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,10 +36,17 @@ class ReportsController extends Controller
     public function print(Request $request): View
     {
         [$report, $rows, $filters] = $this->reportData($request);
-        $school = SystemSetting::query()->whereIn('key', ['school_name', 'school_address', 'school_phone'])->pluck('value', 'key');
-        $filterSummary = $this->filterSummary($filters);
+        $school = SystemSetting::query()
+            ->whereIn('key', ['school_name', 'school_address', 'school_phone'])
+            ->pluck('value', 'key');
 
-        return view('reports.print', compact('report', 'rows', 'filters', 'school', 'filterSummary'));
+        return view('reports.print', [
+            'report' => $report,
+            'rows' => $rows,
+            'filters' => $filters,
+            'school' => $school,
+            'filterSummary' => $this->filterSummary($filters),
+        ]);
     }
 
     public function csv(Request $request): StreamedResponse
@@ -57,7 +65,7 @@ class ReportsController extends Controller
                 }
             } elseif ($report === 'invoices') {
                 fputcsv($output, ['Invoice', 'Student', 'Date', 'Total', 'Paid', 'Balance', 'Payment status']);
-                foreach ($query->cursor() as $invoice) {
+                foreach ($query->lazy() as $invoice) {
                     fputcsv($output, [
                         $invoice->invoice_number,
                         $invoice->student?->full_name,
@@ -70,7 +78,7 @@ class ReportsController extends Controller
                 }
             } elseif ($report === 'payments') {
                 fputcsv($output, ['Payment', 'Invoice', 'Student', 'Date', 'Amount', 'Method', 'Status']);
-                foreach ($query->cursor() as $payment) {
+                foreach ($query->lazy() as $payment) {
                     fputcsv($output, [
                         $payment->payment_number,
                         $payment->invoice?->invoice_number,
@@ -81,16 +89,42 @@ class ReportsController extends Controller
                         $payment->status,
                     ]);
                 }
-            } else {
-                fputcsv($output, ['Student', 'Year', 'Grade', 'Section', 'Status']);
-                foreach ($query->cursor() as $registration) {
+            } elseif ($report === 'student_information') {
+                fputcsv($output, ['Student number', 'Registration number', 'Student', 'Gender', 'Date of birth', 'Phone', 'Email', 'Enrollment date', 'Latest class']);
+                foreach ($query->lazy() as $student) {
+                    $registration = $student->registrations->first();
                     fputcsv($output, [
+                        $student->student_number,
+                        $student->registration_number,
+                        $student->full_name,
+                        $student->gender ? (string) str($student->gender)->headline() : '',
+                        $student->date_of_birth?->format('Y-m-d'),
+                        $student->phone,
+                        $student->email,
+                        $student->enrollment_date?->format('Y-m-d'),
+                        $registration ? trim(implode(' ', array_filter([$registration->academicYear?->name, $registration->grade?->name, $registration->section?->name]))) : '',
+                    ]);
+                }
+            } else {
+                fputcsv($output, $report === 'class_sections'
+                    ? ['Academic year', 'Grade', 'Section', 'Student number', 'Registration number', 'Student', 'Gender', 'Status']
+                    : ['Student number', 'Registration number', 'Student', 'Academic year', 'Grade', 'Section', 'Registered on', 'Status']);
+
+                foreach ($query->lazy() as $registration) {
+                    $base = [
+                        $registration->student?->student_number,
+                        $registration->student?->registration_number,
                         $registration->student?->full_name,
                         $registration->academicYear?->name,
                         $registration->grade?->name,
                         $registration->section?->name,
+                        $registration->registered_on?->format('Y-m-d'),
                         $registration->status,
-                    ]);
+                    ];
+
+                    fputcsv($output, $report === 'class_sections'
+                        ? [$base[3], $base[4], $base[5], $base[0], $base[1], $base[2], $registration->student?->gender ? (string) str($registration->student->gender)->headline() : '', $base[7]]
+                        : $base);
                 }
             }
 
@@ -158,21 +192,46 @@ class ReportsController extends Controller
                         ->when($filters['section_id'] ?? null, fn (Builder $invoices, int $id) => $invoices->where('section_id', $id))),
                 )
                 ->latest('payment_date'),
-            default => StudentRegistration::query()
-                ->with('student', 'academicYear', 'grade', 'section')
-                ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->whereHas('student', fn (Builder $student) => $student
-                    ->where('first_name', 'like', '%'.$search.'%')
+            'student_information' => Student::query()
+                ->with(['registrations' => fn ($registrations) => $registrations
+                    ->with('academicYear', 'grade', 'section')
+                    ->latest('registered_on')])
+                ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where(fn (Builder $students) => $students
+                    ->where('student_number', 'like', '%'.$search.'%')
+                    ->orWhere('registration_number', 'like', '%'.$search.'%')
+                    ->orWhere('first_name', 'like', '%'.$search.'%')
                     ->orWhere('last_name', 'like', '%'.$search.'%')
-                    ->orWhere('student_number', 'like', '%'.$search.'%')
-                    ->orWhere('registration_number', 'like', '%'.$search.'%')))
-                ->when($filters['academic_year_id'] ?? null, fn (Builder $query, int $id) => $query->where('academic_year_id', $id))
-                ->when($filters['grade_id'] ?? null, fn (Builder $query, int $id) => $query->where('grade_id', $id))
-                ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->where('section_id', $id))
-                ->when($filters['registration_status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
-                ->when($filters['date_from'] ?? null, fn (Builder $query, string $date) => $query->whereDate('registered_on', '>=', $date))
-                ->when($filters['date_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('registered_on', '<=', $date))
-                ->latest('registered_on'),
+                    ->orWhere('phone', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.$search.'%')))
+                ->when($filters['gender'] ?? null, fn (Builder $query, string $gender) => $query->where('gender', $gender))
+                ->orderBy('last_name')
+                ->orderBy('first_name'),
+            'class_sections' => $this->registrationReportQuery($filters, true),
+            default => $this->registrationReportQuery($filters),
         };
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function registrationReportQuery(array $filters, bool $classList = false): Builder
+    {
+        return StudentRegistration::query()
+            ->with('student', 'academicYear', 'grade', 'section')
+            ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->whereHas('student', fn (Builder $student) => $student
+                ->where('first_name', 'like', '%'.$search.'%')
+                ->orWhere('last_name', 'like', '%'.$search.'%')
+                ->orWhere('student_number', 'like', '%'.$search.'%')
+                ->orWhere('registration_number', 'like', '%'.$search.'%')))
+            ->when($filters['academic_year_id'] ?? null, fn (Builder $query, int $id) => $query->where('academic_year_id', $id))
+            ->when($filters['grade_id'] ?? null, fn (Builder $query, int $id) => $query->where('grade_id', $id))
+            ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->where('section_id', $id))
+            ->when($filters['registration_status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when(! $classList && ($filters['date_from'] ?? null), fn (Builder $query) => $query->whereDate('registered_on', '>=', $filters['date_from']))
+            ->when(! $classList && ($filters['date_to'] ?? null), fn (Builder $query) => $query->whereDate('registered_on', '<=', $filters['date_to']))
+            ->when($classList, fn (Builder $query) => $query
+                ->orderByDesc('academic_year_id')
+                ->orderBy('grade_id')
+                ->orderBy('section_id'))
+            ->when(! $classList, fn (Builder $query) => $query->latest('registered_on'));
     }
 
     /** @return array<string, mixed> */
@@ -180,6 +239,7 @@ class ReportsController extends Controller
     {
         return $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
+            'gender' => ['nullable', 'in:male,female'],
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
             'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
@@ -195,7 +255,9 @@ class ReportsController extends Controller
 
     private function normaliseReport(string $report): string
     {
-        return in_array($report, ['students', 'stock', 'invoices', 'payments'], true) ? $report : 'students';
+        return in_array($report, ['students', 'student_information', 'class_sections', 'stock', 'invoices', 'payments'], true)
+            ? $report
+            : 'students';
     }
 
     /** @param array<string, mixed> $filters
@@ -209,6 +271,7 @@ class ReportsController extends Controller
 
         return array_values(array_filter([
             isset($filters['search']) ? 'Search: '.$filters['search'] : null,
+            isset($filters['gender']) ? 'Gender: '.str($filters['gender'])->headline() : null,
             $academicYear ? 'Academic year: '.$academicYear->name : null,
             $grade ? 'Grade: '.$grade->name : null,
             $section ? 'Section: '.$section->name : null,

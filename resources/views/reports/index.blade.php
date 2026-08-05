@@ -19,6 +19,8 @@
             <div>
                 <label class="form-label" for="report">Report type</label>
                 <select id="report" name="report" onchange="this.form.submit()">
+                    <option value="student_information" @selected($report === 'student_information')>Student general information</option>
+                    <option value="class_sections" @selected($report === 'class_sections')>Students by class and section</option>
                     <option value="students" @selected($report === 'students')>Student registrations</option>
                     <option value="stock" @selected($report === 'stock')>Stock on hand</option>
                     <option value="invoices" @selected($report === 'invoices')>Invoices</option>
@@ -28,26 +30,39 @@
 
             @if ($report === 'stock')
                 <div>
-                    <label class="form-label">Search books</label>
-                    <input name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Title, SKU or barcode">
+                    <label class="form-label" for="report-search">Search books</label>
+                    <input id="report-search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Title, SKU or barcode">
                 </div>
                 <div>
-                    <label class="form-label">Stock level</label>
-                    <select name="stock_level">
+                    <label class="form-label" for="stock-level">Stock level</label>
+                    <select id="stock-level" name="stock_level">
                         <option value="">All stock levels</option>
                         <option value="in_stock" @selected(($filters['stock_level'] ?? '') === 'in_stock')>In stock</option>
                         <option value="low_stock" @selected(($filters['stock_level'] ?? '') === 'low_stock')>Low stock</option>
                         <option value="out_of_stock" @selected(($filters['stock_level'] ?? '') === 'out_of_stock')>Out of stock</option>
                     </select>
                 </div>
-            @else
+            @elseif ($report === 'student_information')
                 <div>
-                    <label class="form-label">{{ $report === 'students' ? 'Search students' : ($report === 'invoices' ? 'Search invoices or students' : 'Search payments, invoices or students') }}</label>
-                    <input name="search" value="{{ $filters['search'] ?? '' }}" placeholder="{{ $report === 'students' ? 'Student name or registration no.' : ($report === 'invoices' ? 'Invoice number or student' : 'Payment number, invoice or student') }}">
+                    <label class="form-label" for="report-search">Search students</label>
+                    <input id="report-search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Name, student no., phone or email">
                 </div>
                 <div>
-                    <label class="form-label">Academic year</label>
-                    <select name="academic_year_id">
+                    <label class="form-label" for="gender">Gender</label>
+                    <select id="gender" name="gender">
+                        <option value="">All genders</option>
+                        <option value="male" @selected(($filters['gender'] ?? '') === 'male')>Male</option>
+                        <option value="female" @selected(($filters['gender'] ?? '') === 'female')>Female</option>
+                    </select>
+                </div>
+            @else
+                <div>
+                    <label class="form-label" for="report-search">{{ $report === 'invoices' ? 'Search invoices or students' : ($report === 'payments' ? 'Search payments, invoices or students' : 'Search students') }}</label>
+                    <input id="report-search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="{{ $report === 'invoices' ? 'Invoice number or student' : ($report === 'payments' ? 'Payment number, invoice or student' : 'Student name or registration no.') }}">
+                </div>
+                <div>
+                    <label class="form-label" for="academic-year">Academic year</label>
+                    <select id="academic-year" name="academic_year_id">
                         <option value="">All academic years</option>
                         @foreach ($years as $year)
                             <option value="{{ $year->id }}" @selected(($filters['academic_year_id'] ?? null) == $year->id)>{{ $year->name }}</option>
@@ -55,8 +70,8 @@
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Grade</label>
-                    <select name="grade_id" data-grade-select data-section-target="#report-section">
+                    <label class="form-label" for="report-grade">Grade</label>
+                    <select id="report-grade" name="grade_id" data-grade-select data-section-target="#report-section">
                         <option value="">All grades</option>
                         @foreach ($grades as $grade)
                             <option value="{{ $grade->id }}" @selected(($filters['grade_id'] ?? null) == $grade->id)>{{ $grade->name }}</option>
@@ -64,7 +79,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Section</label>
+                    <label class="form-label" for="report-section">Section</label>
                     <select id="report-section" name="section_id" disabled>
                         <option value="">All sections</option>
                         @foreach ($grades as $grade)
@@ -75,10 +90,10 @@
                     </select>
                 </div>
 
-                @if ($report === 'students')
+                @if (in_array($report, ['students', 'class_sections'], true))
                     <div>
-                        <label class="form-label">Registration status</label>
-                        <select name="registration_status">
+                        <label class="form-label" for="registration-status">Registration status</label>
+                        <select id="registration-status" name="registration_status">
                             <option value="">All registration statuses</option>
                             @foreach (['active', 'inactive', 'withdrawn', 'completed'] as $status)
                                 <option value="{{ $status }}" @selected(($filters['registration_status'] ?? '') === $status)>{{ str($status)->headline() }}</option>
@@ -87,8 +102,8 @@
                     </div>
                 @elseif ($report === 'invoices')
                     <div>
-                        <label class="form-label">Payment status</label>
-                        <select name="invoice_payment_status">
+                        <label class="form-label" for="invoice-status">Payment status</label>
+                        <select id="invoice-status" name="invoice_payment_status">
                             <option value="">All payment statuses</option>
                             @foreach (['unpaid', 'partially_paid', 'paid', 'deferred'] as $status)
                                 <option value="{{ $status }}" @selected(($filters['invoice_payment_status'] ?? '') === $status)>{{ str($status)->headline() }}</option>
@@ -97,8 +112,8 @@
                     </div>
                 @else
                     <div>
-                        <label class="form-label">Payment method</label>
-                        <select name="payment_method">
+                        <label class="form-label" for="payment-method">Payment method</label>
+                        <select id="payment-method" name="payment_method">
                             <option value="">All methods</option>
                             @foreach (['cash', 'card', 'bank_transfer', 'check', 'other'] as $method)
                                 <option value="{{ $method }}" @selected(($filters['payment_method'] ?? '') === $method)>{{ str($method)->headline() }}</option>
@@ -106,8 +121,8 @@
                         </select>
                     </div>
                     <div>
-                        <label class="form-label">Payment status</label>
-                        <select name="payment_status">
+                        <label class="form-label" for="payment-status">Payment status</label>
+                        <select id="payment-status" name="payment_status">
                             <option value="">All payment statuses</option>
                             @foreach (['valid', 'reversed'] as $status)
                                 <option value="{{ $status }}" @selected(($filters['payment_status'] ?? '') === $status)>{{ str($status)->headline() }}</option>
@@ -116,14 +131,16 @@
                     </div>
                 @endif
 
-                <div>
-                    <label class="form-label">{{ $report === 'students' ? 'Registered from' : 'Date from' }}</label>
-                    <input type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}">
-                </div>
-                <div>
-                    <label class="form-label">{{ $report === 'students' ? 'Registered to' : 'Date to' }}</label>
-                    <input type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}">
-                </div>
+                @if ($report !== 'class_sections')
+                    <div>
+                        <label class="form-label" for="date-from">{{ $report === 'students' ? 'Registered from' : 'Date from' }}</label>
+                        <input id="date-from" type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}">
+                    </div>
+                    <div>
+                        <label class="form-label" for="date-to">{{ $report === 'students' ? 'Registered to' : 'Date to' }}</label>
+                        <input id="date-to" type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}">
+                    </div>
+                @endif
             @endif
 
             <div class="flex items-end gap-2">
