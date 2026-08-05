@@ -71,10 +71,7 @@ class DatabaseSeeder extends Seeder
             $role->permissions()->sync(Permission::whereIn('name', $data['permissions'])->pluck('id'));
         }
 
-        // The deployment configuration is the source of truth for the emergency
-        // administrator. Updating it on each seed keeps a configured admin able
-        // to sign in after an account was previously created with a test email.
-        $administrator = User::updateOrCreate(
+        $administrator = User::firstOrCreate(
             ['email' => env('SBM_ADMIN_EMAIL', 'admin@school.test')],
             [
                 'name' => env('SBM_ADMIN_NAME', 'System Administrator'),
