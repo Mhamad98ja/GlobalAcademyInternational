@@ -20,6 +20,10 @@ return [
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
     ],
 
+    // Keep retries unrestricted while the system is being tested. Set this
+    // to true in the deployment environment when testing is complete.
+    'rate_limiting' => env('AUTH_RATE_LIMITING', false),
+
     /*
     |--------------------------------------------------------------------------
     | Authentication Guards
@@ -97,7 +101,7 @@ return [
             'provider' => 'users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
             'expire' => 60,
-            'throttle' => 60,
+            'throttle' => env('AUTH_PASSWORD_RESET_THROTTLE', 0),
         ],
     ],
 

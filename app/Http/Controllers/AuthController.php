@@ -31,18 +31,22 @@ class AuthController extends Controller
     public function store(LoginRequest $request): RedirectResponse
     {
         $key = Str::transliterate(Str::lower($request->input('email')).'|'.$request->ip());
-        if (RateLimiter::tooManyAttempts($key, 5)) {
+        if ($this->rateLimitingEnabled() && RateLimiter::tooManyAttempts($key, 5)) {
             return back()->withErrors(['email' => 'Too many attempts. Please wait '.RateLimiter::availableIn($key).' seconds.'])->onlyInput('email');
         }
 
         $user = User::with('roles')->where('email', $request->string('email'))->first();
         if (! $user || ! $user->is_active || ! Hash::check($request->string('password'), $user->password)) {
-            RateLimiter::hit($key, 900);
+            if ($this->rateLimitingEnabled()) {
+                RateLimiter::hit($key, 900);
+            }
 
             return back()->withErrors(['email' => 'The supplied credentials are invalid.'])->onlyInput('email');
         }
 
-        RateLimiter::clear($key);
+        if ($this->rateLimitingEnabled()) {
+            RateLimiter::clear($key);
+        }
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
         $user->forceFill(['last_login_at' => now(), 'last_login_ip' => $request->ip()])->save();
@@ -117,7 +121,7 @@ class AuthController extends Controller
             'password' => ['required', 'confirmed', PasswordRule::min(12)->mixedCase()->numbers()],
         ]);
         $key = 'password-reset-whatsapp-verify:'.$data['whatsapp_number'].'|'.$request->ip();
-        if (RateLimiter::tooManyAttempts($key, 5)) {
+        if ($this->rateLimitingEnabled() && RateLimiter::tooManyAttempts($key, 5)) {
             return back()->withErrors(['otp' => 'Too many incorrect codes. Please request a new code and try again later.']);
         }
 
@@ -129,9 +133,11 @@ class AuthController extends Controller
             ->latest('id')
             ->first();
 
-        if (! $otp || $otp->attempts >= 5 || ! Hash::check($data['otp'], $otp->code)) {
-            $otp?->increment('attempts');
-            RateLimiter::hit($key, 900);
+        if (! $otp || ($this->rateLimitingEnabled() && $otp->attempts >= 5) || ! Hash::check($data['otp'], $otp->code)) {
+            if ($this->rateLimitingEnabled()) {
+                $otp?->increment('attempts');
+                RateLimiter::hit($key, 900);
+            }
 
             return back()->withErrors(['otp' => 'This code is invalid or has expired.']);
         }
@@ -141,7 +147,9 @@ class AuthController extends Controller
             $otp->update(['used_at' => now()]);
             $user->passwordResetOtps()->whereNull('used_at')->delete();
         });
-        RateLimiter::clear($key);
+        if ($this->rateLimitingEnabled()) {
+            RateLimiter::clear($key);
+        }
 
         return redirect()->route('login')->with('success', 'Your password has been reset. You can now sign in.');
     }
@@ -169,13 +177,15 @@ class AuthController extends Controller
     private function sendWhatsAppReset(string $whatsappNumber, Request $request, WhatsAppService $whatsApp): RedirectResponse
     {
         $key = 'password-reset-whatsapp-send:'.$whatsappNumber.'|'.$request->ip();
-        if (RateLimiter::tooManyAttempts($key, 5)) {
+        if ($this->rateLimitingEnabled() && RateLimiter::tooManyAttempts($key, 5)) {
             return back()->withErrors(['whatsapp_number' => 'Too many requests. Please try again later.']);
         }
 
         $user = User::query()->where('whatsapp_number', $whatsappNumber)->where('is_active', true)->first();
         if (! $user) {
-            RateLimiter::hit($key, 900);
+            if ($this->rateLimitingEnabled()) {
+                RateLimiter::hit($key, 900);
+            }
 
             return back()->with('success', 'If the WhatsApp number belongs to an active account, a reset code has been sent.');
         }
@@ -201,9 +211,16 @@ class AuthController extends Controller
             return back()->withErrors(['whatsapp_number' => 'The WhatsApp reset message could not be sent. Check the WhatsApp Cloud API configuration and try again.']);
         }
 
-        RateLimiter::hit($key, 900);
+        if ($this->rateLimitingEnabled()) {
+            RateLimiter::hit($key, 900);
+        }
 
         return redirect()->route('password.whatsapp', ['whatsapp_number' => $whatsappNumber])
             ->with('success', 'A six-digit reset code was sent to WhatsApp. It expires in 10 minutes.');
+    }
+
+    private function rateLimitingEnabled(): bool
+    {
+        return (bool) config('auth.rate_limiting');
     }
 }
