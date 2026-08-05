@@ -6,21 +6,36 @@
     <div class="sidebar-backdrop no-print" data-sidebar-backdrop></div>
     <aside id="primary-sidebar" class="sidebar no-print" aria-label="Main navigation">
         <div class="sidebar-brand">
-            <div class="sidebar-brand-mark">S</div>
+            <div class="sidebar-brand-mark" aria-hidden="true"><x-nav-icon name="books" /></div>
             <div class="sidebar-brand-copy"><div class="font-semibold text-white">School Book Manager</div><div class="text-[11px] text-slate-400">Inventory & distribution</div></div>
             <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close navigation">&times;</button>
         </div>
         <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
-@php($nav=[['dashboard','Dashboard','dashboard.view'],['operations.index','Operations center','dashboard.view'],['students.index','Students','students.view'],['books.index','Books & packages','books.view'],['suppliers.index','Suppliers','suppliers.view'],['distributions.index','Distribution','distributions.create'],['payments.index','Payments','payments.view'],['inventory.ledger','Inventory ledger','inventory.view'],['deferred.index','Deferred approvals','deferred.view'],['academic.index','Academic structure','academic.manage'],['teachers.index','Teachers','people.manage'],['responsible.index','Responsible persons','people.manage'],['reports.index','Reports','reports.view'],['admin.users','Administration','admin.manage']])
-@foreach($nav as [$route,$label,$permission])
+@php($nav=[
+    ['dashboard','Dashboard','dashboard.view','dashboard'],
+    ['operations.index','Operations center','dashboard.view','operations'],
+    ['students.index','Students','students.view','students'],
+    ['books.index','Books & packages','books.view','books'],
+    ['suppliers.index','Suppliers','suppliers.view','suppliers'],
+    ['distributions.index','Distribution','distributions.create','distribution'],
+    ['payments.index','Payments','payments.view','payments'],
+    ['inventory.ledger','Inventory ledger','inventory.view','inventory'],
+    ['deferred.index','Deferred approvals','deferred.view','deferred'],
+    ['academic.index','Academic structure','academic.manage','academic'],
+    ['teachers.index','Teachers','people.manage','teachers'],
+    ['responsible.index','Responsible persons','people.manage','responsible'],
+    ['reports.index','Reports','reports.view','reports'],
+    ['admin.users','Administration','admin.manage','administration'],
+])
+@foreach($nav as [$route,$label,$permission,$icon])
     @if(auth()->user()->hasPermission($permission))
         <a href="{{ route($route) }}" class="sidebar-link {{ request()->routeIs(str_replace('.index','.*',$route)) || request()->routeIs($route) || ($route === 'books.index' && request()->routeIs('class-lists.*')) ? 'active' : '' }}" aria-label="{{ __($label) }}" title="{{ __($label) }}">
-            <span class="sidebar-link-icon" aria-hidden="true">{{ strtoupper($label[0]) }}</span><span class="sidebar-link-label">{{ __($label) }}</span>
+            <span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon :name="$icon" /></span><span class="sidebar-link-label">{{ __($label) }}</span>
         </a>
     @endif
 @endforeach
         </nav>
-        <div class="shrink-0 border-t border-white/10 p-3"><form method="POST" action="{{ route('logout') }}">@csrf<button class="sidebar-link w-full text-left" aria-label="Sign out" title="Sign out"><span class="sidebar-link-icon" aria-hidden="true">&rarr;</span><span class="sidebar-signout-label">Sign out</span></button></form></div>
+        <div class="shrink-0 border-t border-white/10 p-3"><form method="POST" action="{{ route('logout') }}">@csrf<button class="sidebar-link w-full text-left" aria-label="Sign out" title="Sign out"><span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon name="sign-out" /></span><span class="sidebar-signout-label">Sign out</span></button></form></div>
     </aside>
     <main class="main">
         <header class="topbar no-print">
