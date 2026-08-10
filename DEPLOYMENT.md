@@ -22,4 +22,4 @@ The initial database contains only roles/permissions, one administrator, academi
 
 - The web service sleeps after 15 minutes without traffic; the next visit can take about a minute to wake it.
 - The free Render PostgreSQL database is intended for testing and expires after 30 days. Export or upgrade it before then if you need to keep data.
-- Render's free web service cannot send email over SMTP ports. Configure a paid host or an HTTPS email API before using email password resets in production.
+- Render's free web service cannot send email over SMTP ports. This project supports the Resend HTTPS API for password-reset emails. In the web service's **Environment** settings, add `RESEND_API_KEY`, set `MAIL_MAILER=resend`, and set `MAIL_FROM_ADDRESS` to a sender address verified in Resend. Then save the variables and manually deploy the latest commit. Any active user account can request a reset link at `/forgot-password`.

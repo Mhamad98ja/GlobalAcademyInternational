@@ -157,7 +157,7 @@ class AuthController extends Controller
     private function sendEmailReset(string $email): RedirectResponse
     {
         if (in_array(config('mail.default'), ['log', 'array'], true)) {
-            return back()->withErrors(['email' => 'Email delivery is not configured. Add the Gmail SMTP settings before sending reset links.']);
+            return back()->withErrors(['email' => 'Email delivery is not configured. Add an email provider before sending reset links.']);
         }
 
         $user = User::query()->where('email', $email)->where('is_active', true)->first();
@@ -167,7 +167,7 @@ class AuthController extends Controller
             } catch (Throwable $exception) {
                 report($exception);
 
-                return back()->withErrors(['email' => 'The reset email could not be sent. Check the Gmail mail configuration and try again.']);
+                return back()->withErrors(['email' => 'The reset email could not be sent. Check the email provider configuration and try again.']);
             }
         }
 

@@ -43,6 +43,10 @@ services:
         sync: false
       - key: SBM_ADMIN_PASSWORD
         sync: false
+      # Set MAIL_MAILER=resend and add a verified Resend sender in the Render dashboard.
+      # Resend uses HTTPS, so password-reset email works on the Render Free plan.
+      - key: RESEND_API_KEY
+        sync: false
 
 databases:
   - name: sbm-school-book-test-db
