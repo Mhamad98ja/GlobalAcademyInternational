@@ -156,8 +156,8 @@ class AuthController extends Controller
 
     private function sendEmailReset(string $email): RedirectResponse
     {
-        if (in_array(config('mail.default'), ['log', 'array'], true)) {
-            return back()->withErrors(['email' => 'Email delivery is not configured. Add an email provider before sending reset links.']);
+        if ($configurationError = $this->emailDeliveryConfigurationError()) {
+            return back()->withErrors(['email' => $configurationError]);
         }
 
         $user = User::query()->where('email', $email)->where('is_active', true)->first();
@@ -172,6 +172,33 @@ class AuthController extends Controller
         }
 
         return back()->with('success', 'If the email belongs to an active account, a reset link has been sent.');
+    }
+
+    private function emailDeliveryConfigurationError(): ?string
+    {
+        $mailer = (string) config('mail.default');
+
+        if (in_array($mailer, ['log', 'array'], true)) {
+            return 'Email delivery is not configured. Add an email provider before sending reset links.';
+        }
+
+        if ($mailer === 'resend' && blank(config('services.resend.key'))) {
+            return 'Resend email delivery is not configured. Add RESEND_API_KEY in the service environment settings.';
+        }
+
+        if ($mailer === 'smtp') {
+            $smtp = (array) config('mail.mailers.smtp');
+            if (blank($smtp['host'] ?? null) || blank($smtp['username'] ?? null) || blank($smtp['password'] ?? null)) {
+                return 'SMTP email delivery is incomplete. Add the SMTP host, username, and password.';
+            }
+
+            $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+            if (is_string($appHost) && str_ends_with($appHost, '.onrender.com')) {
+                return 'SMTP email is blocked on Render Free. Set MAIL_MAILER=resend and add RESEND_API_KEY.';
+            }
+        }
+
+        return null;
     }
 
     private function sendWhatsAppReset(string $whatsappNumber, Request $request, WhatsAppService $whatsApp): RedirectResponse

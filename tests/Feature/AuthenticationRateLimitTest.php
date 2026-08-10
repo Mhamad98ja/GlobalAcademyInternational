@@ -36,4 +36,18 @@ class AuthenticationRateLimitTest extends TestCase
 
         $this->assertAuthenticatedAs($user);
     }
+
+    public function test_reset_request_explains_when_resend_is_not_configured(): void
+    {
+        config()->set('mail.default', 'resend');
+        config()->set('services.resend.key', null);
+        $user = User::factory()->create(['is_active' => true]);
+
+        $this->post(route('password.email'), [
+            'delivery_method' => 'email',
+            'email' => $user->email,
+        ])->assertSessionHasErrors([
+            'email' => 'Resend email delivery is not configured. Add RESEND_API_KEY in the service environment settings.',
+        ]);
+    }
 }
