@@ -51,7 +51,7 @@ class DistributionController extends Controller
                     'quantity' => $item->quantity,
                 ])->values(),
             ])->values(),
-            'books' => Book::active()->orderBy('title')->get(),
+            'books' => Book::active()->withBranchStock()->orderBy('title')->get(),
             'selectedRegistration' => $request->integer('registration'),
         ]);
     }

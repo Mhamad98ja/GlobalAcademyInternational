@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Models\Concerns\HasPublicId;
+use App\Models\Concerns\BelongsToBranch;
 use App\Services\Money;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SupplierPurchase extends Model
 {
-    use HasPublicId;
+    use HasPublicId, BelongsToBranch;
 
     protected $fillable = [
         'purchase_number',

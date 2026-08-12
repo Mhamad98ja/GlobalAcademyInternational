@@ -21,6 +21,8 @@ use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\StudentRegistrationsController;
 use App\Http\Controllers\SuppliersController;
 use App\Http\Controllers\SupplierReturnsController;
+use App\Http\Controllers\BranchesController;
+use App\Http\Controllers\BookTransfersController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -39,7 +41,8 @@ Route::middleware('guest')->group(function () use ($authThrottle): void {
 });
 Route::post('/logout',[AuthController::class,'destroy'])->middleware('auth')->name('logout');
 
-Route::middleware(['auth'])->group(function (): void {
+Route::middleware(['auth', 'branch'])->group(function (): void {
+ Route::post('/branches/current',[BranchesController::class,'select'])->name('branches.select');
  Route::get('/dashboard',DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
  Route::get('/operations',[OperationsController::class,'index'])->middleware('permission:dashboard.view')->name('operations.index');
  Route::middleware('permission:class-lists.manage')->group(function():void{Route::get('/class-book-lists/{classBookList}/edit',[ClassBookListsController::class,'edit'])->name('class-lists.edit');Route::put('/class-book-lists/{classBookList}',[ClassBookListsController::class,'update'])->name('class-lists.update');});
@@ -62,4 +65,6 @@ Route::middleware(['auth'])->group(function (): void {
  Route::middleware('permission:class-lists.manage')->group(function():void{Route::get('/class-book-lists',[ClassBookListsController::class,'index'])->name('class-lists.index');Route::get('/class-book-lists/create',[ClassBookListsController::class,'create'])->name('class-lists.create');Route::post('/class-book-lists',[ClassBookListsController::class,'store'])->name('class-lists.store');});
  Route::middleware('permission:reports.view')->group(function():void{Route::get('/reports',[ReportsController::class,'index'])->name('reports.index');Route::get('/reports/csv',[ReportsController::class,'csv'])->name('reports.csv');});
  Route::middleware('permission:admin.manage')->group(function():void{Route::get('/admin/users',[AdministrationController::class,'users'])->name('admin.users');Route::post('/admin/users',[AdministrationController::class,'storeUser'])->name('admin.users.store');Route::post('/admin/users/{user}/toggle',[AdministrationController::class,'toggleUser'])->name('admin.users.toggle');Route::delete('/admin/users/{user}',[AdministrationController::class,'destroyUser'])->name('admin.users.destroy');Route::get('/admin/roles',[AdministrationController::class,'roles'])->name('admin.roles');Route::get('/admin/audit',[AdministrationController::class,'audit'])->name('admin.audit');Route::get('/admin/recycle-bin',[AdministrationController::class,'recycleBin'])->name('admin.recycle');Route::post('/admin/recycle-bin/{type}/{id}',[AdministrationController::class,'restore'])->name('admin.recycle.restore');Route::get('/admin/settings',[AdministrationController::class,'settings'])->name('admin.settings');Route::put('/admin/settings',[AdministrationController::class,'saveSettings'])->name('admin.settings.update');});
+ Route::middleware('permission:admin.manage')->group(function():void{Route::get('/admin/branches',[BranchesController::class,'index'])->name('branches.index');Route::post('/admin/branches',[BranchesController::class,'store'])->name('branches.store');Route::put('/admin/branches/{branch}',[BranchesController::class,'update'])->name('branches.update');});
+ Route::middleware('permission:inventory.transfer')->group(function():void{Route::get('/transfers',[BookTransfersController::class,'index'])->name('transfers.index');Route::get('/transfers/create',[BookTransfersController::class,'create'])->name('transfers.create');Route::post('/transfers',[BookTransfersController::class,'store'])->name('transfers.store');Route::get('/transfers/{transfer}',[BookTransfersController::class,'show'])->name('transfers.show');});
 });

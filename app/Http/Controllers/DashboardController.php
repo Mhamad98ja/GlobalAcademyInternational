@@ -23,14 +23,14 @@ class DashboardController extends Controller
             ->orderByDesc('starts_on')
             ->first();
         $academicYearId = $activeAcademicYear?->id;
-        $books = Book::query()->active()->get();
+        $books = Book::query()->active()->withBranchStock()->get();
 
         return view('dashboard', [
             'activeAcademicYear' => $activeAcademicYear,
             'activeStudents' => $academicYearId
                 ? StudentRegistration::query()->where('status', 'active')->where('academic_year_id', $academicYearId)->count()
                 : 0,
-            'stock' => $books->sum('stock_on_hand'),
+            'stock' => $books->sum('branch_quantity'),
             'lowStock' => $books->filter(fn (Book $book) => $book->stock_on_hand <= $book->minimum_stock)->sortBy('stock_on_hand')->take(6),
             'collected' => $academicYearId
                 ? Payment::query()->where('status', 'valid')->whereDate('payment_date', today())->whereHas('invoice', fn ($query) => $query->where('academic_year_id', $academicYearId))->sum('amount')

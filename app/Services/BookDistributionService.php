@@ -63,7 +63,7 @@ final class BookDistributionService
 
             $total = $subtotal + $taxTotal;
             $invoice = Invoice::create([
-                'invoice_number' => 'INV-'.now()->format('Ymd').'-'.str_pad((string) ((Invoice::max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT),
+                'invoice_number' => 'INV-'.now()->format('Ymd').'-'.str_pad((string) ((Invoice::withoutGlobalScopes()->max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT),
                 'student_id' => $registration->student_id,
                 'student_registration_id' => $registration->id,
                 'responsible_person_id' => $registration->student->responsiblePersons()

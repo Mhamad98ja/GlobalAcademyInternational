@@ -51,7 +51,7 @@ final class SupplierPurchaseService
             }
 
             $purchase = SupplierPurchase::create([
-                'purchase_number' => 'PO-'.now()->format('Ymd').'-'.str_pad((string) ((SupplierPurchase::max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT),
+                'purchase_number' => 'PO-'.now()->format('Ymd').'-'.str_pad((string) ((SupplierPurchase::withoutGlobalScopes()->max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT),
                 'supplier_id' => $data['supplier_id'],
                 'academic_year_id' => $data['academic_year_id'] ?? null,
                 'purchase_date' => $data['purchase_date'],

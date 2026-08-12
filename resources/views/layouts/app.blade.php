@@ -20,6 +20,7 @@
     ['distributions.index','Distribution','distributions.create','distribution'],
     ['payments.index','Payments','payments.view','payments'],
     ['inventory.ledger','Inventory ledger','inventory.view','inventory'],
+    ['transfers.index','Book transfers','inventory.transfer','inventory'],
     ['deferred.index','Deferred approvals','deferred.view','deferred'],
     ['academic.index','Academic structure','academic.manage','academic'],
     ['teachers.index','Teachers','people.manage','teachers'],
@@ -43,7 +44,29 @@
                 <button type="button" class="nav-toggle" data-sidebar-toggle aria-controls="primary-sidebar" aria-expanded="true"><span class="sr-only">Toggle navigation</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
                 <div class="min-w-0 text-sm text-slate-500"><span class="hidden sm:inline">{{ config('app.name', 'School Book Manager') }}</span><span class="sm:hidden">SBM</span></div>
             </div>
-            <div class="flex shrink-0 items-center gap-3"><a href="{{ route('reports.index') }}" class="hidden text-sm text-slate-500 hover:text-teal-700 sm:block">Reports</a><div class="h-8 w-px bg-slate-200"></div><div class="max-w-40 text-right"><div class="truncate text-sm font-medium text-slate-800">{{ auth()->user()->name }}</div><div class="truncate text-xs text-slate-500">{{ auth()->user()->roles->first()?->label ?? 'User' }}</div></div><div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-teal-100 font-semibold text-teal-800">{{ strtoupper(substr(auth()->user()->name,0,1)) }}</div></div>
+            <div class="flex shrink-0 items-center gap-3">
+                <a href="{{ route('reports.index') }}" class="hidden text-sm text-slate-500 hover:text-teal-700 sm:block">Reports</a>
+                @php($branchContext = app(\App\Services\BranchContext::class))
+                @php($activeBranch = $branchContext->branch())
+                @php($availableBranches = $branchContext->accessibleBranches(auth()->user()))
+                @if ($availableBranches->isNotEmpty())
+                    <form method="POST" action="{{ route('branches.select') }}" class="hidden lg:block">
+                        @csrf
+                        <label class="sr-only" for="branch-switcher">Active branch</label>
+                        <select id="branch-switcher" name="branch_id" onchange="this.form.submit()" class="max-w-44 !py-1.5 text-xs font-medium">
+                            <option value="{{ $activeBranch?->id }}">{{ $activeBranch?->name ?? 'Select branch' }}</option>
+                            @foreach ($availableBranches as $availableBranch)
+                                @if ($availableBranch->id !== $activeBranch?->id)
+                                    <option value="{{ $availableBranch->id }}">{{ $availableBranch->name }}</option>
+                                @endif
+                            @endforeach
+                        </select>
+                    </form>
+                @endif
+                <div class="h-8 w-px bg-slate-200"></div>
+                <div class="max-w-40 text-right"><div class="truncate text-sm font-medium text-slate-800">{{ auth()->user()->name }}</div><div class="truncate text-xs text-slate-500">{{ auth()->user()->roles->first()?->label ?? 'User' }}</div></div>
+                <div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-teal-100 font-semibold text-teal-800">{{ strtoupper(substr(auth()->user()->name,0,1)) }}</div>
+            </div>
         </header>
         <div class="page">@include('components.flash')@yield('content')</div>
     </main>

@@ -19,7 +19,7 @@ final class PaymentService
             $this->invoices->refreshBalances($invoice);
             $amount = Money::cents($data['amount']);
             if ($amount <= 0 || $amount > Money::cents((string)$invoice->balance_due)) throw ValidationException::withMessages(['amount'=>'Payment must be greater than zero and no more than the balance due.']);
-            $payment = Payment::create(['payment_number'=>'PAY-'.now()->format('Ymd').'-'.str_pad((string)((Payment::max('id') ?? 0)+1),5,'0',STR_PAD_LEFT),'invoice_id'=>$invoice->id,'student_id'=>$invoice->student_id,'payment_date'=>$data['payment_date'],'amount'=>Money::decimal($amount),'method'=>$data['method'],'cashbox'=>$data['cashbox'] ?? null,'reference_number'=>$data['reference_number'] ?? null,'status'=>'valid','idempotency_key'=>$data['idempotency_key'] ?? (string)Str::uuid(),'notes'=>$data['notes'] ?? null,'received_by'=>$user->id]);
+            $payment = Payment::create(['payment_number'=>'PAY-'.now()->format('Ymd').'-'.str_pad((string)((Payment::withoutGlobalScopes()->max('id') ?? 0)+1),5,'0',STR_PAD_LEFT),'invoice_id'=>$invoice->id,'student_id'=>$invoice->student_id,'payment_date'=>$data['payment_date'],'amount'=>Money::decimal($amount),'method'=>$data['method'],'cashbox'=>$data['cashbox'] ?? null,'reference_number'=>$data['reference_number'] ?? null,'status'=>'valid','idempotency_key'=>$data['idempotency_key'] ?? (string)Str::uuid(),'notes'=>$data['notes'] ?? null,'received_by'=>$user->id]);
             $this->invoices->refreshBalances($invoice);
             $this->audit->log('payment.recorded',$payment,[],['amount'=>$payment->amount]);
             return $payment;

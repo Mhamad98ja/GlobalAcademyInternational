@@ -58,6 +58,16 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class);
     }
 
+    public function branches(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Branch::class)->withPivot('is_default')->withTimestamps();
+    }
+
+    public function custodyStocks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(UserBookStock::class);
+    }
+
     public function passwordResetOtps(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(PasswordResetOtp::class);

@@ -61,7 +61,13 @@ class ReportsController extends Controller
             if ($report === 'stock') {
                 fputcsv($output, ['SKU', 'Title', 'On hand', 'Reserved', 'Available']);
                 foreach ($query->cursor() as $book) {
-                    fputcsv($output, [$book->sku, $book->title, $book->stock_on_hand, $book->reserved_quantity, $book->available_quantity]);
+                    $level = $filters['stock_level'] ?? null;
+                    if (($level === 'in_stock' && $book->branch_quantity < 1)
+                        || ($level === 'low_stock' && $book->branch_quantity > $book->minimum_stock)
+                        || ($level === 'out_of_stock' && $book->branch_quantity > 0)) {
+                        continue;
+                    }
+                    fputcsv($output, [$book->sku, $book->title, $book->branch_quantity, $book->branchStocks->first()?->reserved_quantity ?? 0, $book->available_quantity]);
                 }
             } elseif ($report === 'invoices') {
                 fputcsv($output, ['Invoice', 'Student', 'Date', 'Total', 'Paid', 'Balance', 'Payment status']);
@@ -146,15 +152,12 @@ class ReportsController extends Controller
     private function reportQuery(string $report, array $filters): Builder
     {
         return match ($report) {
-            'stock' => Book::query()
+            'stock' => Book::query()->withBranchStock()
                 ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where(fn (Builder $books) => $books
                     ->where('title', 'like', '%'.$search.'%')
                     ->orWhere('sku', 'like', '%'.$search.'%')
                     ->orWhere('barcode', 'like', '%'.$search.'%')))
-                ->when(($filters['stock_level'] ?? null) === 'in_stock', fn (Builder $query) => $query->where('stock_on_hand', '>', 0))
-                ->when(($filters['stock_level'] ?? null) === 'low_stock', fn (Builder $query) => $query->whereColumn('stock_on_hand', '<=', 'minimum_stock'))
-                ->when(($filters['stock_level'] ?? null) === 'out_of_stock', fn (Builder $query) => $query->where('stock_on_hand', '<=', 0))
-                ->orderBy('stock_on_hand')
+                ->orderBy('title')
                 ->orderBy('title'),
             'invoices' => Invoice::query()
                 ->with('student')

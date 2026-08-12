@@ -6,7 +6,11 @@
             <thead><tr><th>SKU</th><th>Book</th><th>On hand</th><th>Reserved</th><th>Available</th></tr></thead>
             <tbody>
                 @foreach ($rows as $book)
-                    <tr><td>{{ $book->sku }}</td><td>{{ $book->title }}</td><td>{{ $book->stock_on_hand }}</td><td>{{ $book->reserved_quantity }}</td><td>{{ $book->available_quantity }}</td></tr>
+                    @php($reserved = $book->branchStocks->first()?->reserved_quantity ?? 0)
+                    @if (($filters['stock_level'] ?? null) === 'in_stock' && $book->branch_quantity < 1) @continue @endif
+                    @if (($filters['stock_level'] ?? null) === 'low_stock' && $book->branch_quantity > $book->minimum_stock) @continue @endif
+                    @if (($filters['stock_level'] ?? null) === 'out_of_stock' && $book->branch_quantity > 0) @continue @endif
+                    <tr><td>{{ $book->sku }}</td><td>{{ $book->title }}</td><td>{{ $book->branch_quantity }}</td><td>{{ $reserved }}</td><td>{{ $book->available_quantity }}</td></tr>
                 @endforeach
             </tbody>
         </table>

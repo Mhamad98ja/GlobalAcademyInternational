@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\AcademicYear;
+use App\Models\Branch;
 use App\Models\Grade;
 use App\Models\Permission;
 use App\Models\Role;
@@ -36,6 +37,7 @@ class DatabaseSeeder extends Seeder
             'payments.reverse' => 'Reverse payments',
             'inventory.view' => 'View inventory',
             'inventory.adjust' => 'Adjust inventory',
+            'inventory.transfer' => 'Transfer books between branches and users',
             'returns.manage' => 'Manage returns',
             'deferred.view' => 'View deferred approvals',
             'deferred.create' => 'Create deferred payments',
@@ -80,6 +82,8 @@ class DatabaseSeeder extends Seeder
             ],
         );
         $administrator->roles()->sync([Role::where('name', 'super-administrator')->value('id')]);
+        $mainBranch = Branch::firstOrCreate(['code' => 'MAIN'], ['name' => 'Main Branch', 'is_active' => true]);
+        $administrator->branches()->syncWithoutDetaching([$mainBranch->id => ['is_default' => true]]);
 
         foreach ([
             ['name' => '2026-2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'open'],

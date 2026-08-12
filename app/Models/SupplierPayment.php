@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToBranch;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierPayment extends Model
 {
+    use BelongsToBranch;
     protected $fillable = [
         'supplier_purchase_id',
         'amount',

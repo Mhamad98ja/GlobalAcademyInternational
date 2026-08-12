@@ -13,6 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'permission' => \App\Http\Middleware\EnsureUserHasPermission::class,
+            'branch' => \App\Http\Middleware\EnsureBranchAccess::class,
         ]);
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
     })

@@ -1,0 +1,34 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use App\Models\Concerns\HasPublicId;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class BookTransfer extends Model
+{
+    use HasPublicId;
+
+    protected $fillable = [
+        'transfer_number', 'transfer_type', 'source_branch_id', 'destination_branch_id',
+        'source_user_id', 'destination_user_id', 'academic_year_id', 'transferred_on',
+        'status', 'notes', 'created_by', 'completed_by',
+    ];
+
+    protected function casts(): array
+    {
+        return ['transferred_on' => 'date'];
+    }
+
+    public function sourceBranch(): BelongsTo { return $this->belongsTo(Branch::class, 'source_branch_id'); }
+    public function destinationBranch(): BelongsTo { return $this->belongsTo(Branch::class, 'destination_branch_id'); }
+    public function sourceUser(): BelongsTo { return $this->belongsTo(User::class, 'source_user_id'); }
+    public function destinationUser(): BelongsTo { return $this->belongsTo(User::class, 'destination_user_id'); }
+    public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function academicYear(): BelongsTo { return $this->belongsTo(AcademicYear::class); }
+    public function items(): HasMany { return $this->hasMany(BookTransferItem::class); }
+}

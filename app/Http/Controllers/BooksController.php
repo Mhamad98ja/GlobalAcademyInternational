@@ -36,7 +36,7 @@ class BooksController extends Controller
                 ->paginate(15)
                 ->withQueryString();
         } else {
-            $books = Book::query()
+            $books = Book::query()->withBranchStock()
                 ->when($search !== '', fn ($query) => $query->where(fn ($books) => $books
                     ->where('title', 'like', '%'.$search.'%')
                     ->orWhere('barcode', 'like', '%'.$search.'%')
@@ -67,7 +67,7 @@ class BooksController extends Controller
 
     public function show(Book $book): View
     {
-        $book->load(['movements' => fn ($query) => $query->with('user')->latest()->take(20)]);
+        $book->load(['branchStocks' => fn ($stocks) => $stocks->where('branch_id', app(\App\Services\BranchContext::class)->id()), 'movements' => fn ($query) => $query->with('user')->latest()->take(20)]);
 
         return view('books.show', compact('book'));
     }

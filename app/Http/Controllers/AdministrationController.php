@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
+use App\Services\BranchContext;
 use App\Models\Book;
 use App\Models\ResponsiblePerson;
 use App\Models\Role;
@@ -23,12 +24,12 @@ class AdministrationController extends Controller
     public function users(): View
     {
         return view('admin.users', [
-            'users' => User::with('roles')->orderBy('name')->paginate(20),
+            'users' => User::with('roles', 'branches')->orderBy('name')->paginate(20),
             'roles' => Role::orderBy('label')->get(),
         ]);
     }
 
-    public function storeUser(Request $request): RedirectResponse
+    public function storeUser(Request $request, BranchContext $branches): RedirectResponse
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -36,6 +37,9 @@ class AdministrationController extends Controller
             'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', 'unique:users,whatsapp_number'],
             'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()],
             'role_id' => ['required', 'exists:roles,id'],
+            'branch_ids' => ['nullable', 'array'],
+            'branch_ids.*' => ['integer', 'exists:branches,id'],
+            'default_branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
 
         $user = User::create([
@@ -46,6 +50,13 @@ class AdministrationController extends Controller
             'is_active' => true,
         ]);
         $user->roles()->sync([$data['role_id']]);
+        $branchIds = $data['branch_ids'] ?? [];
+        $defaultBranchId = $data['default_branch_id'] ?? null;
+        if ($branchIds !== []) {
+            $this->syncBranches($user, $branchIds, $defaultBranchId);
+        } elseif ($branchId = $branches->id()) {
+            $user->branches()->syncWithoutDetaching([$branchId => ['is_default' => true]]);
+        }
 
         return back()->with('success', 'User account created.');
     }
@@ -53,8 +64,9 @@ class AdministrationController extends Controller
     public function editUser(User $user): View
     {
         return view('admin.user-form', [
-            'managedUser' => $user->load('roles'),
+            'managedUser' => $user->load('roles', 'branches'),
             'roles' => Role::orderBy('label')->get(),
+            'branches' => \App\Models\Branch::where('is_active', true)->orderBy('name')->get(),
         ]);
     }
 
@@ -66,6 +78,9 @@ class AdministrationController extends Controller
             'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', Rule::unique('users', 'whatsapp_number')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', Password::min(12)->mixedCase()->numbers()],
             'role_id' => ['required', 'exists:roles,id'],
+            'branch_ids' => ['nullable', 'array'],
+            'branch_ids.*' => ['integer', 'exists:branches,id'],
+            'default_branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
 
         $attributes = ['name' => $data['name'], 'email' => $data['email'], 'whatsapp_number' => $data['whatsapp_number'] ?? null];
@@ -75,6 +90,7 @@ class AdministrationController extends Controller
 
         $user->update($attributes);
         $user->roles()->sync([$data['role_id']]);
+        $this->syncBranches($user, $data['branch_ids'] ?? [], $data['default_branch_id'] ?? null);
 
         return redirect()->route('admin.users')->with('success', 'User account updated.');
     }
@@ -140,6 +156,14 @@ class AdministrationController extends Controller
     public function settings(): View
     {
         return view('admin.settings', ['settings' => SystemSetting::pluck('value', 'key')]);
+    }
+
+    private function syncBranches(User $user, array $branchIds, ?int $defaultBranchId): void
+    {
+        if ($defaultBranchId !== null && ! in_array($defaultBranchId, $branchIds, true)) {
+            abort(422, 'The default branch must be assigned to this user.');
+        }
+        $user->branches()->sync(collect($branchIds)->mapWithKeys(fn ($id) => [(int) $id => ['is_default' => (int) $id === $defaultBranchId]])->all());
     }
 
     public function saveSettings(Request $request): RedirectResponse
