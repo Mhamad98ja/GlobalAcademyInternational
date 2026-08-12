@@ -1,7 +1,7 @@
 @extends('layouts.app', ['title' => 'Branches'])
 
 @section('content')
-<div class="page-header"><div><h1 class="page-title">Branches</h1><p class="page-subtitle">Create locations and assign the users who may work in each one.</p></div></div>
+<div class="page-header"><div><h1 class="page-title">Branches</h1><p class="page-subtitle">Create locations and assign the users who may work in each one.</p>@if ($controllerAdministrator)<p class="mt-2 text-xs font-medium text-violet-700">Controller Administrator: {{ $controllerAdministrator->name }}. Only this account can create, edit, or deactivate branches.</p>@endif</div></div>
 <div class="grid gap-6 xl:grid-cols-[minmax(19rem,1fr)_minmax(0,1.8fr)]">
 <section class="panel"><div class="panel-header"><h2 class="panel-title">New branch</h2></div><form method="POST" action="{{ route('branches.store') }}" class="space-y-3 p-5" data-submit-lock>@csrf
 <div><label class="form-label">Code *</label><input name="code" required value="{{ old('code') }}" placeholder="BEIRUT"></div>

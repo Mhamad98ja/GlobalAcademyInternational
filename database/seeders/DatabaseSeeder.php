@@ -82,6 +82,9 @@ class DatabaseSeeder extends Seeder
             ],
         );
         $administrator->roles()->sync([Role::where('name', 'super-administrator')->value('id')]);
+        if (! User::query()->where('is_controller_administrator', true)->exists()) {
+            $administrator->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        }
         $mainBranch = Branch::firstOrCreate(['code' => 'MAIN'], ['name' => 'Main Branch', 'is_active' => true]);
         $administrator->branches()->syncWithoutDetaching([$mainBranch->id => ['is_default' => true]]);
 

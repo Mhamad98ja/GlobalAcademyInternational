@@ -7,7 +7,7 @@
         <p class="page-subtitle">Create employee accounts, assign their role, and update user details safely.</p>
     </div>
     <div class="flex flex-wrap gap-2">
-        <a class="btn btn-secondary" href="{{ route('branches.index') }}">Branches</a>
+        @can('manage-branches')<a class="btn btn-secondary" href="{{ route('branches.index') }}">Branches</a>@endcan
         <a class="btn btn-secondary" href="{{ route('admin.roles') }}">Roles</a>
         <a class="btn btn-secondary" href="{{ route('admin.audit') }}">Audit log</a>
     </div>
@@ -48,15 +48,31 @@
                     @endforeach
                 </select>
             </div>
-            <div>
-                <label class="form-label">Branch access</label>
-                <select name="branch_ids[]" multiple size="4">
-                    @foreach (\App\Models\Branch::where('is_active', true)->orderBy('name')->get() as $branch)
-                        <option value="{{ $branch->id }}" @selected($branch->id === app(\App\Services\BranchContext::class)->id())>{{ $branch->name }}</option>
-                    @endforeach
-                </select>
-                <p class="mt-1 text-xs text-slate-500">New users are assigned to the current branch by default. Edit the account to choose multiple branches or a different default.</p>
-            </div>
+            @if (auth()->user()->isControllerAdministrator())
+                <div class="border-t border-slate-200 pt-3">
+                    <h3 class="font-medium text-slate-800">Branch authority</h3>
+                    <div class="mt-3">
+                        <label class="form-label">Assigned branches</label>
+                        <select name="branch_ids[]" multiple size="4">
+                            @foreach (\App\Models\Branch::where('is_active', true)->orderBy('name')->get() as $branch)
+                                <option value="{{ $branch->id }}" @selected($branch->id === app(\App\Services\BranchContext::class)->id())>{{ $branch->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <label class="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" name="has_all_branch_access" value="1"> Administrator access to all branches</label>
+                    <div class="mt-3">
+                        <label class="form-label">Administrator for selected branches</label>
+                        <select name="branch_administrator_ids[]" multiple size="4">
+                            @foreach (\App\Models\Branch::where('is_active', true)->orderBy('name')->get() as $branch)
+                                <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <p class="mt-2 text-xs text-slate-500">Only the Controller Administrator can assign branch access. This does not give permission to create, edit, or deactivate branches.</p>
+                </div>
+            @else
+                <p class="text-xs text-slate-500">The new user will be assigned to your current branch. Only the Controller Administrator can change branch access.</p>
+            @endif
             <button class="btn btn-primary w-full">Create user</button>
         </form>
     </section>
@@ -72,7 +88,12 @@
                     @foreach ($users as $user)
                         <tr>
                             <td>{{ $user->name }}<div class="text-xs muted">{{ $user->email }}</div><div class="text-xs muted">{{ $user->whatsapp_number }}</div></td>
-                            <td>{{ $user->roles->pluck('label')->join(', ') ?: '-' }}<div class="mt-1 text-xs muted">{{ $user->branches->pluck('name')->join(', ') ?: 'No branch' }}</div></td>
+                            <td>
+                                {{ $user->roles->pluck('label')->join(', ') ?: '-' }}
+                                @if ($user->is_controller_administrator)<div class="mt-1 text-xs font-medium text-violet-700">Controller Administrator</div>
+                                @elseif ($user->has_all_branch_access)<div class="mt-1 text-xs font-medium text-indigo-700">Administrator for all branches</div>
+                                @else<div class="mt-1 text-xs muted">{{ $user->branches->pluck('name')->join(', ') ?: 'No branch' }}</div>@endif
+                            </td>
                             <td>{{ $user->last_login_at?->format('d M Y H:i') ?? 'Never' }}</td>
                             <td><span class="badge {{ $user->is_active ? 'badge-green' : 'badge-red' }}">{{ $user->is_active ? 'Active' : 'Disabled' }}</span></td>
                             <td class="space-x-3">

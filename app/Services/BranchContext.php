@@ -39,14 +39,14 @@ final class BranchContext
 
     public function canUse(User $user, int $branchId): bool
     {
-        return $user->hasRole('super-administrator')
+        return $user->hasGlobalBranchAccess()
             ? Branch::query()->whereKey($branchId)->where('is_active', true)->exists()
             : $user->branches()->whereKey($branchId)->where('is_active', true)->exists();
     }
 
     public function accessibleBranches(User $user)
     {
-        return $user->hasRole('super-administrator')
+        return $user->hasGlobalBranchAccess()
             ? Branch::query()->where('is_active', true)->orderBy('name')->get()
             : $user->branches()->where('is_active', true)->orderBy('name')->get();
     }

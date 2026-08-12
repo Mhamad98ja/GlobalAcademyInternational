@@ -22,7 +22,7 @@ class Branch extends Model
 
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class)->withPivot('is_default')->withTimestamps();
+        return $this->belongsToMany(User::class)->withPivot('is_default', 'is_branch_administrator')->withTimestamps();
     }
 
     public function bookStocks(): HasMany

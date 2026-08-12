@@ -1,6 +1,7 @@
 @extends('layouts.app', ['title' => 'Edit user'])
 
 @section('content')
+@php($canTransferControllerAuthority = auth()->user()->isControllerAdministrator() && ! $managedUser->is_controller_administrator && $managedUser->is_active && $managedUser->hasPermission('admin.manage'))
 <div class="page-header">
     <div>
         <h1 class="page-title">Edit user</h1>
@@ -34,9 +35,10 @@
                 @endforeach
             </select>
         </div>
+        @if (auth()->user()->isControllerAdministrator())
         <div class="border-t border-slate-200 pt-4">
-            <h2 class="panel-title">Branch access</h2>
-            <p class="mt-1 text-xs text-slate-500">The user can view and create records only in their assigned branches.</p>
+            <h2 class="panel-title">Branch authority</h2>
+            <p class="mt-1 text-xs text-slate-500">The user can work only in assigned branches unless access to all branches is selected. Branch authority never permits branch creation, editing, or deactivation.</p>
             <div class="mt-3">
                 <label class="form-label">Assigned branches</label>
                 <select name="branch_ids[]" multiple size="5">
@@ -49,7 +51,22 @@
                 <label class="form-label">Default branch</label>
                 <select name="default_branch_id"><option value="">None</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}" @selected(old('default_branch_id', $managedUser->branches->firstWhere('pivot.is_default', true)?->id) == $branch->id)>{{ $branch->name }}</option>@endforeach</select>
             </div>
+            <label class="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" name="has_all_branch_access" value="1" @checked(old('has_all_branch_access', $managedUser->has_all_branch_access))> Administrator access to all branches</label>
+            <div class="mt-3">
+                <label class="form-label">Administrator for selected branches</label>
+                <select name="branch_administrator_ids[]" multiple size="5">
+                    @foreach ($branches as $branch)
+                        <option value="{{ $branch->id }}" @selected(in_array($branch->id, old('branch_administrator_ids', $managedUser->branches->filter(fn ($branch) => $branch->pivot->is_branch_administrator)->pluck('id')->all())))>{{ $branch->name }} ({{ $branch->code }})</option>
+                    @endforeach
+                </select>
+                <p class="mt-1 text-xs text-slate-500">This only grants administrator responsibility inside those branches. It does not allow branch creation, editing, or removal.</p>
+            </div>
         </div>
+        @else
+            <div class="border-t border-slate-200 pt-4 text-sm text-slate-600">
+                Branch authority is managed only by the Controller Administrator.
+            </div>
+        @endif
         <div class="border-t border-slate-200 pt-4">
             <h2 class="panel-title">Change password</h2>
             <p class="mt-1 text-xs text-slate-500">Leave both password fields empty to keep the current password.</p>
@@ -66,7 +83,13 @@
         </div>
     </div>
     <div class="flex justify-end border-t border-slate-200 p-5">
+        @if ($canTransferControllerAuthority)
+            <button type="submit" form="transfer-controller-authority" class="btn btn-secondary mr-auto" onclick="return confirm('Transfer Controller Administrator authority to {{ addslashes($managedUser->name) }}?');">Make Controller Administrator</button>
+        @endif
         <button class="btn btn-primary">Save user</button>
     </div>
 </form>
+@if ($canTransferControllerAuthority)
+    <form id="transfer-controller-authority" method="POST" action="{{ route('admin.users.controller.transfer', $managedUser) }}">@csrf</form>
+@endif
 @endsection

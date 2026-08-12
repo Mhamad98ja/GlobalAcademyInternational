@@ -31,7 +31,8 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
 
-        Gate::before(fn (User $user): ?bool => $user->hasRole('super-administrator') ? true : null);
+        Gate::before(fn (User $user, string $ability): ?bool => $ability === 'manage-branches' ? null : ($user->hasRole('super-administrator') ? true : null));
+        Gate::define('manage-branches', fn (User $user): bool => $user->isControllerAdministrator());
         Gate::policy(Invoice::class, InvoicePolicy::class);
     }
 }

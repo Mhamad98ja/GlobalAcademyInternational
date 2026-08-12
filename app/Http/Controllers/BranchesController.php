@@ -18,9 +18,12 @@ class BranchesController extends Controller
 {
     public function index(): View
     {
+        $users = \App\Models\User::query()->with('roles')->where('is_active', true)->orderBy('name')->get();
+
         return view('branches.index', [
             'branches' => Branch::with('users')->withCount('users')->orderBy('name')->get(),
-            'users' => \App\Models\User::query()->where('is_active', true)->orderBy('name')->get(),
+            'users' => $users,
+            'controllerAdministrator' => \App\Models\User::query()->where('is_controller_administrator', true)->first(),
         ]);
     }
 
@@ -81,6 +84,10 @@ class BranchesController extends Controller
         if ($defaultUserId !== null && ! in_array($defaultUserId, $userIds, true)) {
             throw ValidationException::withMessages(['default_user_id' => 'The default user must be assigned to this branch.']);
         }
-        $branch->users()->sync(collect($userIds)->mapWithKeys(fn ($id) => [(int) $id => ['is_default' => (int) $id === $defaultUserId]])->all());
+        $currentAssignments = $branch->users()->get()->keyBy('id');
+        $branch->users()->sync(collect($userIds)->mapWithKeys(fn ($id) => [(int) $id => [
+            'is_default' => (int) $id === $defaultUserId,
+            'is_branch_administrator' => (bool) ($currentAssignments->get((int) $id)?->pivot->is_branch_administrator ?? false),
+        ]])->all());
     }
 }

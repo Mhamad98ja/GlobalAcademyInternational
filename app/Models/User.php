@@ -26,6 +26,8 @@ class User extends Authenticatable
         'whatsapp_number',
         'password',
         'is_active',
+        'is_controller_administrator',
+        'has_all_branch_access',
     ];
 
     /**
@@ -49,6 +51,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'is_controller_administrator' => 'boolean',
+            'has_all_branch_access' => 'boolean',
             'last_login_at' => 'datetime',
         ];
     }
@@ -60,7 +64,7 @@ class User extends Authenticatable
 
     public function branches(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->belongsToMany(Branch::class)->withPivot('is_default')->withTimestamps();
+        return $this->belongsToMany(Branch::class)->withPivot('is_default', 'is_branch_administrator')->withTimestamps();
     }
 
     public function custodyStocks(): \Illuminate\Database\Eloquent\Relations\HasMany
@@ -84,5 +88,15 @@ class User extends Authenticatable
     public function hasRole(string $role): bool
     {
         return $this->roles()->where('name', $role)->exists();
+    }
+
+    public function isControllerAdministrator(): bool
+    {
+        return $this->is_active && $this->is_controller_administrator;
+    }
+
+    public function hasGlobalBranchAccess(): bool
+    {
+        return $this->isControllerAdministrator() || $this->has_all_branch_access;
     }
 }
