@@ -95,4 +95,38 @@ class MultiBranchWorkflowTest extends TestCase
         $this->actingAs($user)->withSession(['current_branch_id' => $main->id])->get(route('students.index'))->assertOk()->assertDontSee('North Student');
         $this->actingAs($user)->withSession(['current_branch_id' => $north->id])->get(route('students.index'))->assertOk()->assertSee('North Student');
     }
+
+    public function test_administrator_can_create_and_update_a_branch_with_user_assignments(): void
+    {
+        $administrator = $this->user('administrator@example.test');
+        [$main] = $this->branches($administrator);
+        $employee = $this->user('employee@example.test');
+
+        $this->actingAs($administrator)->withSession(['current_branch_id' => $main->id])
+            ->post(route('branches.store'), [
+                'code' => 'SOUTH',
+                'name' => 'South Branch',
+                'phone' => '+9613000000',
+                'email' => 'south@example.test',
+                'address' => 'South district',
+                'is_active' => '1',
+                'user_ids' => [(string) $employee->id],
+                'default_user_id' => (string) $employee->id,
+            ])->assertRedirect()->assertSessionHas('success');
+
+        $south = Branch::where('code', 'SOUTH')->firstOrFail();
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $south->id, 'user_id' => $employee->id, 'is_default' => true]);
+
+        $this->actingAs($administrator)->withSession(['current_branch_id' => $main->id])
+            ->put(route('branches.update', $south), [
+                'code' => 'SOUTH',
+                'name' => 'South Campus',
+                'is_active' => '1',
+                'user_ids' => [(string) $administrator->id, (string) $employee->id],
+                'default_user_id' => (string) $administrator->id,
+            ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('branches', ['id' => $south->id, 'name' => 'South Campus']);
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $south->id, 'user_id' => $administrator->id, 'is_default' => true]);
+    }
 }
