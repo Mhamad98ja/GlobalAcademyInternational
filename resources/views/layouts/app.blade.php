@@ -35,6 +35,9 @@
         </a>
     @endif
 @endforeach
+@if(auth()->user()->isControllerAdministrator())
+    <a href="{{ route('admin.imports') }}" class="sidebar-link {{ request()->routeIs('admin.imports*') ? 'active' : '' }}" aria-label="Import data" title="Import data"><span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon name="administration" /></span><span class="sidebar-link-label">Import data</span></a>
+@endif
         </nav>
         <div class="shrink-0 border-t border-white/10 p-3"><form method="POST" action="{{ route('logout') }}">@csrf<button class="sidebar-link w-full text-left" aria-label="Sign out" title="Sign out"><span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon name="sign-out" /></span><span class="sidebar-signout-label">Sign out</span></button></form></div>
     </aside>

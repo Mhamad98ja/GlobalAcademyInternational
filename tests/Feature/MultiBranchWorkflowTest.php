@@ -189,6 +189,12 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertSee('New branch')
             ->assertSee('Delete branch');
 
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('admin.imports'))
+            ->assertOk()
+            ->assertSee('Import students')
+            ->assertSee('Import books');
+
         $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $main->id])
             ->get(route('branches.index'))
             ->assertForbidden();
