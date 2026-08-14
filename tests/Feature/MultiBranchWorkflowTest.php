@@ -183,6 +183,12 @@ class MultiBranchWorkflowTest extends TestCase
         $branchAdministrator = $this->user('branch-admin@example.test');
         [$main] = $this->branches($controller, $branchAdministrator);
 
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('branches.index'))
+            ->assertOk()
+            ->assertSee('New branch')
+            ->assertSee('Delete branch');
+
         $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $main->id])
             ->get(route('branches.index'))
             ->assertForbidden();
