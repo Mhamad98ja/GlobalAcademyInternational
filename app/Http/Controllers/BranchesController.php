@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
+use App\Services\AuditService;
 use App\Services\BranchContext;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +50,19 @@ class BranchesController extends Controller
         return back()->with('success', 'Branch updated.');
     }
 
+    public function destroy(Branch $branch, AuditService $audit): RedirectResponse
+    {
+        $this->assertMayBeDeleted($branch);
+
+        $oldValues = $branch->only(['code', 'name', 'phone', 'email', 'address', 'notes', 'is_active']);
+        DB::transaction(function () use ($branch, $audit, $oldValues): void {
+            $branch->delete();
+            $audit->log('branch.deleted', $branch, $oldValues);
+        });
+
+        return back()->with('success', 'Branch deleted.');
+    }
+
     public function select(Request $request, BranchContext $branches): RedirectResponse
     {
         $data = $request->validate(['branch_id' => ['required', 'integer', 'exists:branches,id']]);
@@ -74,6 +88,14 @@ class BranchesController extends Controller
         ]);
         $data['is_active'] = $request->boolean('is_active');
 
+        // The Main Branch is the permanent home for the central roster and
+        // the fallback context for users. It must keep its stable code and
+        // remain available.
+        if ($branch !== null && strtoupper($branch->code) === 'MAIN') {
+            $data['code'] = 'MAIN';
+            $data['is_active'] = true;
+        }
+
         return $data;
     }
 
@@ -89,5 +111,42 @@ class BranchesController extends Controller
             'is_default' => (int) $id === $defaultUserId,
             'is_branch_administrator' => (bool) ($currentAssignments->get((int) $id)?->pivot->is_branch_administrator ?? false),
         ]])->all());
+    }
+
+    private function assertMayBeDeleted(Branch $branch): void
+    {
+        if (strtoupper($branch->code) === 'MAIN') {
+            throw ValidationException::withMessages(['branch' => 'The Main Branch cannot be deleted.']);
+        }
+
+        $blockers = [];
+        if ($branch->users()->exists()) {
+            $blockers[] = 'assigned users';
+        }
+
+        foreach ([
+            'students', 'student_registrations', 'class_book_lists', 'supplier_purchases',
+            'supplier_returns', 'supplier_payments', 'invoices', 'payments', 'payment_reversals',
+            'deferred_payment_approvals', 'book_distributions', 'book_returns', 'stock_movements',
+            'stock_adjustments', 'credit_notes', 'refunds', 'audit_logs', 'branch_book_stocks',
+            'user_book_stocks',
+        ] as $table) {
+            if (DB::table($table)->where('branch_id', $branch->id)->exists()) {
+                $blockers[] = str_replace('_', ' ', $table);
+            }
+        }
+
+        if (DB::table('book_transfers')
+            ->where('source_branch_id', $branch->id)
+            ->orWhere('destination_branch_id', $branch->id)
+            ->exists()) {
+            $blockers[] = 'book transfer history';
+        }
+
+        if ($blockers !== []) {
+            throw ValidationException::withMessages([
+                'branch' => 'This branch cannot be deleted because it has '.implode(', ', $blockers).'. Reassign the records or deactivate the branch instead.',
+            ]);
+        }
     }
 }

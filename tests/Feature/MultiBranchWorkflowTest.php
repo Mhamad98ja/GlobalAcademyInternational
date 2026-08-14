@@ -131,6 +131,51 @@ class MultiBranchWorkflowTest extends TestCase
         $this->assertDatabaseHas('branch_user', ['branch_id' => $south->id, 'user_id' => $administrator->id, 'is_default' => true]);
     }
 
+    public function test_controller_administrator_can_delete_only_an_unused_non_main_branch(): void
+    {
+        $administrator = $this->user('administrator@example.test');
+        $administrator->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        [$main] = $this->branches($administrator);
+        $unused = Branch::create(['code' => 'SOUTH', 'name' => 'South Branch', 'is_active' => true]);
+        $inUse = Branch::create(['code' => 'EAST', 'name' => 'East Branch', 'is_active' => true]);
+        $inUse->users()->attach($administrator->id, ['is_default' => false, 'is_branch_administrator' => false]);
+
+        $this->actingAs($administrator)->withSession(['current_branch_id' => $main->id])
+            ->delete(route('branches.destroy', $unused))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('branches', ['id' => $unused->id]);
+
+        $this->actingAs($administrator)->withSession(['current_branch_id' => $main->id])
+            ->delete(route('branches.destroy', $main))
+            ->assertSessionHasErrors('branch');
+
+        $this->actingAs($administrator)->withSession(['current_branch_id' => $main->id])
+            ->delete(route('branches.destroy', $inUse))
+            ->assertSessionHasErrors('branch');
+
+        $this->assertDatabaseHas('branches', ['id' => $main->id]);
+        $this->assertDatabaseHas('branches', ['id' => $inUse->id]);
+    }
+
+    public function test_main_branch_code_and_active_status_are_preserved_when_updated(): void
+    {
+        $administrator = $this->user('administrator@example.test');
+        $administrator->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        [$main] = $this->branches($administrator);
+
+        $this->actingAs($administrator)->withSession(['current_branch_id' => $main->id])
+            ->put(route('branches.update', $main), [
+                'code' => 'RENAMED',
+                'name' => 'Main Campus',
+                'is_active' => '0',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('branches', ['id' => $main->id, 'code' => 'MAIN', 'name' => 'Main Campus', 'is_active' => true]);
+    }
+
     public function test_only_the_controller_administrator_can_change_branch_structure(): void
     {
         $controller = $this->user('controller@example.test');
