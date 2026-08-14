@@ -509,8 +509,8 @@ class CoreWorkflowTest extends TestCase
         $this->assertDatabaseHas('users', ['email' => 'admin@school.test', 'is_active' => true]);
         $this->assertDatabaseCount('academic_years', 2);
         $this->assertDatabaseCount('school_levels', 2);
-        $this->assertDatabaseCount('grades', 14);
-        $this->assertDatabaseCount('sections', 56);
+        $this->assertDatabaseCount('grades', 15);
+        $this->assertDatabaseCount('sections', 40);
         $this->assertDatabaseCount('students', 0);
         $this->assertDatabaseCount('books', 0);
         $this->assertDatabaseCount('suppliers', 0);

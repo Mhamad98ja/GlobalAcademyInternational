@@ -92,6 +92,10 @@ return new class extends Migration
         $this->addBranchColumn('refunds');
 
         Schema::table('class_book_lists', function (Blueprint $table): void {
+            // MySQL uses the former composite unique key for the
+            // academic_year_id foreign key. Keep a dedicated index before
+            // replacing that key with the branch-aware constraint.
+            $table->index('academic_year_id');
             $table->dropUnique('book_list_scope_name_unique');
             $table->unique(['branch_id', 'academic_year_id', 'grade_id', 'section_id', 'name'], 'branch_book_list_scope_name_unique');
         });
@@ -111,7 +115,7 @@ return new class extends Migration
         }
 
         Schema::table('audit_logs', function (Blueprint $table): void {
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete()->index();
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
         });
         DB::table('audit_logs')->whereNull('branch_id')->update(['branch_id' => $mainBranchId]);
 
@@ -189,7 +193,7 @@ return new class extends Migration
     private function addBranchColumn(string $table): void
     {
         Schema::table($table, function (Blueprint $blueprint): void {
-            $blueprint->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete()->index();
+            $blueprint->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
         });
     }
 };

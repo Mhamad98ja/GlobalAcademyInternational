@@ -98,17 +98,34 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        $preschool = SchoolLevel::firstOrCreate(['name' => 'Preschool'], ['sort_order' => 1]);
-        $school = SchoolLevel::firstOrCreate(['name' => 'School'], ['sort_order' => 2]);
+        $preschool = SchoolLevel::updateOrCreate(['name' => 'Preschool'], ['sort_order' => 1]);
+        $school = SchoolLevel::updateOrCreate(['name' => 'School'], ['sort_order' => 2]);
 
-        $gradeNames = ['KG1', 'KG2', 'GR1', 'GR2', 'GR3', 'GR4', 'GR5', 'GR6', 'GR7', 'GR8', 'GR9', 'GR10', 'GR11', 'GR12'];
-        foreach ($gradeNames as $index => $name) {
-            $grade = Grade::firstOrCreate(
-                ['school_level_id' => $index < 2 ? $preschool->id : $school->id, 'name' => $name],
-                ['sort_order' => $index + 1],
+        $structure = [
+            [$preschool, 'Preschool', 1, ['A']],
+            [$preschool, 'KG1', 2, ['A', 'B']],
+            [$preschool, 'KG2', 3, ['A', 'B', 'C']],
+            [$school, 'Grade 1', 4, ['A', 'B', 'C']],
+            [$school, 'Grade 2', 5, ['A', 'B', 'C']],
+            [$school, 'Grade 3', 6, ['A', 'B', 'C']],
+            [$school, 'Grade 4', 7, ['B', 'C']],
+            [$school, 'Grade 5', 8, ['A', 'B']],
+            [$school, 'Grade 6', 9, ['A', 'B']],
+            [$school, 'Grade 7', 10, ['A', 'B']],
+            [$school, 'Grade 8', 11, ['A', 'B', 'C']],
+            [$school, 'Grade 9', 12, ['A', 'B', 'C']],
+            [$school, 'Grade 10', 13, ['A', 'B', 'C', 'D']],
+            [$school, 'Grade 11', 14, ['A', 'B', 'C']],
+            [$school, 'Grade 12', 15, ['A', 'B', 'C', 'D']],
+        ];
+
+        foreach ($structure as [$level, $gradeName, $sortOrder, $sectionNames]) {
+            $grade = Grade::updateOrCreate(
+                ['school_level_id' => $level->id, 'name' => $gradeName],
+                ['sort_order' => $sortOrder],
             );
 
-            foreach (['A', 'B', 'C', 'D'] as $sectionName) {
+            foreach ($sectionNames as $sectionName) {
                 Section::firstOrCreate(['grade_id' => $grade->id, 'name' => $sectionName]);
             }
         }

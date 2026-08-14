@@ -31,8 +31,8 @@ RUN composer dump-autoload --no-dev --optimize
 FROM php:8.2-apache-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libonig-dev libpq-dev \
-    && docker-php-ext-install mbstring pdo_pgsql \
+    && apt-get install -y --no-install-recommends libonig-dev libpq-dev libzip-dev \
+    && docker-php-ext-install mbstring pdo_pgsql zip \
     && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
 
