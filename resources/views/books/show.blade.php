@@ -12,7 +12,7 @@
     <section class="panel">
         <div class="panel-header"><h2 class="panel-title">Catalogue details</h2></div>
         <dl class="divide-y divide-slate-100 px-5">
-            @foreach (['ISBN' => $book->isbn, 'Author' => $book->author, 'Publisher' => $book->publisher, 'Subject' => $book->subject, 'Format' => $book->media_format ? str_replace('_', ' ', $book->media_format) : null, 'Shelf' => $book->shelf_location, 'Latest purchase price' => number_format((float) $book->purchase_price, 2), 'Selling price' => number_format((float) $book->selling_price, 2)] as $label => $value)
+            @foreach (['ISBN' => $book->isbn, 'Author' => $book->author, 'Publisher' => $book->publisher, 'Subject' => $book->subject, 'Format' => $book->media_format ? str_replace('_', ' ', $book->media_format) : null, 'Used by' => match($book->default_audience) { 'student' => 'Student', 'teacher' => 'Teacher', 'both' => 'Students and teachers', default => null }, 'Shelf' => $book->shelf_location, 'Latest purchase price' => number_format((float) $book->purchase_price, 2), 'Selling price' => number_format((float) $book->selling_price, 2)] as $label => $value)
                 <div class="flex justify-between gap-4 py-3"><dt class="muted">{{ $label }}</dt><dd class="text-right font-medium text-slate-800">{{ $value ?: '—' }}</dd></div>
             @endforeach
         </dl>

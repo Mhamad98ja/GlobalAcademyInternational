@@ -249,6 +249,35 @@ class CoreWorkflowTest extends TestCase
             ->assertRedirect(route('books.index', ['tab' => 'packages']));
     }
 
+    public function test_book_usage_can_be_selected_when_creating_and_editing_a_book(): void
+    {
+        $user = $this->administrator();
+
+        $this->actingAs($user)->post(route('books.store'), [
+            'sku' => 'B-USAGE',
+            'barcode' => '978000099',
+            'title' => 'Teacher guide',
+            'selling_price' => '0.00',
+            'default_audience' => 'teacher',
+            'is_active' => '1',
+        ])->assertRedirect();
+
+        $book = Book::where('sku', 'B-USAGE')->firstOrFail();
+        $this->assertDatabaseHas('books', ['id' => $book->id, 'default_audience' => 'teacher']);
+        $this->actingAs($user)->get(route('books.edit', $book))->assertOk()->assertSee('Used by')->assertSee('Teacher');
+
+        $this->actingAs($user)->put(route('books.update', $book), [
+            'sku' => $book->sku,
+            'barcode' => $book->barcode,
+            'title' => $book->title,
+            'selling_price' => '0.00',
+            'default_audience' => 'both',
+            'is_active' => '1',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('books', ['id' => $book->id, 'default_audience' => 'both']);
+    }
+
     public function test_reports_apply_filters_that_match_the_selected_report(): void
     {
         $user = $this->administrator();

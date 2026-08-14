@@ -58,7 +58,7 @@
                     @forelse ($books as $book)
                         <tr>
                             <td><a class="link" href="{{ route('books.show', $book) }}">{{ $book->title }}</a><div class="text-xs text-slate-500">{{ $book->sku }}{{ $book->author ? ' &middot; '.$book->author : '' }}</div></td>
-                            <td>{{ $book->gradeUsages->pluck('audience')->map(fn ($audience) => ucfirst($audience))->unique()->implode(', ') ?: 'â€”' }}</td>
+                            <td>{{ match($book->default_audience) { 'student' => 'Student', 'teacher' => 'Teacher', 'both' => 'Students and teachers', default => $book->gradeUsages->pluck('audience')->map(fn ($audience) => ucfirst($audience))->unique()->implode(', ') ?: 'â€”' } }}</td>
                             <td class="font-mono text-xs">{{ $book->barcode }}</td>
                             <td>{{ number_format((float) $book->purchase_price, 2) }}</td>
                             <td class="font-semibold">{{ number_format((float) $book->selling_price, 2) }}</td>

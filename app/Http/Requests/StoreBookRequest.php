@@ -31,6 +31,7 @@ class StoreBookRequest extends FormRequest
             'language' => ['nullable', 'string', 'max:30'],
             'category' => ['nullable', 'string', 'max:100'],
             'media_format' => ['nullable', 'in:print,digital,print_and_digital'],
+            'default_audience' => ['nullable', 'in:student,teacher,both'],
             'selling_price' => ['required', 'decimal:0,2', 'min:0'],
             'tax_rate' => ['nullable', 'decimal:0,2', 'min:0', 'max:100'],
             'minimum_stock' => ['nullable', 'integer', 'min:0'],

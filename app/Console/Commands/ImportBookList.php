@@ -404,6 +404,7 @@ class ImportBookList extends Command
             'subject' => $row['subject'],
             'category' => 'School book',
             'media_format' => $row['media_format'],
+            'default_audience' => $this->combinedAudience($book?->default_audience, $row['audience']),
             'is_active' => true,
             'notes' => 'Imported from the Lebanon book list. Source quantity intentionally not imported.',
         ];
@@ -421,6 +422,15 @@ class ImportBookList extends Command
         $updatedBooks++;
 
         return $book;
+    }
+
+    private function combinedAudience(?string $current, string $incoming): string
+    {
+        if ($current === null || $current === $incoming) {
+            return $incoming;
+        }
+
+        return 'both';
     }
 
     private function findOrCreateAcademicYear(string $name): AcademicYear

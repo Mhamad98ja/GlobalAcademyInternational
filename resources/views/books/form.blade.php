@@ -30,6 +30,7 @@
                 <div><label class="form-label">Language</label><input name="language" value="{{ old('language', $book->language) }}"></div>
                 <div><label class="form-label">Category</label><input name="category" value="{{ old('category', $book->category) }}"></div>
                 <div><label class="form-label">Format</label><select name="media_format"><option value="">Not specified</option>@foreach(['print' => 'Print', 'digital' => 'Digital', 'print_and_digital' => 'Print + digital'] as $value => $label)<option value="{{ $value }}" @selected(old('media_format', $book->media_format) === $value)>{{ $label }}</option>@endforeach</select></div>
+                <div><label class="form-label">Used by</label><select name="default_audience"><option value="">Not specified</option>@foreach(['student' => 'Student', 'teacher' => 'Teacher', 'both' => 'Students and teachers'] as $value => $label)<option value="{{ $value }}" @selected(old('default_audience', $book->default_audience) === $value)>{{ $label }}</option>@endforeach</select></div>
                 <div><label class="form-label">Shelf location</label><input name="shelf_location" value="{{ old('shelf_location', $book->shelf_location) }}"></div>
             </div>
         </div>
