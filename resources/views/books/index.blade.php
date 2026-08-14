@@ -53,11 +53,12 @@
     @else
         <div class="table-wrap">
             <table class="data-table min-w-[760px]">
-                <thead><tr><th>Book</th><th>Barcode</th><th>Purchase price</th><th>Sale price</th><th>Available</th><th>Status</th></tr></thead>
+                <thead><tr><th>Book</th><th>Usage</th><th>Barcode</th><th>Purchase price</th><th>Sale price</th><th>Available</th><th>Status</th></tr></thead>
                 <tbody>
                     @forelse ($books as $book)
                         <tr>
                             <td><a class="link" href="{{ route('books.show', $book) }}">{{ $book->title }}</a><div class="text-xs text-slate-500">{{ $book->sku }}{{ $book->author ? ' &middot; '.$book->author : '' }}</div></td>
+                            <td>{{ $book->gradeUsages->pluck('audience')->map(fn ($audience) => ucfirst($audience))->unique()->implode(', ') ?: 'â€”' }}</td>
                             <td class="font-mono text-xs">{{ $book->barcode }}</td>
                             <td>{{ number_format((float) $book->purchase_price, 2) }}</td>
                             <td class="font-semibold">{{ number_format((float) $book->selling_price, 2) }}</td>
@@ -65,7 +66,7 @@
                             <td><span class="badge {{ $book->is_active ? 'badge-green' : 'badge-red' }}">{{ $book->is_active ? 'Active' : 'Inactive' }}</span></td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="empty">No books found.</td></tr>
+                        <tr><td colspan="7" class="empty">No books found.</td></tr>
                     @endforelse
                 </tbody>
             </table>

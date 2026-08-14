@@ -12,7 +12,7 @@
     <section class="panel">
         <div class="panel-header"><h2 class="panel-title">Catalogue details</h2></div>
         <dl class="divide-y divide-slate-100 px-5">
-            @foreach (['ISBN' => $book->isbn, 'Author' => $book->author, 'Publisher' => $book->publisher, 'Subject' => $book->subject, 'Shelf' => $book->shelf_location, 'Latest purchase price' => number_format((float) $book->purchase_price, 2), 'Selling price' => number_format((float) $book->selling_price, 2)] as $label => $value)
+            @foreach (['ISBN' => $book->isbn, 'Author' => $book->author, 'Publisher' => $book->publisher, 'Subject' => $book->subject, 'Format' => $book->media_format ? str_replace('_', ' ', $book->media_format) : null, 'Shelf' => $book->shelf_location, 'Latest purchase price' => number_format((float) $book->purchase_price, 2), 'Selling price' => number_format((float) $book->selling_price, 2)] as $label => $value)
                 <div class="flex justify-between gap-4 py-3"><dt class="muted">{{ $label }}</dt><dd class="text-right font-medium text-slate-800">{{ $value ?: '—' }}</dd></div>
             @endforeach
         </dl>
@@ -22,4 +22,5 @@
         <div class="table-wrap"><table class="data-table"><thead><tr><th>When</th><th>Type</th><th>Change</th><th>After</th></tr></thead><tbody>@forelse ($book->movements as $movement)<tr><td>{{ $movement->created_at->format('d M Y H:i') }}</td><td class="capitalize">{{ str_replace('_', ' ', $movement->type) }}</td><td class="font-semibold {{ $movement->quantity_change < 0 ? 'text-rose-700' : 'text-emerald-700' }}">{{ $movement->quantity_change > 0 ? '+' : '' }}{{ $movement->quantity_change }}</td><td>{{ $movement->quantity_after }}</td></tr>@empty<tr><td colspan="4" class="empty">No movement recorded.</td></tr>@endforelse</tbody></table></div>
     </section>
 </div>
+<section class="panel mt-6"><div class="panel-header"><h2 class="panel-title">Usage by grade</h2></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Grade</th><th>Used by</th></tr></thead><tbody>@forelse($book->gradeUsages->sortBy('grade.sort_order') as $usage)<tr><td>{{ $usage->grade->name }}</td><td class="capitalize">{{ $usage->audience }}</td></tr>@empty<tr><td colspan="2" class="empty">No grade usage has been recorded.</td></tr>@endforelse</tbody></table></div></section>
 @endsection

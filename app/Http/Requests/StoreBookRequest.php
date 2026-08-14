@@ -20,7 +20,7 @@ class StoreBookRequest extends FormRequest
 
         return [
             'sku' => ['required', 'string', 'max:80', Rule::unique('books', 'sku')->ignore($book)],
-            'isbn' => ['nullable', 'string', 'max:30', Rule::unique('books', 'isbn')->ignore($book)],
+            'isbn' => ['nullable', 'string', 'max:30'],
             'barcode' => ['required', 'string', 'max:100', Rule::unique('books', 'barcode')->ignore($book)],
             'title' => ['required', 'string', 'max:255'],
             'subtitle' => ['nullable', 'string', 'max:255'],
@@ -30,6 +30,7 @@ class StoreBookRequest extends FormRequest
             'subject' => ['nullable', 'string', 'max:100'],
             'language' => ['nullable', 'string', 'max:30'],
             'category' => ['nullable', 'string', 'max:100'],
+            'media_format' => ['nullable', 'in:print,digital,print_and_digital'],
             'selling_price' => ['required', 'decimal:0,2', 'min:0'],
             'tax_rate' => ['nullable', 'decimal:0,2', 'min:0', 'max:100'],
             'minimum_stock' => ['nullable', 'integer', 'min:0'],
