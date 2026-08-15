@@ -483,13 +483,29 @@ class CoreWorkflowTest extends TestCase
         $this->actingAs($user)->get(route('invoices.print', $invoice))
             ->assertOk()
             ->assertSee('Cedar Grove School')
+            ->assertSee('/images/global-academy-international-logo.png', false)
             ->assertSee('Student Book Invoice')
             ->assertSee('Parent / guardian acknowledgement');
         $this->actingAs($user)->get(route('reports.print', ['report' => 'students']))
             ->assertOk()
             ->assertSee('Cedar Grove School')
+            ->assertSee('/images/global-academy-international-logo.png', false)
             ->assertSee('Official report')
             ->assertSee('Prepared by');
+    }
+
+    public function test_global_academy_branding_is_used_by_the_application_and_default_school_setting(): void
+    {
+        $user = $this->administrator();
+
+        $this->assertDatabaseHas('system_settings', [
+            'key' => 'school_name',
+            'value' => 'Global Academy International',
+        ]);
+        $this->actingAs($user)->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Global Academy International')
+            ->assertSee('/images/global-academy-international-logo.png', false);
     }
 
     public function test_academic_years_levels_grades_and_sections_can_be_edited(): void

@@ -2,7 +2,7 @@
 
 @section('content')
 @php
-    $schoolName = $school['school_name'] ?? config('app.name', 'School Book Manager');
+    $schoolName = $school['school_name'] ?? 'Global Academy International';
     $schoolContact = collect([$school['school_address'] ?? null, $school['school_phone'] ?? null])->filter()->implode(' • ');
     $registration = $invoice->registration;
     $gradeName = $registration?->grade?->name ?? $invoice->grade?->name ?? '-';

@@ -15,7 +15,7 @@
 @section('content')
 @php
     $reportQuery = array_merge(request()->except('page'), ['report' => $report]);
-    $schoolName = $school['school_name'] ?? config('app.name', 'School Book Manager');
+    $schoolName = $school['school_name'] ?? 'Global Academy International';
     $schoolContact = collect([$school['school_address'] ?? null, $school['school_phone'] ?? null])->filter()->implode(' • ');
 @endphp
 

@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>{{ $title ?? config('app.name', 'SBM') }}</title>@vite(['resources/css/app.css','resources/js/app.js'])</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>{{ isset($title) ? $title.' · Global Academy International' : 'Global Academy International' }}</title>@vite(['resources/css/app.css','resources/js/app.js'])</head>
 <body>
 <div class="app-shell" data-app-shell>
     <div class="sidebar-backdrop no-print" data-sidebar-backdrop></div>
     <aside id="primary-sidebar" class="sidebar no-print" aria-label="Main navigation">
         <div class="sidebar-brand">
-            <div class="sidebar-brand-mark" aria-hidden="true"><x-nav-icon name="books" /></div>
-            <div class="sidebar-brand-copy"><div class="font-semibold text-white">School Book Manager</div><div class="text-[11px] text-slate-400">Inventory & distribution</div></div>
+            <img class="sidebar-brand-logo" src="{{ asset('images/global-academy-international-logo.png') }}" alt="Global Academy International logo">
+            <div class="sidebar-brand-copy"><div class="font-semibold text-white">Global Academy International</div><div class="text-[11px] text-slate-400">Book inventory & distribution</div></div>
             <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close navigation">&times;</button>
         </div>
         <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -45,7 +45,7 @@
         <header class="topbar no-print">
             <div class="flex min-w-0 items-center gap-3">
                 <button type="button" class="nav-toggle" data-sidebar-toggle aria-controls="primary-sidebar" aria-expanded="true"><span class="sr-only">Toggle navigation</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
-                <div class="min-w-0 text-sm text-slate-500"><span class="hidden sm:inline">{{ config('app.name', 'School Book Manager') }}</span><span class="sm:hidden">SBM</span></div>
+                <div class="min-w-0 text-sm text-slate-500"><span class="hidden sm:inline">Global Academy International</span><span class="sm:hidden">GAI</span></div>
             </div>
             <div class="flex shrink-0 items-center gap-3">
                 <a href="{{ route('reports.index') }}" class="hidden text-sm text-slate-500 hover:text-teal-700 sm:block">Reports</a>

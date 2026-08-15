@@ -23,7 +23,7 @@
     .print-document *, .print-document *::before, .print-document *::after { box-sizing: border-box; }
     .print-masthead { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; border-bottom: 5px solid var(--document-teal); background: var(--document-navy); color: #fff; padding: 1.55rem 2rem; }
     .print-brand { display: flex; min-width: 0; align-items: center; gap: 0.95rem; }
-    .print-school-mark { width: 2.8rem; flex: 0 0 auto; color: #fff; }
+    .print-school-mark { width: 3rem; height: 3rem; flex: 0 0 auto; object-fit: contain; }
     .print-school-name { font-size: 1.3rem; font-weight: 800; letter-spacing: 0.025em; line-height: 1.1; }
     .print-school-contact { margin-top: 0.28rem; color: rgb(255 255 255 / 75%); font-size: 0.72rem; }
     .print-document-kind { flex: 0 0 auto; border-left: 1px solid rgb(255 255 255 / 35%); padding-left: 1.5rem; color: rgb(255 255 255 / 85%); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-align: right; text-transform: uppercase; }
