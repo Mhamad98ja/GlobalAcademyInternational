@@ -679,6 +679,7 @@ class CoreWorkflowTest extends TestCase
     public function test_administrator_can_soft_delete_another_user_but_not_their_own_account(): void
     {
         $administrator = $this->administrator();
+        $administrator->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
         $employee = User::factory()->create(['is_active' => true]);
 
         $this->actingAs($administrator)

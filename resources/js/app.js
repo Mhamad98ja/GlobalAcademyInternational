@@ -162,7 +162,7 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
         if (!barcodeInput || !summary) return;
         const book = booksByBarcode.get(barcodeInput.value.trim().toLocaleLowerCase());
         summary.textContent = book
-            ? `${book.title} — ${book.available_quantity} available, sale ${Number(book.selling_price).toFixed(2)}`
+            ? `${book.title} — ${book.available_quantity} available${Object.hasOwn(book, 'selling_price') ? `, sale ${Number(book.selling_price).toFixed(2)}` : ''}`
             : (barcodeInput.value.trim() ? 'Barcode not found' : 'Awaiting barcode scan');
     };
     const renderLines = (items = []) => {

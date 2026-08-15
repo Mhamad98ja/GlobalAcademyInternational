@@ -4,11 +4,10 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">User management</h1>
-        <p class="page-subtitle">Create employee accounts, assign their role, and update user details safely.</p>
+        <p class="page-subtitle">Controller Administrator assigns branch responsibility; each Branch Super Administrator manages users in their own branch.</p>
     </div>
     <div class="flex flex-wrap gap-2">
-        @can('manage-branches')<a class="btn btn-secondary" href="{{ route('branches.index') }}">Branches</a>@endcan
-        <a class="btn btn-secondary" href="{{ route('admin.roles') }}">Roles</a>
+        @if ($canManageBranchAssignments)<a class="btn btn-secondary" href="{{ route('branches.index') }}">Branches</a><a class="btn btn-secondary" href="{{ route('admin.roles') }}">Roles</a>@endif
         <a class="btn btn-secondary" href="{{ route('admin.audit') }}">Audit log</a>
     </div>
 </div>
@@ -39,39 +38,39 @@
                 <label class="form-label">Confirm password *</label>
                 <input type="password" name="password_confirmation" required>
             </div>
-            <div>
-                <label class="form-label">Role *</label>
-                <select name="role_id" required>
-                    <option value="">Select role</option>
-                    @foreach ($roles as $role)
-                        <option value="{{ $role->id }}" @selected(old('role_id') == $role->id)>{{ $role->label }}</option>
-                    @endforeach
-                </select>
-            </div>
-            @if (auth()->user()->isControllerAdministrator())
+            @if ($canManageBranchAssignments)
+                <div>
+                    <label class="form-label">Role *</label>
+                    <select name="role_id" required>
+                        <option value="">Select role</option>
+                        @foreach ($roles as $role)
+                            <option value="{{ $role->id }}" @selected(old('role_id') == $role->id)>{{ $role->label }}</option>
+                        @endforeach
+                    </select>
+                </div>
                 <div class="border-t border-slate-200 pt-3">
                     <h3 class="font-medium text-slate-800">Branch authority</h3>
                     <div class="mt-3">
                         <label class="form-label">Assigned branches</label>
                         <select name="branch_ids[]" multiple size="4">
-                            @foreach (\App\Models\Branch::where('is_active', true)->orderBy('name')->get() as $branch)
-                                <option value="{{ $branch->id }}" @selected($branch->id === app(\App\Services\BranchContext::class)->id())>{{ $branch->name }}</option>
+                            @foreach ($branches as $branch)
+                                <option value="{{ $branch->id }}" @selected($branch->id === $currentBranchId)>{{ $branch->name }}</option>
                             @endforeach
                         </select>
                     </div>
-                    <label class="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" name="has_all_branch_access" value="1"> Administrator access to all branches</label>
                     <div class="mt-3">
-                        <label class="form-label">Administrator for selected branches</label>
+                        <label class="form-label">Branch Super Administrator for selected branches</label>
                         <select name="branch_administrator_ids[]" multiple size="4">
-                            @foreach (\App\Models\Branch::where('is_active', true)->orderBy('name')->get() as $branch)
+                            @foreach ($branches as $branch)
                                 <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                             @endforeach
                         </select>
                     </div>
-                    <p class="mt-2 text-xs text-slate-500">Only the Controller Administrator can assign branch access. This does not give permission to create, edit, or deactivate branches.</p>
+                    <p class="mt-2 text-xs text-slate-500">Only the Controller Administrator assigns branches and designates a Branch Super Administrator. Only one Branch Super Administrator can be responsible for each branch. This never permits branch creation, editing, or removal.</p>
                 </div>
             @else
-                <p class="text-xs text-slate-500">The new user will be assigned to your current branch. Only the Controller Administrator can change branch access.</p>
+                <input type="hidden" name="role_id" value="{{ $roles->firstWhere('name', 'employee')?->id }}">
+                <p class="text-xs text-slate-500">This account will be a Branch User in your current branch. Branch Users cannot access financial information.</p>
             @endif
             <button class="btn btn-primary w-full">Create user</button>
         </form>
@@ -91,14 +90,16 @@
                             <td>
                                 {{ $user->roles->pluck('label')->join(', ') ?: '-' }}
                                 @if ($user->is_controller_administrator)<div class="mt-1 text-xs font-medium text-violet-700">Controller Administrator</div>
-                                @elseif ($user->has_all_branch_access)<div class="mt-1 text-xs font-medium text-indigo-700">Administrator for all branches</div>
+                                @elseif ($user->branches->contains(fn ($branch) => $branch->pivot->is_branch_administrator))<div class="mt-1 text-xs font-medium text-indigo-700">Branch Super Administrator: {{ $user->branches->filter(fn ($branch) => $branch->pivot->is_branch_administrator)->pluck('name')->join(', ') }}</div>
                                 @else<div class="mt-1 text-xs muted">{{ $user->branches->pluck('name')->join(', ') ?: 'No branch' }}</div>@endif
                             </td>
                             <td>{{ $user->last_login_at?->format('d M Y H:i') ?? 'Never' }}</td>
                             <td><span class="badge {{ $user->is_active ? 'badge-green' : 'badge-red' }}">{{ $user->is_active ? 'Active' : 'Disabled' }}</span></td>
                             <td class="space-x-3">
-                                <a class="link text-xs" href="{{ route('admin.users.edit', $user) }}">Edit</a>
-                                @if (! $user->is(auth()->user()))
+                                @if ($canManageBranchAssignments || ! $user->hasRole('super-administrator') || $user->is(auth()->user()))
+                                    <a class="link text-xs" href="{{ route('admin.users.edit', $user) }}">Edit</a>
+                                @endif
+                                @if (! $user->is(auth()->user()) && ($canManageBranchAssignments || ! $user->hasRole('super-administrator')))
                                     <form class="inline" method="POST" action="{{ route('admin.users.toggle', $user) }}">
                                         @csrf
                                         <button class="link text-xs">{{ $user->is_active ? 'Disable' : 'Enable' }}</button>

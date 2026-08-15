@@ -8,6 +8,7 @@ use App\Models\AcademicYear;
 use App\Models\Book;
 use App\Models\Branch;
 use App\Models\BranchBookStock;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SchoolLevel;
 use App\Models\Grade;
@@ -43,6 +44,19 @@ class MultiBranchWorkflowTest extends TestCase
         }
 
         return [$main, $north];
+    }
+
+    private function branchUser(string $email): User
+    {
+        $role = Role::firstOrCreate(['name' => 'employee'], ['label' => 'Branch User']);
+        $role->permissions()->sync(Permission::query()->whereIn('name', [
+            'dashboard.view', 'students.view', 'students.manage', 'books.view', 'distributions.create',
+            'inventory.view', 'inventory.transfer', 'people.manage', 'reports.view',
+        ])->pluck('id'));
+        $user = User::factory()->create(['email' => $email, 'is_active' => true]);
+        $user->roles()->sync([$role->id]);
+
+        return $user;
     }
 
     public function test_branch_transfer_moves_stock_only_between_the_selected_branches(): void
@@ -114,6 +128,7 @@ class MultiBranchWorkflowTest extends TestCase
                 'is_active' => '1',
                 'user_ids' => [(string) $employee->id],
                 'default_user_id' => (string) $employee->id,
+                'branch_administrator_id' => (string) $employee->id,
             ])->assertRedirect()->assertSessionHas('success');
 
         $south = Branch::where('code', 'SOUTH')->firstOrFail();
@@ -126,6 +141,7 @@ class MultiBranchWorkflowTest extends TestCase
                 'is_active' => '1',
                 'user_ids' => [(string) $administrator->id, (string) $employee->id],
                 'default_user_id' => (string) $administrator->id,
+                'branch_administrator_id' => (string) $employee->id,
             ])->assertRedirect()->assertSessionHas('success');
 
         $this->assertDatabaseHas('branches', ['id' => $south->id, 'name' => 'South Campus']);
@@ -164,13 +180,18 @@ class MultiBranchWorkflowTest extends TestCase
     {
         $administrator = $this->user('administrator@example.test');
         $administrator->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
-        [$main] = $this->branches($administrator);
+        $branchAdministrator = $this->user('branch-administrator@example.test');
+        [$main] = $this->branches($administrator, $branchAdministrator);
+        $main->users()->updateExistingPivot($branchAdministrator->id, ['is_branch_administrator' => true]);
 
         $this->actingAs($administrator)->withSession(['current_branch_id' => $main->id])
             ->put(route('branches.update', $main), [
                 'code' => 'RENAMED',
                 'name' => 'Main Campus',
                 'is_active' => '0',
+                'user_ids' => [$administrator->id, $branchAdministrator->id],
+                'default_user_id' => $administrator->id,
+                'branch_administrator_id' => $branchAdministrator->id,
             ])
             ->assertRedirect();
 
@@ -183,6 +204,7 @@ class MultiBranchWorkflowTest extends TestCase
         $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
         $branchAdministrator = $this->user('branch-admin@example.test');
         [$main] = $this->branches($controller, $branchAdministrator);
+        $main->users()->updateExistingPivot($branchAdministrator->id, ['is_branch_administrator' => true]);
 
         $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
             ->get(route('branches.index'))
@@ -205,7 +227,13 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertForbidden();
 
         $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
-            ->post(route('branches.store'), ['code' => 'ALLOWED', 'name' => 'Allowed', 'is_active' => '1'])
+            ->post(route('branches.store'), [
+                'code' => 'ALLOWED',
+                'name' => 'Allowed',
+                'is_active' => '1',
+                'user_ids' => [$branchAdministrator->id],
+                'branch_administrator_id' => $branchAdministrator->id,
+            ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('branches', ['code' => 'ALLOWED']);
@@ -216,8 +244,9 @@ class MultiBranchWorkflowTest extends TestCase
         $controller = $this->user('controller@example.test');
         $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
         $otherAdministrator = $this->user('other-admin@example.test');
-        $managedUser = $this->user('managed@example.test');
+        $managedUser = $this->branchUser('managed@example.test');
         [$main, $north] = $this->branches($controller, $otherAdministrator);
+        $otherAdministrator->branches()->updateExistingPivot($main->id, ['is_branch_administrator' => true]);
         $managedUser->branches()->attach([$main->id => ['is_default' => true]]);
         $roleId = Role::where('name', 'super-administrator')->value('id');
 
@@ -252,5 +281,54 @@ class MultiBranchWorkflowTest extends TestCase
             'is_default' => true,
             'is_branch_administrator' => true,
         ]);
+    }
+
+    public function test_branch_super_administrator_controls_local_users_while_branch_users_cannot_view_financial_data(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        $branchAdministrator = $this->user('branch-admin@example.test');
+        $branchUser = $this->branchUser('branch-user@example.test');
+        [$main] = $this->branches($controller, $branchAdministrator);
+        $main->users()->updateExistingPivot($branchAdministrator->id, ['is_branch_administrator' => true]);
+        $branchUser->branches()->attach([$main->id => ['is_default' => true, 'is_branch_administrator' => false]]);
+        $book = Book::create(['sku' => 'FIN-BOOK', 'barcode' => '978000092', 'title' => 'Financially Protected Book', 'selling_price' => '12.50']);
+
+        $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $main->id])
+            ->post(route('admin.users.store'), [
+                'name' => 'Created Branch User',
+                'email' => 'created-branch-user@example.test',
+                'password' => 'SecureBranchUser123!',
+                'password_confirmation' => 'SecureBranchUser123!',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $created = User::where('email', 'created-branch-user@example.test')->firstOrFail();
+        $this->assertTrue($created->hasRole('employee'));
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $main->id, 'user_id' => $created->id, 'is_default' => true]);
+
+        $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $main->id])
+            ->get(route('invoices.index'))
+            ->assertOk();
+
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee("Today's collection")
+            ->assertDontSee('Outstanding balance');
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
+            ->get(route('books.show', $book))
+            ->assertOk()
+            ->assertDontSee('Selling price')
+            ->assertDontSee('Latest purchase price');
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
+            ->get(route('distributions.create'))
+            ->assertOk()
+            ->assertDontSee('Payment at distribution');
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('invoices.index'))->assertForbidden();
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('payments.index'))->assertForbidden();
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('operations.index'))->assertForbidden();
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('reports.index', ['report' => 'payments']))->assertForbidden();
     }
 }

@@ -33,7 +33,7 @@ class BranchesController extends Controller
         $data = $this->validated($request);
         DB::transaction(function () use ($data): void {
             $branch = Branch::create(Arr::only($data, ['code', 'name', 'phone', 'email', 'address', 'notes', 'is_active']));
-            $this->syncUsers($branch, $data['user_ids'] ?? [], isset($data['default_user_id']) ? (int) $data['default_user_id'] : null);
+            $this->syncUsers($branch, $data['user_ids'] ?? [], isset($data['default_user_id']) ? (int) $data['default_user_id'] : null, (int) $data['branch_administrator_id']);
         });
 
         return back()->with('success', 'Branch created and users assigned.');
@@ -44,7 +44,7 @@ class BranchesController extends Controller
         $data = $this->validated($request, $branch);
         DB::transaction(function () use ($branch, $data): void {
             $branch->update(Arr::only($data, ['code', 'name', 'phone', 'email', 'address', 'notes', 'is_active']));
-            $this->syncUsers($branch, $data['user_ids'] ?? [], isset($data['default_user_id']) ? (int) $data['default_user_id'] : null);
+            $this->syncUsers($branch, $data['user_ids'] ?? [], isset($data['default_user_id']) ? (int) $data['default_user_id'] : null, (int) $data['branch_administrator_id']);
         });
 
         return back()->with('success', 'Branch updated.');
@@ -85,6 +85,7 @@ class BranchesController extends Controller
             'user_ids' => ['nullable', 'array'],
             'user_ids.*' => ['integer', 'exists:users,id'],
             'default_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'branch_administrator_id' => ['required', 'integer', 'exists:users,id'],
         ]);
         $data['is_active'] = $request->boolean('is_active');
 
@@ -99,17 +100,23 @@ class BranchesController extends Controller
         return $data;
     }
 
-    private function syncUsers(Branch $branch, array $userIds, ?int $defaultUserId): void
+    private function syncUsers(Branch $branch, array $userIds, ?int $defaultUserId, int $branchAdministratorId): void
     {
         $userIds = array_map('intval', $userIds);
         $defaultUserId = $defaultUserId === null ? null : (int) $defaultUserId;
+        $branchAdministrator = \App\Models\User::query()->with('roles')->findOrFail($branchAdministratorId);
         if ($defaultUserId !== null && ! in_array($defaultUserId, $userIds, true)) {
             throw ValidationException::withMessages(['default_user_id' => 'The default user must be assigned to this branch.']);
         }
-        $currentAssignments = $branch->users()->get()->keyBy('id');
+        if (! in_array($branchAdministratorId, $userIds, true)) {
+            throw ValidationException::withMessages(['branch_administrator_id' => 'The Branch Super Administrator must be assigned to this branch.']);
+        }
+        if ($branchAdministrator->is_controller_administrator || ! $branchAdministrator->hasRole('super-administrator')) {
+            throw ValidationException::withMessages(['branch_administrator_id' => 'Choose an active Branch Super Administrator for this branch.']);
+        }
         $branch->users()->sync(collect($userIds)->mapWithKeys(fn ($id) => [(int) $id => [
             'is_default' => (int) $id === $defaultUserId,
-            'is_branch_administrator' => (bool) ($currentAssignments->get((int) $id)?->pivot->is_branch_administrator ?? false),
+            'is_branch_administrator' => (int) $id === $branchAdministratorId,
         ]])->all());
     }
 

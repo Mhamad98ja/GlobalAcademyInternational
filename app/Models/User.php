@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\HasPublicId;
+use App\Services\BranchContext;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -98,5 +99,34 @@ class User extends Authenticatable
     public function hasGlobalBranchAccess(): bool
     {
         return $this->isControllerAdministrator() || $this->has_all_branch_access;
+    }
+
+    public function isBranchAdministrator(?int $branchId = null): bool
+    {
+        if (! $this->is_active || $this->isControllerAdministrator()) {
+            return $this->isControllerAdministrator();
+        }
+
+        $branchId ??= app(BranchContext::class)->id();
+
+        return $branchId !== null
+            && $this->hasRole('super-administrator')
+            && $this->branches()
+                ->whereKey($branchId)
+                ->wherePivot('is_branch_administrator', true)
+                ->exists();
+    }
+
+    public function canManageUsersInBranch(?int $branchId = null): bool
+    {
+        return $this->isControllerAdministrator() || $this->isBranchAdministrator($branchId);
+    }
+
+    public function canViewFinancials(): bool
+    {
+        return $this->isControllerAdministrator()
+            || $this->hasPermission('invoices.view')
+            || $this->hasPermission('payments.view')
+            || $this->hasPermission('purchases.manage');
     }
 }

@@ -3,7 +3,7 @@
 @section('content')
 <div class="page-header">
     <div><div class="text-sm text-slate-500"><a class="link" href="{{ route('books.index') }}">Books</a> / Detail</div><h1 class="page-title mt-1">{{ $book->title }}</h1><p class="page-subtitle">{{ $book->sku }} · Barcode {{ $book->barcode }}</p></div>
-    <div class="flex gap-2"><a class="btn btn-secondary" href="{{ route('books.edit', $book) }}">Edit</a><a class="btn btn-primary" href="{{ route('inventory.adjustments') }}">Adjust stock</a></div>
+    <div class="flex gap-2">@if (auth()->user()->hasPermission('books.manage'))<a class="btn btn-secondary" href="{{ route('books.edit', $book) }}">Edit</a>@endif @if (auth()->user()->hasPermission('inventory.adjust'))<a class="btn btn-primary" href="{{ route('inventory.adjustments') }}">Adjust stock</a>@endif</div>
 </div>
 
 <div class="grid gap-4 sm:grid-cols-3"><div class="stat"><div class="stat-label">On hand (current branch)</div><div class="stat-value">{{ $book->branch_quantity }}</div></div><div class="stat"><div class="stat-label">Reserved</div><div class="stat-value">{{ $book->branchStocks->first()?->reserved_quantity ?? $book->reserved_quantity }}</div></div><div class="stat"><div class="stat-label">Available</div><div class="stat-value">{{ $book->available_quantity }}</div></div></div>
@@ -12,7 +12,9 @@
     <section class="panel">
         <div class="panel-header"><h2 class="panel-title">Catalogue details</h2></div>
         <dl class="divide-y divide-slate-100 px-5">
-            @foreach (['ISBN' => $book->isbn, 'Author' => $book->author, 'Publisher' => $book->publisher, 'Subject' => $book->subject, 'Format' => $book->media_format ? str_replace('_', ' ', $book->media_format) : null, 'Used by' => match($book->default_audience) { 'student' => 'Student', 'teacher' => 'Teacher', 'both' => 'Students and teachers', default => null }, 'Shelf' => $book->shelf_location, 'Latest purchase price' => number_format((float) $book->purchase_price, 2), 'Selling price' => number_format((float) $book->selling_price, 2)] as $label => $value)
+            @php($details = ['ISBN' => $book->isbn, 'Author' => $book->author, 'Publisher' => $book->publisher, 'Subject' => $book->subject, 'Format' => $book->media_format ? str_replace('_', ' ', $book->media_format) : null, 'Used by' => match($book->default_audience) { 'student' => 'Student', 'teacher' => 'Teacher', 'both' => 'Students and teachers', default => null }, 'Shelf' => $book->shelf_location])
+            @if ($canViewFinancials) @php($details = [...$details, 'Latest purchase price' => number_format((float) $book->purchase_price, 2), 'Selling price' => number_format((float) $book->selling_price, 2)]) @endif
+            @foreach ($details as $label => $value)
                 <div class="flex justify-between gap-4 py-3"><dt class="muted">{{ $label }}</dt><dd class="text-right font-medium text-slate-800">{{ $value ?: '—' }}</dd></div>
             @endforeach
         </dl>

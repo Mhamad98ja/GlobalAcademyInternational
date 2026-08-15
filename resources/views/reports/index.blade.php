@@ -23,9 +23,9 @@
                     <option value="class_sections" @selected($report === 'class_sections')>Students by class and section</option>
                     <option value="students" @selected($report === 'students')>Student registrations</option>
                     <option value="stock" @selected($report === 'stock')>Stock on hand</option>
-                    <option value="invoices" @selected($report === 'invoices')>Invoices</option>
+                    @if ($canViewFinancials)<option value="invoices" @selected($report === 'invoices')>Invoices</option>@endif
                     <option value="distributions" @selected($report === 'distributions')>Book distributions</option>
-                    <option value="payments" @selected($report === 'payments')>Payments</option>
+                    @if ($canViewFinancials)<option value="payments" @selected($report === 'payments')>Payments</option>@endif
                 </select>
             </div>
 
@@ -58,8 +58,8 @@
                 </div>
             @else
                 <div>
-                    <label class="form-label" for="report-search">{{ $report === 'invoices' ? 'Search invoices or students' : ($report === 'distributions' ? 'Search distributions, invoices or students' : ($report === 'payments' ? 'Search payments, invoices or students' : 'Search students')) }}</label>
-                    <input id="report-search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="{{ $report === 'invoices' ? 'Invoice number or student' : ($report === 'distributions' ? 'Invoice number or student' : ($report === 'payments' ? 'Payment number, invoice or student' : 'Student name or registration no.')) }}">
+                    <label class="form-label" for="report-search">{{ $report === 'invoices' ? 'Search invoices or students' : ($report === 'distributions' ? ($canViewFinancials ? 'Search distributions, invoices or students' : 'Search distributions or students') : ($report === 'payments' ? 'Search payments, invoices or students' : 'Search students')) }}</label>
+                    <input id="report-search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="{{ $report === 'invoices' ? 'Invoice number or student' : ($report === 'distributions' ? ($canViewFinancials ? 'Invoice number or student' : 'Student name or number') : ($report === 'payments' ? 'Payment number, invoice or student' : 'Student name or registration no.')) }}">
                 </div>
                 <div>
                     <label class="form-label" for="academic-year">Academic year</label>

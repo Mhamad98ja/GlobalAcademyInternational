@@ -54,19 +54,19 @@ class DatabaseSeeder extends Seeder
 
         $roles = [
             'super-administrator' => [
-                'label' => 'Super Administrator',
-                'description' => 'Unrestricted system administrator',
+                'label' => 'Branch Super Administrator',
+                'description' => 'Full operational and financial administration within assigned branches.',
                 'permissions' => array_keys($permissions),
             ],
             'employee' => [
-                'label' => 'Employee',
-                'description' => 'General school employee',
-                'permissions' => ['dashboard.view', 'students.view', 'books.view', 'suppliers.view', 'reports.view'],
+                'label' => 'Branch User',
+                'description' => 'Daily student, inventory, transfer, and distribution work without financial access.',
+                'permissions' => ['dashboard.view', 'students.view', 'students.manage', 'books.view', 'distributions.create', 'inventory.view', 'inventory.transfer', 'people.manage', 'reports.view'],
             ],
         ];
 
         foreach ($roles as $name => $data) {
-            $role = Role::firstOrCreate(
+            $role = Role::updateOrCreate(
                 ['name' => $name],
                 ['label' => $data['label'], 'description' => $data['description']],
             );

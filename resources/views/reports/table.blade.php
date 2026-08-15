@@ -34,12 +34,12 @@
         </table>
     @elseif ($report === 'distributions')
         <table class="data-table">
-            <thead><tr><th>Distribution</th><th>Invoice</th><th>Student</th><th>Date</th><th>Books issued</th><th>Distributed by</th></tr></thead>
+            <thead><tr><th>Distribution</th>@if ($canViewFinancials)<th>Invoice</th>@endif<th>Student</th><th>Date</th><th>Books issued</th><th>Distributed by</th></tr></thead>
             <tbody>
                 @foreach ($rows as $distribution)
                     <tr>
                         <td>Distribution #{{ $distribution->id }}</td>
-                        <td>{{ $distribution->invoice?->invoice_number }}</td>
+                        @if ($canViewFinancials)<td>{{ $distribution->invoice?->invoice_number }}</td>@endif
                         <td>{{ $distribution->student?->full_name }}</td>
                         <td>{{ $distribution->distributed_on?->format('d M Y') }}</td>
                         <td>{{ $distribution->items->sum('quantity') }}</td>

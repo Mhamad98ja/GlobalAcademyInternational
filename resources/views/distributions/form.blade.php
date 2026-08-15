@@ -43,7 +43,7 @@
             <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 class="panel-title">Books to issue</h2>
-                    <p class="mt-1 text-xs text-slate-500">Books use their current catalogue sale price. A package changes a price only when that book is marked Discounted or Free.</p>
+                    <p class="mt-1 text-xs text-slate-500">Scan each book barcode and confirm the quantity before issuing it.@if ($canViewFinancials) Books use their current catalogue sale price. @endif</p>
                 </div>
                 <button type="button" class="btn btn-secondary btn-small" data-add-row="#distribution-lines" data-template="#distribution-line-template">Add book</button>
             </div>
@@ -66,7 +66,7 @@
             </div>
         </div>
 
-        <div>
+        @if ($canViewFinancials)<div>
             <h2 class="panel-title">Payment at distribution</h2>
             <div class="form-grid mt-4">
                 <div>
@@ -95,7 +95,7 @@
                     <label class="flex items-center gap-2 text-sm font-medium"><input type="checkbox" name="payment[deferred]" value="1">Deferred payment pending approval</label>
                 </div>
             </div>
-        </div>
+        </div>@endif
 
         <div>
             <label class="form-label">Notes</label>

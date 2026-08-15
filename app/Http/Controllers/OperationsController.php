@@ -19,6 +19,7 @@ class OperationsController extends Controller
         $type = $request->string('type')->toString();
         $search = trim($request->string('search')->toString());
         $user = $request->user();
+        abort_unless($user->canViewFinancials(), 403);
         $canViewPurchases = $user->hasPermission('purchases.manage');
         $canViewInvoices = $user->hasPermission('invoices.view');
         $canViewReturns = $user->hasPermission('returns.manage');

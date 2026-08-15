@@ -73,7 +73,7 @@
     </section>
 </div>
 
-<section class="panel mt-6">
+@if ($canViewFinancials)<section class="panel mt-6">
     <div class="panel-header"><h2 class="panel-title">Invoices</h2></div>
     <div class="table-wrap">
         <table class="data-table">
@@ -95,4 +95,5 @@
         </table>
     </div>
 </section>
+@endif
 @endsection

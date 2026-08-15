@@ -22,6 +22,7 @@ class BooksController extends Controller
     {
         $canManagePackages = $request->user()->hasPermission('class-lists.manage');
         $canManageBooks = $request->user()->hasPermission('books.manage');
+        $canViewFinancials = $request->user()->canViewFinancials();
         $tab = $canManagePackages && $request->string('tab')->toString() === 'packages' ? 'packages' : 'books';
         $search = trim($request->string('search')->toString());
         $books = null;
@@ -51,7 +52,7 @@ class BooksController extends Controller
                 ->withQueryString();
         }
 
-        return view('books.index', compact('books', 'lists', 'tab', 'search', 'canManageBooks', 'canManagePackages'));
+        return view('books.index', compact('books', 'lists', 'tab', 'search', 'canManageBooks', 'canManagePackages', 'canViewFinancials'));
     }
 
     public function create(): View
@@ -76,11 +77,11 @@ class BooksController extends Controller
         return redirect()->route('books.show', $book)->with('success', 'Book added to the catalogue and its current-branch stock was recorded.');
     }
 
-    public function show(Book $book): View
+    public function show(Book $book, Request $request): View
     {
         $book->load(['branchStocks' => fn ($stocks) => $stocks->where('branch_id', app(\App\Services\BranchContext::class)->id()), 'movements' => fn ($query) => $query->with('user')->latest()->take(20), 'gradeUsages.grade']);
 
-        return view('books.show', compact('book'));
+        return view('books.show', ['book' => $book, 'canViewFinancials' => $request->user()->canViewFinancials()]);
     }
 
     public function edit(Book $book): View

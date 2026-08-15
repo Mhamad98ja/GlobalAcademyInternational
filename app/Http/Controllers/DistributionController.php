@@ -19,13 +19,17 @@ class DistributionController extends Controller
 {
     public function index(): View
     {
+        $canViewFinancials = auth()->user()->canViewFinancials();
+
         return view('distributions.index', [
             'distributions' => BookDistribution::with('student', 'invoice')->latest('distributed_on')->paginate(15),
+            'canViewFinancials' => $canViewFinancials,
         ]);
     }
 
     public function create(Request $request): View
     {
+        $canViewFinancials = $request->user()->canViewFinancials();
         $packages = ClassBookList::query()
             ->where('is_active', true)
             ->with('items.book', 'section')
@@ -52,14 +56,21 @@ class DistributionController extends Controller
                     'quantity' => $item->quantity,
                 ])->values(),
             ])->values(),
-            'bookData' => $books->map(fn (Book $book) => [
-                'id' => $book->id,
-                'barcode' => $book->barcode,
-                'title' => $book->title,
-                'available_quantity' => $book->available_quantity,
-                'selling_price' => (string) $book->selling_price,
-            ])->values(),
+            'bookData' => $books->map(function (Book $book) use ($canViewFinancials): array {
+                $data = [
+                    'id' => $book->id,
+                    'barcode' => $book->barcode,
+                    'title' => $book->title,
+                    'available_quantity' => $book->available_quantity,
+                ];
+                if ($canViewFinancials) {
+                    $data['selling_price'] = (string) $book->selling_price;
+                }
+
+                return $data;
+            })->values(),
             'selectedRegistration' => $request->integer('registration'),
+            'canViewFinancials' => $canViewFinancials,
         ]);
     }
 
@@ -75,20 +86,23 @@ class DistributionController extends Controller
         $distribution = $service->distribute(
             $registration,
             $this->itemsFromBarcodes($data['items']),
-            $data['payment'] ?? [],
+            $request->user()->canViewFinancials() ? ($data['payment'] ?? []) : [],
             $request->user(),
             $data['notes'] ?? null,
             $package,
         );
 
-        return redirect()->route('invoices.show', $distribution->invoice)->with('success', 'Books distributed and invoice issued.');
+        return redirect()->route(
+            $request->user()->canViewFinancials() ? 'invoices.show' : 'distributions.show',
+            $request->user()->canViewFinancials() ? $distribution->invoice : $distribution,
+        )->with('success', 'Books distributed successfully.');
     }
 
-    public function show(BookDistribution $distribution): View
+    public function show(BookDistribution $distribution, Request $request): View
     {
         $distribution->load('student', 'registration.grade', 'registration.section', 'items.book', 'invoice');
 
-        return view('distributions.show', compact('distribution'));
+        return view('distributions.show', ['distribution' => $distribution, 'canViewFinancials' => $request->user()->canViewFinancials()]);
     }
 
     private function matchingPackage(StudentRegistration $registration, ?int $packageId): ?ClassBookList

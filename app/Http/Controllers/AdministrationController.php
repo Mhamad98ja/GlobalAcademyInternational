@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Services\BranchContext;
 use App\Models\Book;
+use App\Models\Branch;
 use App\Models\ResponsiblePerson;
 use App\Models\Role;
 use App\Models\Student;
@@ -22,23 +23,36 @@ use Illuminate\View\View;
 
 class AdministrationController extends Controller
 {
-    public function users(): View
+    public function users(BranchContext $branches): View
     {
+        $actor = auth()->user();
+        $currentBranchId = $branches->id();
+        $canManageBranchAssignments = $actor->isControllerAdministrator();
+
         return view('admin.users', [
-            'users' => User::with('roles', 'branches')->orderBy('name')->paginate(20),
+            'users' => User::with('roles', 'branches')
+                ->when(! $canManageBranchAssignments, fn ($users) => $users->whereHas('branches', fn ($assignedBranches) => $assignedBranches->whereKey($currentBranchId)))
+                ->orderBy('name')
+                ->paginate(20),
             'roles' => Role::orderBy('label')->get(),
+            'branches' => Branch::where('is_active', true)->orderBy('name')->get(),
+            'canManageBranchAssignments' => $canManageBranchAssignments,
+            'currentBranchId' => $currentBranchId,
         ]);
     }
 
     public function storeUser(Request $request, BranchContext $branches): RedirectResponse
     {
-        $canManageBranchAssignments = $request->user()->isControllerAdministrator();
+        $actor = $request->user();
+        $currentBranchId = $branches->id();
+        $canManageBranchAssignments = $actor->isControllerAdministrator();
+        abort_unless($actor->canManageUsersInBranch($currentBranchId), 403);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', 'unique:users,whatsapp_number'],
             'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()],
-            'role_id' => ['required', 'exists:roles,id'],
+            'role_id' => [$canManageBranchAssignments ? 'required' : 'nullable', 'exists:roles,id'],
             'branch_ids' => ['nullable', 'array'],
             'branch_ids.*' => ['integer', 'exists:branches,id'],
             'default_branch_id' => ['nullable', 'integer', 'exists:branches,id'],
@@ -53,38 +67,48 @@ class AdministrationController extends Controller
             'whatsapp_number' => $data['whatsapp_number'] ?? null,
             'password' => $data['password'],
             'is_active' => true,
-            'has_all_branch_access' => $canManageBranchAssignments && $request->boolean('has_all_branch_access'),
+            'has_all_branch_access' => false,
         ]);
-        $user->roles()->sync([$data['role_id']]);
+        $roleId = $canManageBranchAssignments
+            ? (int) $data['role_id']
+            : (int) Role::where('name', 'employee')->value('id');
+        $user->roles()->sync([$roleId]);
         $branchIds = $data['branch_ids'] ?? [];
         $defaultBranchId = isset($data['default_branch_id']) ? (int) $data['default_branch_id'] : null;
-        if ($canManageBranchAssignments && $branchIds !== []) {
+        if ($canManageBranchAssignments && ($branchIds !== [] || $user->hasRole('super-administrator'))) {
             $this->syncBranches($user, $branchIds, $defaultBranchId, $data['branch_administrator_ids'] ?? []);
-        } elseif ($branchId = $branches->id()) {
-            $user->branches()->syncWithoutDetaching([$branchId => ['is_default' => true, 'is_branch_administrator' => false]]);
+        } elseif ($currentBranchId) {
+            $user->branches()->syncWithoutDetaching([$currentBranchId => ['is_default' => true, 'is_branch_administrator' => false]]);
         }
 
         return back()->with('success', 'User account created.');
     }
 
-    public function editUser(User $user): View
+    public function editUser(User $user, BranchContext $branches): View
     {
+        $actor = auth()->user();
+        $this->ensureCanManageUser($actor, $user, $branches->id());
+
         return view('admin.user-form', [
             'managedUser' => $user->load('roles', 'branches'),
             'roles' => Role::orderBy('label')->get(),
-            'branches' => \App\Models\Branch::where('is_active', true)->orderBy('name')->get(),
+            'branches' => Branch::where('is_active', true)->orderBy('name')->get(),
+            'canManageBranchAssignments' => $actor->isControllerAdministrator(),
         ]);
     }
 
-    public function updateUser(Request $request, User $user): RedirectResponse
+    public function updateUser(Request $request, User $user, BranchContext $branches): RedirectResponse
     {
-        $canManageBranchAssignments = $request->user()->isControllerAdministrator();
+        $actor = $request->user();
+        $currentBranchId = $branches->id();
+        $this->ensureCanManageUser($actor, $user, $currentBranchId);
+        $canManageBranchAssignments = $actor->isControllerAdministrator();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', Rule::unique('users', 'whatsapp_number')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', Password::min(12)->mixedCase()->numbers()],
-            'role_id' => ['required', 'exists:roles,id'],
+            'role_id' => [$canManageBranchAssignments ? 'required' : 'nullable', 'exists:roles,id'],
             'branch_ids' => ['nullable', 'array'],
             'branch_ids.*' => ['integer', 'exists:branches,id'],
             'default_branch_id' => ['nullable', 'integer', 'exists:branches,id'],
@@ -98,16 +122,16 @@ class AdministrationController extends Controller
             'email' => $data['email'],
             'whatsapp_number' => $data['whatsapp_number'] ?? null,
         ];
-        if ($canManageBranchAssignments) {
-            $attributes['has_all_branch_access'] = $request->boolean('has_all_branch_access');
-        }
         if (! empty($data['password'])) {
             $attributes['password'] = $data['password'];
         }
 
         $user->update($attributes);
-        $user->roles()->sync([$data['role_id']]);
         if ($canManageBranchAssignments) {
+            if ($user->is_controller_administrator && Role::whereKey($data['role_id'])->where('name', '!=', 'super-administrator')->exists()) {
+                abort(422, 'The Controller Administrator must remain a Branch Super Administrator.');
+            }
+            $user->roles()->sync([(int) $data['role_id']]);
             $this->syncBranches(
                 $user,
                 $data['branch_ids'] ?? [],
@@ -119,8 +143,9 @@ class AdministrationController extends Controller
         return redirect()->route('admin.users')->with('success', 'User account updated.');
     }
 
-    public function toggleUser(User $user): RedirectResponse
+    public function toggleUser(User $user, BranchContext $branches): RedirectResponse
     {
+        $this->ensureCanManageUser(auth()->user(), $user, $branches->id());
         abort_if($user->is(auth()->user()), 422, 'You cannot disable your own account.');
         abort_if($user->is_controller_administrator, 422, 'Transfer Controller Administrator authority before disabling this account.');
         $user->update(['is_active' => ! $user->is_active]);
@@ -128,8 +153,9 @@ class AdministrationController extends Controller
         return back()->with('success', 'User status updated.');
     }
 
-    public function destroyUser(User $user): RedirectResponse
+    public function destroyUser(User $user, BranchContext $branches): RedirectResponse
     {
+        $this->ensureCanManageUser(auth()->user(), $user, $branches->id());
         abort_if($user->is(auth()->user()), 422, 'You cannot delete your own account.');
         abort_if($user->is_controller_administrator, 422, 'Transfer Controller Administrator authority before deleting this account.');
 
@@ -211,10 +237,37 @@ class AdministrationController extends Controller
         if (array_diff($branchAdministratorIds, $branchIds) !== []) {
             abort(422, 'A branch administrator must be assigned to that branch.');
         }
+        if ($branchAdministratorIds !== [] && ! $user->hasRole('super-administrator')) {
+            abort(422, 'Only a Branch Super Administrator can be responsible for a branch.');
+        }
+        if ($user->hasRole('super-administrator') && ! $user->isControllerAdministrator() && $branchAdministratorIds === []) {
+            abort(422, 'A Branch Super Administrator must be responsible for at least one assigned branch.');
+        }
+
+        foreach ($branchAdministratorIds as $branchId) {
+            DB::table('branch_user')
+                ->where('branch_id', $branchId)
+                ->where('user_id', '!=', $user->id)
+                ->where('is_branch_administrator', true)
+                ->update(['is_branch_administrator' => false, 'updated_at' => now()]);
+        }
         $user->branches()->sync(collect($branchIds)->mapWithKeys(fn ($id) => [(int) $id => [
             'is_default' => (int) $id === $defaultBranchId,
             'is_branch_administrator' => in_array((int) $id, $branchAdministratorIds, true),
         ]])->all());
+    }
+
+    private function ensureCanManageUser(User $actor, User $managedUser, ?int $branchId): void
+    {
+        abort_unless($actor->canManageUsersInBranch($branchId), 403);
+
+        if ($actor->isControllerAdministrator()) {
+            return;
+        }
+
+        abort_if($managedUser->is_controller_administrator, 403);
+        abort_if($managedUser->hasRole('super-administrator') && ! $managedUser->is($actor), 403);
+        abort_unless($branchId !== null && $managedUser->branches()->whereKey($branchId)->exists(), 403);
     }
 
     public function saveSettings(Request $request): RedirectResponse

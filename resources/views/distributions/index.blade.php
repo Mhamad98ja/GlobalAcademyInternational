@@ -1,1 +1,33 @@
-@extends('layouts.app',['title'=>'Book distribution']) @section('content')<div class="page-header"><div><h1 class="page-title">Book distribution</h1><p class="page-subtitle">Issue books, create an invoice and take payment in one protected workflow.</p></div><a class="btn btn-primary" href="{{ route('distributions.create') }}">New distribution</a></div><section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Distribution</th><th>Student</th><th>Invoice</th><th>Date</th><th>Status</th></tr></thead><tbody>@forelse($distributions as $distribution)<tr><td><a class="link" href="{{ route('distributions.show',$distribution) }}">{{ substr($distribution->public_id,0,8) }}</a></td><td>{{ $distribution->student->full_name }}</td><td><a class="link" href="{{ route('invoices.show',$distribution->invoice) }}">{{ $distribution->invoice->invoice_number }}</a></td><td>{{ $distribution->distributed_on->format('d M Y') }}</td><td><span class="badge badge-green">{{ ucfirst($distribution->status) }}</span></td></tr>@empty<tr><td colspan="5" class="empty">No books have been distributed yet.</td></tr>@endforelse</tbody></table></div><div class="border-t border-slate-200 px-4 py-3">{{ $distributions->links() }}</div></section>@endsection
+@extends('layouts.app', ['title' => 'Book distribution'])
+
+@section('content')
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Book distribution</h1>
+        <p class="page-subtitle">Issue books to students using barcode scanning.</p>
+    </div>
+    <a class="btn btn-primary" href="{{ route('distributions.create') }}">New distribution</a>
+</div>
+
+<section class="panel">
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Distribution</th><th>Student</th>@if ($canViewFinancials)<th>Invoice</th>@endif<th>Date</th><th>Status</th></tr></thead>
+            <tbody>
+                @forelse ($distributions as $distribution)
+                    <tr>
+                        <td><a class="link" href="{{ route('distributions.show', $distribution) }}">{{ substr($distribution->public_id, 0, 8) }}</a></td>
+                        <td>{{ $distribution->student->full_name }}</td>
+                        @if ($canViewFinancials)<td><a class="link" href="{{ route('invoices.show', $distribution->invoice) }}">{{ $distribution->invoice->invoice_number }}</a></td>@endif
+                        <td>{{ $distribution->distributed_on->format('d M Y') }}</td>
+                        <td><span class="badge badge-green">{{ ucfirst($distribution->status) }}</span></td>
+                    </tr>
+                @empty
+                    <tr><td colspan="{{ $canViewFinancials ? 5 : 4 }}" class="empty">No books have been distributed yet.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+    <div class="border-t border-slate-200 px-4 py-3">{{ $distributions->links() }}</div>
+</section>
+@endsection

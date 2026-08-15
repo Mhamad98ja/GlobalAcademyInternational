@@ -84,11 +84,16 @@ class StudentsController extends Controller
         });
     }
 
-    public function show(Student $student): View
+    public function show(Student $student, Request $request): View
     {
-        $student->load(['registrations.academicYear', 'registrations.grade', 'registrations.section', 'responsiblePersons', 'invoices']);
+        $relations = ['registrations.academicYear', 'registrations.grade', 'registrations.section', 'responsiblePersons'];
+        $canViewFinancials = $request->user()->canViewFinancials();
+        if ($canViewFinancials) {
+            $relations[] = 'invoices';
+        }
+        $student->load($relations);
 
-        return view('students.show', compact('student'));
+        return view('students.show', compact('student', 'canViewFinancials'));
     }
 
     public function edit(Student $student): View

@@ -4,7 +4,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">Books &amp; packages</h1>
-        <p class="page-subtitle">{{ $tab === 'packages' ? 'Required and optional book packages by academic year, grade, and section.' : 'Products, barcodes, purchase and sale prices, and stock position.' }}</p>
+        <p class="page-subtitle">{{ $tab === 'packages' ? 'Required and optional book packages by academic year, grade, and section.' : ($canViewFinancials ? 'Products, barcodes, purchase and sale prices, and stock position.' : 'Products, barcodes, usage, and stock position.') }}</p>
     </div>
     <div class="flex flex-wrap gap-2">
         @if ($canManageBooks)<a class="btn btn-secondary" href="{{ route('books.create') }}">Add book</a>@endif
@@ -53,20 +53,19 @@
     @else
         <div class="table-wrap">
             <table class="data-table min-w-[760px]">
-                <thead><tr><th>Book</th><th>Usage</th><th>Barcode</th><th>Purchase price</th><th>Sale price</th><th>Available</th><th>Status</th></tr></thead>
+                <thead><tr><th>Book</th><th>Usage</th><th>Barcode</th>@if ($canViewFinancials)<th>Purchase price</th><th>Sale price</th>@endif<th>Available</th><th>Status</th></tr></thead>
                 <tbody>
                     @forelse ($books as $book)
                         <tr>
                             <td><a class="link" href="{{ route('books.show', $book) }}">{{ $book->title }}</a><div class="text-xs text-slate-500">{{ $book->sku }}{{ $book->author ? ' &middot; '.$book->author : '' }}</div></td>
                             <td>{{ match($book->default_audience) { 'student' => 'Student', 'teacher' => 'Teacher', 'both' => 'Students and teachers', default => $book->gradeUsages->pluck('audience')->map(fn ($audience) => ucfirst($audience))->unique()->implode(', ') ?: 'â€”' } }}</td>
                             <td class="font-mono text-xs">{{ $book->barcode }}</td>
-                            <td>{{ number_format((float) $book->purchase_price, 2) }}</td>
-                            <td class="font-semibold">{{ number_format((float) $book->selling_price, 2) }}</td>
+                            @if ($canViewFinancials)<td>{{ number_format((float) $book->purchase_price, 2) }}</td><td class="font-semibold">{{ number_format((float) $book->selling_price, 2) }}</td>@endif
                             <td><span class="badge {{ $book->available_quantity <= $book->minimum_stock ? 'badge-amber' : 'badge-green' }}">{{ $book->available_quantity }}</span></td>
                             <td><span class="badge {{ $book->is_active ? 'badge-green' : 'badge-red' }}">{{ $book->is_active ? 'Active' : 'Inactive' }}</span></td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="empty">No books found.</td></tr>
+                        <tr><td colspan="{{ $canViewFinancials ? 7 : 5 }}" class="empty">No books found.</td></tr>
                     @endforelse
                 </tbody>
             </table>

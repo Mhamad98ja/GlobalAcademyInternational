@@ -31,6 +31,7 @@ class ReportsController extends Controller
             'filters' => $filters,
             'years' => AcademicYear::orderByDesc('starts_on')->get(),
             'grades' => Grade::with('sections')->orderBy('sort_order')->get(),
+            'canViewFinancials' => $request->user()->canViewFinancials(),
         ]);
     }
 
@@ -47,16 +48,18 @@ class ReportsController extends Controller
             'filters' => $filters,
             'school' => $school,
             'filterSummary' => $this->filterSummary($filters),
+            'canViewFinancials' => $request->user()->canViewFinancials(),
         ]);
     }
 
     public function csv(Request $request): StreamedResponse
     {
-        $report = $this->normaliseReport($request->string('report')->toString());
+        $canViewFinancials = $request->user()->canViewFinancials();
+        $report = $this->normaliseReport($request->string('report')->toString(), $canViewFinancials);
         $filters = $this->filters($request);
-        $query = $this->reportQuery($report, $filters);
+        $query = $this->reportQuery($report, $filters, $canViewFinancials);
 
-        return response()->streamDownload(function () use ($report, $query, $filters): void {
+        return response()->streamDownload(function () use ($report, $query, $filters, $canViewFinancials): void {
             $output = fopen('php://output', 'w');
 
             if ($report === 'stock') {
@@ -85,16 +88,21 @@ class ReportsController extends Controller
                     ]);
                 }
             } elseif ($report === 'distributions') {
-                fputcsv($output, ['Distribution', 'Invoice', 'Student', 'Date', 'Books issued', 'Distributed by']);
+                fputcsv($output, $canViewFinancials
+                    ? ['Distribution', 'Invoice', 'Student', 'Date', 'Books issued', 'Distributed by']
+                    : ['Distribution', 'Student', 'Date', 'Books issued', 'Distributed by']);
                 foreach ($query->lazy() as $distribution) {
-                    fputcsv($output, [
+                    $row = [
                         'Distribution #'.$distribution->id,
-                        $distribution->invoice?->invoice_number,
                         $distribution->student?->full_name,
                         $distribution->distributed_on?->format('Y-m-d'),
                         $distribution->items->sum('quantity'),
                         $distribution->distributedBy?->name,
-                    ]);
+                    ];
+                    if ($canViewFinancials) {
+                        array_splice($row, 1, 0, [$distribution->invoice?->invoice_number]);
+                    }
+                    fputcsv($output, $row);
                 }
             } elseif ($report === 'payments') {
                 fputcsv($output, ['Payment', 'Invoice', 'Student', 'Date', 'Amount', 'Method', 'Status']);
@@ -156,14 +164,15 @@ class ReportsController extends Controller
     /** @return array{0: string, 1: \Illuminate\Support\Collection<int, mixed>, 2: array<string, mixed>} */
     private function reportData(Request $request): array
     {
-        $report = $this->normaliseReport($request->string('report')->toString());
+        $canViewFinancials = $request->user()->canViewFinancials();
+        $report = $this->normaliseReport($request->string('report')->toString(), $canViewFinancials);
         $filters = $this->filters($request);
 
-        return [$report, $this->reportQuery($report, $filters)->get(), $filters];
+        return [$report, $this->reportQuery($report, $filters, $canViewFinancials)->get(), $filters];
     }
 
     /** @param array<string, mixed> $filters */
-    private function reportQuery(string $report, array $filters): Builder
+    private function reportQuery(string $report, array $filters, bool $canViewFinancials): Builder
     {
         return match ($report) {
             'stock' => Book::query()->withBranchStock()
@@ -188,13 +197,22 @@ class ReportsController extends Controller
                 ->when($filters['date_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('invoice_date', '<=', $date))
                 ->latest('invoice_date'),
             'distributions' => BookDistribution::query()
-                ->with('student', 'invoice', 'distributedBy', 'items')
-                ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where(fn (Builder $distributions) => $distributions
-                    ->whereHas('invoice', fn (Builder $invoice) => $invoice->whereInsensitiveLike('invoice_number', $search))
-                    ->orWhereHas('student', fn (Builder $student) => $student
+                ->with('student', 'distributedBy', 'items')
+                ->when($canViewFinancials, fn (Builder $query) => $query->with('invoice'))
+                ->when($filters['search'] ?? null, function (Builder $query, string $search) use ($canViewFinancials): void {
+                    $query->where(function (Builder $distributions) use ($search, $canViewFinancials): void {
+                        if ($canViewFinancials) {
+                            $distributions->whereHas('invoice', fn (Builder $invoice) => $invoice->whereInsensitiveLike('invoice_number', $search));
+                        }
+                        $studentQuery = fn (Builder $student) => $student
                         ->whereInsensitiveLike('first_name', $search)
                         ->orWhereInsensitiveLike('last_name', $search)
-                        ->orWhereInsensitiveLike('student_number', $search))))
+                        ->orWhereInsensitiveLike('student_number', $search);
+                        $canViewFinancials
+                            ? $distributions->orWhereHas('student', $studentQuery)
+                            : $distributions->whereHas('student', $studentQuery);
+                    });
+                })
                 ->when($filters['academic_year_id'] ?? null, fn (Builder $query, int $id) => $query->where('academic_year_id', $id))
                 ->when($filters['grade_id'] ?? null, fn (Builder $query, int $id) => $query->where('grade_id', $id))
                 ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->where('section_id', $id))
@@ -284,11 +302,14 @@ class ReportsController extends Controller
         ]);
     }
 
-    private function normaliseReport(string $report): string
+    private function normaliseReport(string $report, bool $canViewFinancials): string
     {
-        return in_array($report, ['students', 'student_information', 'class_sections', 'stock', 'invoices', 'distributions', 'payments'], true)
+        $report = in_array($report, ['students', 'student_information', 'class_sections', 'stock', 'invoices', 'distributions', 'payments'], true)
             ? $report
             : 'students';
+        abort_if(! $canViewFinancials && in_array($report, ['invoices', 'payments'], true), 403);
+
+        return $report;
     }
 
     /** @param array<string, mixed> $filters

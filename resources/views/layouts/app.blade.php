@@ -11,9 +11,9 @@
             <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close navigation">&times;</button>
         </div>
         <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
+@php($signedInUser = auth()->user())
 @php($nav=[
     ['dashboard','Dashboard','dashboard.view','dashboard'],
-    ['operations.index','Operations center','dashboard.view','operations'],
     ['students.index','Students','students.view','students'],
     ['books.index','Books & packages','books.view','books'],
     ['suppliers.index','Suppliers','suppliers.view','suppliers'],
@@ -29,12 +29,15 @@
     ['admin.users','Administration','admin.manage','administration'],
 ])
 @foreach($nav as [$route,$label,$permission,$icon])
-    @if(auth()->user()->hasPermission($permission))
+    @if($signedInUser->hasPermission($permission))
         <a href="{{ route($route) }}" class="sidebar-link {{ request()->routeIs(str_replace('.index','.*',$route)) || request()->routeIs($route) || ($route === 'books.index' && request()->routeIs('class-lists.*')) ? 'active' : '' }}" aria-label="{{ __($label) }}" title="{{ __($label) }}">
             <span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon :name="$icon" /></span><span class="sidebar-link-label">{{ __($label) }}</span>
         </a>
     @endif
 @endforeach
+@if($signedInUser->canViewFinancials())
+    <a href="{{ route('operations.index') }}" class="sidebar-link {{ request()->routeIs('operations.*') ? 'active' : '' }}" aria-label="Operations center" title="Operations center"><span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon name="operations" /></span><span class="sidebar-link-label">Operations center</span></a>
+@endif
 @if(auth()->user()->isControllerAdministrator())
     <a href="{{ route('admin.imports') }}" class="sidebar-link {{ request()->routeIs('admin.imports*') ? 'active' : '' }}" aria-label="Import data" title="Import data"><span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon name="administration" /></span><span class="sidebar-link-label">Import data</span></a>
 @endif
@@ -48,7 +51,7 @@
                 <div class="min-w-0 text-sm text-slate-500"><span class="hidden sm:inline">Global Academy International</span><span class="sm:hidden">GAI</span></div>
             </div>
             <div class="flex shrink-0 items-center gap-3">
-                <a href="{{ route('reports.index') }}" class="hidden text-sm text-slate-500 hover:text-teal-700 sm:block">Reports</a>
+                @if ($signedInUser->hasPermission('reports.view'))<a href="{{ route('reports.index') }}" class="hidden text-sm text-slate-500 hover:text-teal-700 sm:block">Reports</a>@endif
                 @php($branchContext = app(\App\Services\BranchContext::class))
                 @php($activeBranch = $branchContext->branch())
                 @php($availableBranches = $branchContext->accessibleBranches(auth()->user()))
@@ -67,8 +70,8 @@
                     </form>
                 @endif
                 <div class="h-8 w-px bg-slate-200"></div>
-                <div class="max-w-40 text-right"><div class="truncate text-sm font-medium text-slate-800">{{ auth()->user()->name }}</div><div class="truncate text-xs text-slate-500">{{ auth()->user()->roles->first()?->label ?? 'User' }}</div></div>
-                <div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-teal-100 font-semibold text-teal-800">{{ strtoupper(substr(auth()->user()->name,0,1)) }}</div>
+                <div class="max-w-40 text-right"><div class="truncate text-sm font-medium text-slate-800">{{ $signedInUser->name }}</div><div class="truncate text-xs text-slate-500">{{ $signedInUser->isControllerAdministrator() ? 'Controller Administrator' : ($signedInUser->roles->first()?->label ?? 'User') }}</div></div>
+                <div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-teal-100 font-semibold text-teal-800">{{ strtoupper(substr($signedInUser->name,0,1)) }}</div>
             </div>
         </header>
         <div class="page">@include('components.flash')@yield('content')</div>
