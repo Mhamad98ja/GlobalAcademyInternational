@@ -56,6 +56,7 @@ class MultiBranchWorkflowTest extends TestCase
         $transfer = app(BookTransferService::class)->betweenBranches($main, $north, [['book_id' => $book->id, 'quantity' => 5]], null, $user);
 
         $this->assertSame('branch_to_branch', $transfer->transfer_type);
+        $this->assertMatchesRegularExpression('/^TRF-\d{8}-[A-Z0-9]{10}$/', $transfer->transfer_number);
         $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 7]);
         $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 7]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'type' => 'branch_transfer_out', 'quantity_change' => -5]);

@@ -11,6 +11,7 @@ use App\Models\Branch;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\UserBookStock;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -98,7 +99,7 @@ final class BookTransferService
     private function makeTransfer(string $type, Branch $source, Branch $destination, ?User $sourceUser, ?User $destinationUser, ?AcademicYear $year, User $user, ?string $notes): BookTransfer
     {
         return BookTransfer::create([
-            'transfer_number' => 'TRF-'.now()->format('Ymd').'-'.str_pad((string) ((BookTransfer::query()->lockForUpdate()->latest('id')->value('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT),
+            'transfer_number' => $this->nextTransferNumber(),
             'transfer_type' => $type,
             'source_branch_id' => $source->id,
             'destination_branch_id' => $destination->id,
@@ -111,6 +112,15 @@ final class BookTransferService
             'created_by' => $user->id,
             'completed_by' => $user->id,
         ]);
+    }
+
+    private function nextTransferNumber(): string
+    {
+        do {
+            $number = 'TRF-'.now()->format('Ymd').'-'.Str::upper(Str::random(10));
+        } while (BookTransfer::query()->where('transfer_number', $number)->exists());
+
+        return $number;
     }
 
     private function normalise(array $items): array
