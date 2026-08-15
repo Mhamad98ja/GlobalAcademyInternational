@@ -66,7 +66,7 @@
     .print-document-footer { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.8rem; border-top: 2px solid var(--document-teal); color: var(--document-muted); font-size: 0.66rem; padding-top: 0.65rem; }
 
     @media print {
-        @page { size: A4 portrait; margin: 10mm; }
+        @page { size: A4 portrait; margin: 6mm; }
         html, body { background: #fff !important; }
         body { font-size: 10pt; }
         .page { max-width: none !important; padding: 0 !important; }
@@ -78,6 +78,29 @@
         .print-document .data-table th { font-size: 0.56rem; padding: 0.42rem; }
         .print-document .data-table td { font-size: 0.62rem; padding: 0.42rem; }
         .print-document-footer { margin-top: 1.1rem; }
+        .print-document--invoice { font-size: 8pt; line-height: 1.2; }
+        .print-document--invoice .print-masthead { border-bottom-width: 3px; padding: 5mm 8mm; }
+        .print-document--invoice .print-school-name { font-size: 1rem; }
+        .print-document--invoice .print-school-contact, .print-document--invoice .print-document-kind { font-size: 0.58rem; }
+        .print-document--invoice .print-document-body { padding: 5mm 8mm 4mm; }
+        .print-document--invoice .print-title-row { gap: 0.8rem; margin-bottom: 0.55rem; }
+        .print-document--invoice .print-title { font-size: 1.08rem; }
+        .print-document--invoice .print-title-note, .print-document--invoice .print-reference-row { font-size: 0.6rem; }
+        .print-document--invoice .print-reference { min-width: 9rem; padding: 0.45rem 0.55rem; }
+        .print-document--invoice .print-reference-row + .print-reference-row { margin-top: 0.2rem; }
+        .print-document--invoice .print-info-grid { gap: 0.5rem 1rem; margin: 0 0 0.55rem; padding: 0.5rem 0; }
+        .print-document--invoice .print-info-label { font-size: 0.55rem; }
+        .print-document--invoice .print-info-value { font-size: 0.7rem; margin-top: 0.1rem; }
+        .print-document--invoice .print-info-detail { font-size: 0.6rem; margin-top: 0; }
+        .print-document--invoice .print-table thead th { font-size: 0.55rem; padding: 0.28rem 0.38rem; }
+        .print-document--invoice .print-table tbody td { font-size: 0.62rem; line-height: 1.15; padding: 0.28rem 0.38rem; }
+        .print-document--invoice .print-financial-summary { gap: 0.7rem; grid-template-columns: minmax(0, 1fr) 10rem; margin-top: 0.55rem; }
+        .print-document--invoice .print-notes { min-height: 2.4rem; padding: 0.45rem 0.55rem; }
+        .print-document--invoice .print-notes p, .print-document--invoice .print-total-row { font-size: 0.6rem; }
+        .print-document--invoice .print-total-row { padding: 0.3rem 0.5rem; }
+        .print-document--invoice .print-signatures { gap: 1rem; margin-top: 0.9rem; }
+        .print-document--invoice .print-signature { font-size: 0.55rem; padding-top: 0.25rem; }
+        .print-document--invoice .print-document-footer { font-size: 0.55rem; margin-top: 0.7rem; padding-top: 0.35rem; }
     }
 
     @media screen and (max-width: 640px) {

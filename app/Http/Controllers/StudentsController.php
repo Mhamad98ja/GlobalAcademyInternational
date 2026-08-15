@@ -35,11 +35,11 @@ class StudentsController extends Controller
         $students = Student::query()
             ->with(['registrations' => fn ($registrations) => $registrations->with('academicYear')->orderByDesc('registered_on')])
             ->when($filters['search'] ?? null, fn ($query, $search) => $query->where(fn ($students) => $students
-                ->where('student_number', 'like', '%'.$search.'%')
-                ->orWhere('registration_number', 'like', '%'.$search.'%')
-                ->orWhere('first_name', 'like', '%'.$search.'%')
-                ->orWhere('last_name', 'like', '%'.$search.'%')
-                ->orWhere('phone', 'like', '%'.$search.'%')))
+                ->whereInsensitiveLike('student_number', $search)
+                ->orWhereInsensitiveLike('registration_number', $search)
+                ->orWhereInsensitiveLike('first_name', $search)
+                ->orWhereInsensitiveLike('last_name', $search)
+                ->orWhereInsensitiveLike('phone', $search)))
             ->when($gradeId || $sectionId, function ($query) use ($gradeId, $sectionId): void {
                 $query->whereHas('registrations', function ($registrations) use ($gradeId, $sectionId): void {
                     $registrations

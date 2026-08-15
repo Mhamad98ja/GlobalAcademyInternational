@@ -7,6 +7,7 @@
         'class_sections' => 'Students by class and section report',
         'stock' => 'Book stock report',
         'invoices' => 'Student invoice report',
+        'distributions' => 'Book distribution report',
         'payments' => 'Payment collection report',
     ];
 @endphp

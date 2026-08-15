@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AcademicYear;
 use App\Models\Book;
+use App\Models\BookDistribution;
 use App\Models\Grade;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -55,7 +56,7 @@ class ReportsController extends Controller
         $filters = $this->filters($request);
         $query = $this->reportQuery($report, $filters);
 
-        return response()->streamDownload(function () use ($report, $query): void {
+        return response()->streamDownload(function () use ($report, $query, $filters): void {
             $output = fopen('php://output', 'w');
 
             if ($report === 'stock') {
@@ -70,7 +71,7 @@ class ReportsController extends Controller
                     fputcsv($output, [$book->sku, $book->title, $book->branch_quantity, $book->branchStocks->first()?->reserved_quantity ?? 0, $book->available_quantity]);
                 }
             } elseif ($report === 'invoices') {
-                fputcsv($output, ['Invoice', 'Student', 'Date', 'Total', 'Paid', 'Balance', 'Payment status']);
+                fputcsv($output, ['Invoice', 'Student', 'Date', 'Total', 'Paid', 'Balance', 'Payment status', 'Issued by']);
                 foreach ($query->lazy() as $invoice) {
                     fputcsv($output, [
                         $invoice->invoice_number,
@@ -80,6 +81,19 @@ class ReportsController extends Controller
                         $invoice->amount_paid,
                         $invoice->balance_due,
                         $invoice->payment_status,
+                        $invoice->createdBy?->name,
+                    ]);
+                }
+            } elseif ($report === 'distributions') {
+                fputcsv($output, ['Distribution', 'Invoice', 'Student', 'Date', 'Books issued', 'Distributed by']);
+                foreach ($query->lazy() as $distribution) {
+                    fputcsv($output, [
+                        'Distribution #'.$distribution->id,
+                        $distribution->invoice?->invoice_number,
+                        $distribution->student?->full_name,
+                        $distribution->distributed_on?->format('Y-m-d'),
+                        $distribution->items->sum('quantity'),
+                        $distribution->distributedBy?->name,
                     ]);
                 }
             } elseif ($report === 'payments') {
@@ -154,19 +168,18 @@ class ReportsController extends Controller
         return match ($report) {
             'stock' => Book::query()->withBranchStock()
                 ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where(fn (Builder $books) => $books
-                    ->where('title', 'like', '%'.$search.'%')
-                    ->orWhere('sku', 'like', '%'.$search.'%')
-                    ->orWhere('barcode', 'like', '%'.$search.'%')))
-                ->orderBy('title')
+                    ->whereInsensitiveLike('title', $search)
+                    ->orWhereInsensitiveLike('sku', $search)
+                    ->orWhereInsensitiveLike('barcode', $search)))
                 ->orderBy('title'),
             'invoices' => Invoice::query()
-                ->with('student')
+                ->with('student', 'createdBy')
                 ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where(fn (Builder $invoices) => $invoices
-                    ->where('invoice_number', 'like', '%'.$search.'%')
+                    ->whereInsensitiveLike('invoice_number', $search)
                     ->orWhereHas('student', fn (Builder $student) => $student
-                        ->where('first_name', 'like', '%'.$search.'%')
-                        ->orWhere('last_name', 'like', '%'.$search.'%')
-                        ->orWhere('student_number', 'like', '%'.$search.'%'))))
+                        ->whereInsensitiveLike('first_name', $search)
+                        ->orWhereInsensitiveLike('last_name', $search)
+                        ->orWhereInsensitiveLike('student_number', $search))))
                 ->when($filters['academic_year_id'] ?? null, fn (Builder $query, int $id) => $query->where('academic_year_id', $id))
                 ->when($filters['grade_id'] ?? null, fn (Builder $query, int $id) => $query->where('grade_id', $id))
                 ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->where('section_id', $id))
@@ -174,16 +187,30 @@ class ReportsController extends Controller
                 ->when($filters['date_from'] ?? null, fn (Builder $query, string $date) => $query->whereDate('invoice_date', '>=', $date))
                 ->when($filters['date_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('invoice_date', '<=', $date))
                 ->latest('invoice_date'),
+            'distributions' => BookDistribution::query()
+                ->with('student', 'invoice', 'distributedBy', 'items')
+                ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where(fn (Builder $distributions) => $distributions
+                    ->whereHas('invoice', fn (Builder $invoice) => $invoice->whereInsensitiveLike('invoice_number', $search))
+                    ->orWhereHas('student', fn (Builder $student) => $student
+                        ->whereInsensitiveLike('first_name', $search)
+                        ->orWhereInsensitiveLike('last_name', $search)
+                        ->orWhereInsensitiveLike('student_number', $search))))
+                ->when($filters['academic_year_id'] ?? null, fn (Builder $query, int $id) => $query->where('academic_year_id', $id))
+                ->when($filters['grade_id'] ?? null, fn (Builder $query, int $id) => $query->where('grade_id', $id))
+                ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->where('section_id', $id))
+                ->when($filters['date_from'] ?? null, fn (Builder $query, string $date) => $query->whereDate('distributed_on', '>=', $date))
+                ->when($filters['date_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('distributed_on', '<=', $date))
+                ->latest('distributed_on'),
             'payments' => Payment::query()
                 ->with('student', 'invoice')
                 ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where(fn (Builder $payments) => $payments
-                    ->where('payment_number', 'like', '%'.$search.'%')
-                    ->orWhere('reference_number', 'like', '%'.$search.'%')
+                    ->whereInsensitiveLike('payment_number', $search)
+                    ->orWhereInsensitiveLike('reference_number', $search)
                     ->orWhereHas('student', fn (Builder $student) => $student
-                        ->where('first_name', 'like', '%'.$search.'%')
-                        ->orWhere('last_name', 'like', '%'.$search.'%')
-                        ->orWhere('student_number', 'like', '%'.$search.'%'))
-                    ->orWhereHas('invoice', fn (Builder $invoice) => $invoice->where('invoice_number', 'like', '%'.$search.'%'))))
+                        ->whereInsensitiveLike('first_name', $search)
+                        ->orWhereInsensitiveLike('last_name', $search)
+                        ->orWhereInsensitiveLike('student_number', $search))
+                    ->orWhereHas('invoice', fn (Builder $invoice) => $invoice->whereInsensitiveLike('invoice_number', $search))))
                 ->when($filters['payment_method'] ?? null, fn (Builder $query, string $method) => $query->where('method', $method))
                 ->when($filters['payment_status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
                 ->when($filters['date_from'] ?? null, fn (Builder $query, string $date) => $query->whereDate('payment_date', '>=', $date))
@@ -201,12 +228,12 @@ class ReportsController extends Controller
                     ->with('academicYear', 'grade', 'section')
                     ->latest('registered_on')])
                 ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where(fn (Builder $students) => $students
-                    ->where('student_number', 'like', '%'.$search.'%')
-                    ->orWhere('registration_number', 'like', '%'.$search.'%')
-                    ->orWhere('first_name', 'like', '%'.$search.'%')
-                    ->orWhere('last_name', 'like', '%'.$search.'%')
-                    ->orWhere('phone', 'like', '%'.$search.'%')
-                    ->orWhere('email', 'like', '%'.$search.'%')))
+                    ->whereInsensitiveLike('student_number', $search)
+                    ->orWhereInsensitiveLike('registration_number', $search)
+                    ->orWhereInsensitiveLike('first_name', $search)
+                    ->orWhereInsensitiveLike('last_name', $search)
+                    ->orWhereInsensitiveLike('phone', $search)
+                    ->orWhereInsensitiveLike('email', $search)))
                 ->when($filters['gender'] ?? null, fn (Builder $query, string $gender) => $query->where('gender', $gender))
                 ->orderBy('last_name')
                 ->orderBy('first_name'),
@@ -221,10 +248,10 @@ class ReportsController extends Controller
         return StudentRegistration::query()
             ->with('student', 'academicYear', 'grade', 'section')
             ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->whereHas('student', fn (Builder $student) => $student
-                ->where('first_name', 'like', '%'.$search.'%')
-                ->orWhere('last_name', 'like', '%'.$search.'%')
-                ->orWhere('student_number', 'like', '%'.$search.'%')
-                ->orWhere('registration_number', 'like', '%'.$search.'%')))
+                ->whereInsensitiveLike('first_name', $search)
+                ->orWhereInsensitiveLike('last_name', $search)
+                ->orWhereInsensitiveLike('student_number', $search)
+                ->orWhereInsensitiveLike('registration_number', $search)))
             ->when($filters['academic_year_id'] ?? null, fn (Builder $query, int $id) => $query->where('academic_year_id', $id))
             ->when($filters['grade_id'] ?? null, fn (Builder $query, int $id) => $query->where('grade_id', $id))
             ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->where('section_id', $id))
@@ -259,7 +286,7 @@ class ReportsController extends Controller
 
     private function normaliseReport(string $report): string
     {
-        return in_array($report, ['students', 'student_information', 'class_sections', 'stock', 'invoices', 'payments'], true)
+        return in_array($report, ['students', 'student_information', 'class_sections', 'stock', 'invoices', 'distributions', 'payments'], true)
             ? $report
             : 'students';
     }

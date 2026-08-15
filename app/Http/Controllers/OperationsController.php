@@ -31,9 +31,9 @@ class OperationsController extends Controller
                     ->with('supplier')
                     ->withSum('supplierReturns as supplier_returns_credit_total_sum', 'credit_total')
                     ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
-                        $query->where('purchase_number', 'like', '%'.$search.'%')
-                            ->orWhere('supplier_invoice_number', 'like', '%'.$search.'%')
-                            ->orWhereHas('supplier', fn ($supplier) => $supplier->where('name', 'like', '%'.$search.'%'));
+                        $query->whereInsensitiveLike('purchase_number', $search)
+                            ->orWhereInsensitiveLike('supplier_invoice_number', $search)
+                            ->orWhereHas('supplier', fn ($supplier) => $supplier->whereInsensitiveLike('name', $search));
                     }))
                     ->latest('purchase_date')
                     ->take(100)
@@ -58,9 +58,9 @@ class OperationsController extends Controller
                 SupplierReturn::query()
                     ->with('supplier', 'purchase')
                     ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
-                        $query->where('reference_number', 'like', '%'.$search.'%')
-                            ->orWhereHas('purchase', fn ($purchase) => $purchase->where('purchase_number', 'like', '%'.$search.'%'))
-                            ->orWhereHas('supplier', fn ($supplier) => $supplier->where('name', 'like', '%'.$search.'%'));
+                        $query->whereInsensitiveLike('reference_number', $search)
+                            ->orWhereHas('purchase', fn ($purchase) => $purchase->whereInsensitiveLike('purchase_number', $search))
+                            ->orWhereHas('supplier', fn ($supplier) => $supplier->whereInsensitiveLike('name', $search));
                     }))
                     ->latest('returned_on')
                     ->take(100)
@@ -85,8 +85,8 @@ class OperationsController extends Controller
                 Invoice::query()
                     ->with('student')
                     ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
-                        $query->where('invoice_number', 'like', '%'.$search.'%')
-                            ->orWhereHas('student', fn ($student) => $student->where('first_name', 'like', '%'.$search.'%')->orWhere('last_name', 'like', '%'.$search.'%'));
+                        $query->whereInsensitiveLike('invoice_number', $search)
+                            ->orWhereHas('student', fn ($student) => $student->whereInsensitiveLike('first_name', $search)->orWhereInsensitiveLike('last_name', $search));
                     }))
                     ->latest('invoice_date')
                     ->take(100)
@@ -111,8 +111,8 @@ class OperationsController extends Controller
                 BookReturn::query()
                     ->with('student', 'invoice')
                     ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
-                        $query->whereHas('invoice', fn ($invoice) => $invoice->where('invoice_number', 'like', '%'.$search.'%'))
-                            ->orWhereHas('student', fn ($student) => $student->where('first_name', 'like', '%'.$search.'%')->orWhere('last_name', 'like', '%'.$search.'%'));
+                        $query->whereHas('invoice', fn ($invoice) => $invoice->whereInsensitiveLike('invoice_number', $search))
+                            ->orWhereHas('student', fn ($student) => $student->whereInsensitiveLike('first_name', $search)->orWhereInsensitiveLike('last_name', $search));
                     }))
                     ->latest('returned_on')
                     ->take(100)

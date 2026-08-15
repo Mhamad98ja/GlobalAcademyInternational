@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Policies\InvoicePolicy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -34,5 +35,18 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(fn (User $user, string $ability): ?bool => $ability === 'manage-branches' ? null : ($user->hasRole('super-administrator') ? true : null));
         Gate::define('manage-branches', fn (User $user): bool => $user->isControllerAdministrator());
         Gate::policy(Invoice::class, InvoicePolicy::class);
+
+        Builder::macro('whereInsensitiveLike', function (string $column, string $value): Builder {
+            /** @var Builder $this */
+            $column = $this->getQuery()->getGrammar()->wrap($column);
+
+            return $this->whereRaw("LOWER({$column}) LIKE ?", ['%'.mb_strtolower($value).'%']);
+        });
+        Builder::macro('orWhereInsensitiveLike', function (string $column, string $value): Builder {
+            /** @var Builder $this */
+            $column = $this->getQuery()->getGrammar()->wrap($column);
+
+            return $this->orWhereRaw("LOWER({$column}) LIKE ?", ['%'.mb_strtolower($value).'%']);
+        });
     }
 }

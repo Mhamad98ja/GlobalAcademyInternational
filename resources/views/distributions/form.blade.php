@@ -16,7 +16,7 @@
         <div class="form-grid">
             <div class="md:col-span-2">
                 <label class="form-label">Active student registration *</label>
-                <select name="student_registration_id" required autofocus data-distribution-registration>
+                <select name="student_registration_id" required data-distribution-registration>
                     <option value="">Search/select a registration</option>
                     @foreach ($registrations as $registration)
                         <option value="{{ $registration->id }}" data-academic-year-id="{{ $registration->academic_year_id }}" data-grade-id="{{ $registration->grade_id }}" data-section-id="{{ $registration->section_id ?? '' }}" data-section-label="{{ $registration->section?->name ?? 'No section' }}" @selected(old('student_registration_id', $selectedRegistration) == $registration->id)>
@@ -50,19 +50,14 @@
             <div class="table-wrap">
                 <table class="data-table min-w-[650px]">
                     <thead>
-                        <tr><th>Scan/select barcode *</th><th>Sale price</th><th>Quantity</th><th></th></tr>
+                        <tr><th>Scan barcode *</th><th>Book</th><th>Quantity</th><th></th></tr>
                     </thead>
                     <tbody id="distribution-lines">
                         <tr data-line>
                             <td>
-                                <select name="items[0][book_id]" required>
-                                    <option value="">Select book by title or barcode</option>
-                                    @foreach ($books as $book)
-                                        <option value="{{ $book->id }}">{{ $book->barcode }} - {{ $book->title }} ({{ $book->available_quantity }} available, sale {{ number_format((float) $book->selling_price, 2) }})</option>
-                                    @endforeach
-                                </select>
+                                <input name="items[0][barcode]" data-distribution-barcode required autofocus autocomplete="off" placeholder="Scan or type barcode" inputmode="none">
                             </td>
-                            <td class="font-medium">Uses sale price</td>
+                            <td class="font-medium text-sm" data-book-summary>Awaiting barcode scan</td>
                             <td><input name="items[0][quantity]" type="number" min="1" value="1" required></td>
                             <td><button type="button" class="link text-xs text-rose-700" data-remove-row>Remove</button></td>
                         </tr>
@@ -116,18 +111,14 @@
 <template id="distribution-line-template">
     <tr data-line>
         <td>
-            <select name="items[__INDEX__][book_id]" required>
-                <option value="">Select book by title or barcode</option>
-                @foreach ($books as $book)
-                    <option value="{{ $book->id }}">{{ $book->barcode }} - {{ $book->title }} ({{ $book->available_quantity }} available, sale {{ number_format((float) $book->selling_price, 2) }})</option>
-                @endforeach
-            </select>
+            <input name="items[__INDEX__][barcode]" data-distribution-barcode required autocomplete="off" placeholder="Scan or type barcode" inputmode="none">
         </td>
-        <td class="font-medium">Uses sale price</td>
+        <td class="font-medium text-sm" data-book-summary>Awaiting barcode scan</td>
         <td><input name="items[__INDEX__][quantity]" type="number" min="1" value="1" required></td>
         <td><button type="button" class="link text-xs text-rose-700" data-remove-row>Remove</button></td>
     </tr>
 </template>
 
 <script type="application/json" id="distribution-package-data">{!! json_encode($packageData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}</script>
+<script type="application/json" id="distribution-book-data">{!! json_encode($bookData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}</script>
 @endsection

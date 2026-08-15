@@ -58,7 +58,12 @@
                 @forelse ($students as $student)
                     <tr>
                         <td>
-                            <a class="link" href="{{ route('students.show', $student) }}">{{ $student->full_name }}</a>
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <a class="link" href="{{ route('students.show', $student) }}">{{ $student->full_name }}</a>
+                                @if(auth()->user()->hasPermission('distributions.create') && $student->registrations->first()?->status === 'active')
+                                    <a class="link text-xs text-teal-700" href="{{ route('distributions.create', ['registration' => $student->registrations->first()->id]) }}">Distribute books</a>
+                                @endif
+                            </div>
                             <div class="text-xs text-slate-500">{{ $student->registration_number ?: 'No registration number' }}</div>
                         </td>
                         <td>{{ $student->student_number }}</td>
@@ -71,7 +76,7 @@
                                 —
                             @endif
                         </td>
-                        <td><a class="link text-xs" href="{{ route('students.edit', $student) }}">Edit</a></td>
+                        <td class="whitespace-nowrap"><a class="link text-xs" href="{{ route('students.edit', $student) }}">Edit</a></td>
                     </tr>
                 @empty
                     <tr>

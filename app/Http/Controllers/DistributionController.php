@@ -31,6 +31,7 @@ class DistributionController extends Controller
             ->with('items.book', 'section')
             ->orderBy('name')
             ->get();
+        $books = Book::active()->withBranchStock()->orderBy('title')->get();
 
         return view('distributions.form', [
             'registrations' => StudentRegistration::with('student', 'academicYear', 'grade', 'section')
@@ -51,7 +52,13 @@ class DistributionController extends Controller
                     'quantity' => $item->quantity,
                 ])->values(),
             ])->values(),
-            'books' => Book::active()->withBranchStock()->orderBy('title')->get(),
+            'bookData' => $books->map(fn (Book $book) => [
+                'id' => $book->id,
+                'barcode' => $book->barcode,
+                'title' => $book->title,
+                'available_quantity' => $book->available_quantity,
+                'selling_price' => (string) $book->selling_price,
+            ])->values(),
             'selectedRegistration' => $request->integer('registration'),
         ]);
     }
@@ -67,7 +74,7 @@ class DistributionController extends Controller
 
         $distribution = $service->distribute(
             $registration,
-            $data['items'],
+            $this->itemsFromBarcodes($data['items']),
             $data['payment'] ?? [],
             $request->user(),
             $data['notes'] ?? null,
@@ -103,5 +110,27 @@ class DistributionController extends Controller
         }
 
         return $package;
+    }
+
+    /** @param list<array{barcode: string, quantity: int|string}> $items @return list<array{book_id: int, quantity: int}> */
+    private function itemsFromBarcodes(array $items): array
+    {
+        $resolved = collect($items)->map(function (array $item): array {
+            $barcode = trim($item['barcode']);
+            $book = Book::active()
+                ->whereRaw('LOWER(barcode) = ?', [mb_strtolower($barcode)])
+                ->first();
+            if ($book === null) {
+                throw ValidationException::withMessages(['items' => "No active book matches barcode {$barcode}."]);
+            }
+
+            return ['book_id' => $book->id, 'quantity' => (int) $item['quantity']];
+        })->values();
+
+        if ($resolved->pluck('book_id')->unique()->count() !== $resolved->count()) {
+            throw ValidationException::withMessages(['items' => 'Scan each book barcode only once. Increase its quantity instead.']);
+        }
+
+        return $resolved->all();
     }
 }

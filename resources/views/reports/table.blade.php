@@ -16,7 +16,7 @@
         </table>
     @elseif ($report === 'invoices')
         <table class="data-table">
-            <thead><tr><th>Invoice</th><th>Student</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
+            <thead><tr><th>Invoice</th><th>Student</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Issued by</th></tr></thead>
             <tbody>
                 @foreach ($rows as $invoice)
                     <tr>
@@ -27,6 +27,23 @@
                         <td>{{ number_format((float) $invoice->amount_paid, 2) }}</td>
                         <td>{{ number_format((float) $invoice->balance_due, 2) }}</td>
                         <td>{{ str($invoice->payment_status)->headline() }}</td>
+                        <td>{{ $invoice->createdBy?->name ?? '—' }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @elseif ($report === 'distributions')
+        <table class="data-table">
+            <thead><tr><th>Distribution</th><th>Invoice</th><th>Student</th><th>Date</th><th>Books issued</th><th>Distributed by</th></tr></thead>
+            <tbody>
+                @foreach ($rows as $distribution)
+                    <tr>
+                        <td>Distribution #{{ $distribution->id }}</td>
+                        <td>{{ $distribution->invoice?->invoice_number }}</td>
+                        <td>{{ $distribution->student?->full_name }}</td>
+                        <td>{{ $distribution->distributed_on?->format('d M Y') }}</td>
+                        <td>{{ $distribution->items->sum('quantity') }}</td>
+                        <td>{{ $distribution->distributedBy?->name ?? '—' }}</td>
                     </tr>
                 @endforeach
             </tbody>

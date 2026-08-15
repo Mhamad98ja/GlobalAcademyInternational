@@ -31,10 +31,10 @@ class BooksController extends Controller
             $lists = ClassBookList::query()
                 ->with('academicYear', 'grade', 'section', 'items.book')
                 ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
-                    $query->where('name', 'like', '%'.$search.'%')
-                        ->orWhereHas('academicYear', fn ($year) => $year->where('name', 'like', '%'.$search.'%'))
-                        ->orWhereHas('grade', fn ($grade) => $grade->where('name', 'like', '%'.$search.'%'))
-                        ->orWhereHas('section', fn ($section) => $section->where('name', 'like', '%'.$search.'%'));
+                    $query->whereInsensitiveLike('name', $search)
+                        ->orWhereHas('academicYear', fn ($year) => $year->whereInsensitiveLike('name', $search))
+                        ->orWhereHas('grade', fn ($grade) => $grade->whereInsensitiveLike('name', $search))
+                        ->orWhereHas('section', fn ($section) => $section->whereInsensitiveLike('name', $search));
                 }))
                 ->latest()
                 ->paginate(15)
@@ -42,10 +42,10 @@ class BooksController extends Controller
         } else {
             $books = Book::query()->withBranchStock()->with('gradeUsages')
                 ->when($search !== '', fn ($query) => $query->where(fn ($books) => $books
-                    ->where('title', 'like', '%'.$search.'%')
-                    ->orWhere('barcode', 'like', '%'.$search.'%')
-                    ->orWhere('isbn', 'like', '%'.$search.'%')
-                    ->orWhere('sku', 'like', '%'.$search.'%')))
+                    ->whereInsensitiveLike('title', $search)
+                    ->orWhereInsensitiveLike('barcode', $search)
+                    ->orWhereInsensitiveLike('isbn', $search)
+                    ->orWhereInsensitiveLike('sku', $search)))
                 ->orderBy('title')
                 ->paginate(15)
                 ->withQueryString();

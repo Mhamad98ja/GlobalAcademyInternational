@@ -24,6 +24,7 @@
                     <option value="students" @selected($report === 'students')>Student registrations</option>
                     <option value="stock" @selected($report === 'stock')>Stock on hand</option>
                     <option value="invoices" @selected($report === 'invoices')>Invoices</option>
+                    <option value="distributions" @selected($report === 'distributions')>Book distributions</option>
                     <option value="payments" @selected($report === 'payments')>Payments</option>
                 </select>
             </div>
@@ -57,8 +58,8 @@
                 </div>
             @else
                 <div>
-                    <label class="form-label" for="report-search">{{ $report === 'invoices' ? 'Search invoices or students' : ($report === 'payments' ? 'Search payments, invoices or students' : 'Search students') }}</label>
-                    <input id="report-search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="{{ $report === 'invoices' ? 'Invoice number or student' : ($report === 'payments' ? 'Payment number, invoice or student' : 'Student name or registration no.') }}">
+                    <label class="form-label" for="report-search">{{ $report === 'invoices' ? 'Search invoices or students' : ($report === 'distributions' ? 'Search distributions, invoices or students' : ($report === 'payments' ? 'Search payments, invoices or students' : 'Search students')) }}</label>
+                    <input id="report-search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="{{ $report === 'invoices' ? 'Invoice number or student' : ($report === 'distributions' ? 'Invoice number or student' : ($report === 'payments' ? 'Payment number, invoice or student' : 'Student name or registration no.')) }}">
                 </div>
                 <div>
                     <label class="form-label" for="academic-year">Academic year</label>
@@ -110,7 +111,7 @@
                             @endforeach
                         </select>
                     </div>
-                @else
+                @elseif ($report === 'payments')
                     <div>
                         <label class="form-label" for="payment-method">Payment method</label>
                         <select id="payment-method" name="payment_method">

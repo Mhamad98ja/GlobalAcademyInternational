@@ -8,6 +8,7 @@ use App\Models\Book;
 use App\Models\BookDistribution;
 use App\Models\ClassBookList;
 use App\Models\ClassBookListItem;
+use App\Models\DeferredPaymentApproval;
 use App\Models\Invoice;
 use App\Models\StudentRegistration;
 use App\Models\User;
@@ -137,6 +138,20 @@ final class BookDistributionService
                     'reference_number' => $payment['reference_number'] ?? null,
                     'idempotency_key' => $payment['idempotency_key'] ?? null,
                 ], $user);
+            }
+
+            if (! empty($payment['deferred'])) {
+                $invoice->refresh();
+                DeferredPaymentApproval::create([
+                    'student_id' => $registration->student_id,
+                    'student_registration_id' => $registration->id,
+                    'invoice_id' => $invoice->id,
+                    'amount_deferred' => $invoice->balance_due,
+                    'reason' => 'Deferred payment requested during book distribution.',
+                    'status' => 'pending',
+                    'follow_up_status' => 'open',
+                    'created_by' => $user->id,
+                ]);
             }
 
             $this->audit->log('distribution.completed', $distribution, [], [

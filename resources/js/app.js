@@ -147,12 +147,24 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     const lines = document.querySelector(form.dataset.linesTarget);
     const lineTemplate = document.querySelector(form.dataset.lineTemplate);
     const packageData = document.querySelector(form.dataset.packageData);
+    const bookData = document.querySelector('#distribution-book-data');
     const packageHint = form.querySelector('[data-package-hint]');
 
-    if (!registrationSelect || !packageSelect || !lines || !lineTemplate || !packageData) return;
+    if (!registrationSelect || !packageSelect || !lines || !lineTemplate || !packageData || !bookData) return;
 
     const packages = JSON.parse(packageData.textContent || '[]');
+    const booksById = new Map(JSON.parse(bookData.textContent || '[]').map((book) => [String(book.id), book]));
+    const booksByBarcode = new Map([...booksById.values()].map((book) => [String(book.barcode).toLocaleLowerCase(), book]));
     const sameId = (left, right) => String(left) === String(right);
+    const refreshBookSummary = (line) => {
+        const barcodeInput = line.querySelector('[data-distribution-barcode]');
+        const summary = line.querySelector('[data-book-summary]');
+        if (!barcodeInput || !summary) return;
+        const book = booksByBarcode.get(barcodeInput.value.trim().toLocaleLowerCase());
+        summary.textContent = book
+            ? `${book.title} — ${book.available_quantity} available, sale ${Number(book.selling_price).toFixed(2)}`
+            : (barcodeInput.value.trim() ? 'Barcode not found' : 'Awaiting barcode scan');
+    };
     const renderLines = (items = []) => {
         const fragment = document.createDocumentFragment();
         const rows = items.length ? items : [{ book_id: '', quantity: 1 }];
@@ -162,10 +174,11 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
             row.querySelectorAll('[name]').forEach((field) => {
                 field.name = field.name.replaceAll('__INDEX__', String(index));
             });
-            const bookSelect = row.querySelector('select[name$="[book_id]"]');
+            const barcodeInput = row.querySelector('[data-distribution-barcode]');
             const quantityInput = row.querySelector('input[name$="[quantity]"]');
-            if (bookSelect) bookSelect.value = String(item.book_id ?? '');
+            if (barcodeInput && item.book_id) barcodeInput.value = booksById.get(String(item.book_id))?.barcode ?? '';
             if (quantityInput) quantityInput.value = String(item.quantity ?? 1);
+            refreshBookSummary(row);
             fragment.append(row);
         });
 
@@ -244,6 +257,12 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     };
 
     registrationSelect.addEventListener('change', refreshPackages);
+    form.addEventListener('input', (event) => {
+        if (event.target.matches('[data-distribution-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
+    });
+    form.addEventListener('change', (event) => {
+        if (event.target.matches('[data-distribution-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
+    });
     packageSelect.addEventListener('change', () => {
         const selectedPackage = packages.find((bookPackage) => sameId(bookPackage.id, packageSelect.value));
         if (!selectedPackage) {
@@ -256,4 +275,5 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     });
 
     refreshPackages();
+    lines.querySelectorAll('[data-line]').forEach(refreshBookSummary);
 });

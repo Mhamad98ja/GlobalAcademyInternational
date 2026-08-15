@@ -98,7 +98,7 @@ final class BookTransferService
     private function makeTransfer(string $type, Branch $source, Branch $destination, ?User $sourceUser, ?User $destinationUser, ?AcademicYear $year, User $user, ?string $notes): BookTransfer
     {
         return BookTransfer::create([
-            'transfer_number' => 'TRF-'.now()->format('Ymd').'-'.str_pad((string) ((BookTransfer::query()->lockForUpdate()->max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT),
+            'transfer_number' => 'TRF-'.now()->format('Ymd').'-'.str_pad((string) ((BookTransfer::query()->lockForUpdate()->latest('id')->value('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT),
             'transfer_type' => $type,
             'source_branch_id' => $source->id,
             'destination_branch_id' => $destination->id,

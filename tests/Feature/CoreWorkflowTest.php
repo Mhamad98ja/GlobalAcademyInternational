@@ -8,6 +8,7 @@ use App\Models\AcademicYear;
 use App\Models\Book;
 use App\Models\BookReturn;
 use App\Models\ClassBookList;
+use App\Models\DeferredPaymentApproval;
 use App\Models\Grade;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -57,6 +58,90 @@ class CoreWorkflowTest extends TestCase
         $user=$this->administrator();$registration=$this->registration($user);$book=Book::create(['sku'=>'B-001','barcode'=>'978000001','title'=>'Math','selling_price'=>'12.00','tax_rate'=>'0.00','minimum_stock'=>1]);app(InventoryService::class)->change($book,5,'opening_stock',null,$registration->academicYear,$user,'Initial stock');
         $distribution=app(BookDistributionService::class)->distribute($registration,[['book_id'=>$book->id,'quantity'=>2]],[],$user);
         $this->assertDatabaseHas('books',['id'=>$book->id,'stock_on_hand'=>3]);$this->assertDatabaseHas('stock_movements',['book_id'=>$book->id,'type'=>'student_distribution','quantity_change'=>-2]);$this->assertDatabaseHas('invoices',['id'=>$distribution->invoice_id,'total'=>'24.00','balance_due'=>'24.00']);
+    }
+
+    public function test_deferred_distribution_creates_a_pending_approval_request(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $book = Book::create(['sku' => 'B-DEFERRED', 'barcode' => '978000000001', 'title' => 'Deferred book', 'selling_price' => '10.00']);
+        app(InventoryService::class)->change($book, 2, 'opening_stock', null, $registration->academicYear, $user, 'Initial stock');
+
+        $distribution = app(BookDistributionService::class)->distribute($registration, [['book_id' => $book->id, 'quantity' => 1]], ['deferred' => true], $user);
+
+        $this->assertDatabaseHas('deferred_payment_approvals', [
+            'invoice_id' => $distribution->invoice_id,
+            'student_id' => $registration->student_id,
+            'amount_deferred' => '10.00',
+            'status' => 'pending',
+            'created_by' => $user->id,
+        ]);
+        $this->assertSame('pending', DeferredPaymentApproval::query()->where('invoice_id', $distribution->invoice_id)->value('status'));
+        $this->actingAs($user)->get(route('deferred.index'))
+            ->assertOk()
+            ->assertSee($distribution->invoice->invoice_number)
+            ->assertSee('pending');
+    }
+
+    public function test_distribution_uses_case_insensitive_barcode_scanning_and_student_shortcuts(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $book = Book::create(['sku' => 'B-SCAN', 'barcode' => 'ISBN-Scan-001', 'title' => 'Scanned book', 'selling_price' => '10.00']);
+        app(InventoryService::class)->change($book, 2, 'opening_stock', null, $registration->academicYear, $user, 'Initial stock');
+
+        $this->actingAs($user)->get(route('students.index'))
+            ->assertOk()
+            ->assertSee('Distribute books')
+            ->assertSee(route('distributions.create', ['registration' => $registration->id]), false);
+
+        $this->actingAs($user)->post(route('distributions.store'), [
+            'student_registration_id' => $registration->id,
+            'items' => [['barcode' => 'isbn-scan-001', 'quantity' => 1]],
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('book_distributions', ['student_registration_id' => $registration->id, 'distributed_by' => $user->id]);
+        $this->assertDatabaseHas('books', ['id' => $book->id, 'stock_on_hand' => 1]);
+    }
+
+    public function test_invoice_print_copies_separate_financial_information_and_fit_a4_layout(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $book = Book::create(['sku' => 'B-PRINT', 'barcode' => '978000000002', 'title' => 'Printed book', 'selling_price' => '12.00']);
+        app(InventoryService::class)->change($book, 1, 'opening_stock', null, $registration->academicYear, $user, 'Initial stock');
+        $distribution = app(BookDistributionService::class)->distribute($registration, [['book_id' => $book->id, 'quantity' => 1]], [], $user);
+
+        $this->actingAs($user)->get(route('invoices.print', ['invoice' => $distribution->invoice, 'copy' => 'financial']))
+            ->assertOk()
+            ->assertSee('Financial invoice')
+            ->assertSee('Unit price')
+            ->assertSee('Balance due')
+            ->assertSee('A4 portrait');
+        $this->actingAs($user)->get(route('invoices.print', ['invoice' => $distribution->invoice, 'copy' => 'student']))
+            ->assertOk()
+            ->assertSee('Parent / student copy')
+            ->assertSee($book->title)
+            ->assertDontSee('Unit price')
+            ->assertDontSee('Balance due');
+    }
+
+    public function test_reports_show_the_user_responsible_for_invoices_and_distributions(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $book = Book::create(['sku' => 'B-RESPONSIBLE', 'barcode' => '978000000003', 'title' => 'Responsible book', 'selling_price' => '10.00']);
+        app(InventoryService::class)->change($book, 1, 'opening_stock', null, $registration->academicYear, $user, 'Initial stock');
+        $distribution = app(BookDistributionService::class)->distribute($registration, [['book_id' => $book->id, 'quantity' => 1]], [], $user);
+
+        $this->actingAs($user)->get(route('reports.index', ['report' => 'invoices', 'search' => strtolower($distribution->invoice->invoice_number)]))
+            ->assertOk()
+            ->assertSee('Issued by')
+            ->assertSee($user->name);
+        $this->actingAs($user)->get(route('reports.index', ['report' => 'distributions', 'search' => 'lina']))
+            ->assertOk()
+            ->assertSee('Distributed by')
+            ->assertSee($user->name);
     }
 
     public function test_partial_payment_recalculates_balance_and_overpayment_is_rejected(): void

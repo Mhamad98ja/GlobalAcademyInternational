@@ -19,9 +19,9 @@ class PeopleController extends Controller
         return view('people.teachers', [
             'teachers' => Teacher::query()
                 ->when($request->filled('search'), fn ($query) => $query
-                    ->where('first_name', 'like', '%'.$request->search.'%')
-                    ->orWhere('last_name', 'like', '%'.$request->search.'%')
-                    ->orWhere('employee_number', 'like', '%'.$request->search.'%'))
+                    ->whereInsensitiveLike('first_name', $request->search)
+                    ->orWhereInsensitiveLike('last_name', $request->search)
+                    ->orWhereInsensitiveLike('employee_number', $request->search))
                 ->orderBy('first_name')
                 ->paginate(15)
                 ->withQueryString(),
@@ -49,8 +49,8 @@ class PeopleController extends Controller
             'people' => ResponsiblePerson::query()
                 ->with(['teacher', 'students'])
                 ->when($request->filled('search'), fn ($query) => $query
-                    ->where('full_name', 'like', '%'.$request->search.'%')
-                    ->orWhere('phone', 'like', '%'.$request->search.'%'))
+                    ->whereInsensitiveLike('full_name', $request->search)
+                    ->orWhereInsensitiveLike('phone', $request->search))
                 ->orderBy('full_name')
                 ->paginate(15)
                 ->withQueryString(),

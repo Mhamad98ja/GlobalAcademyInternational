@@ -8,7 +8,8 @@
         <p class="page-subtitle">{{ $invoice->student->full_name }} - {{ $invoice->invoice_date->format('d M Y') }}</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-        <a class="btn btn-secondary" target="_blank" href="{{ route('invoices.print', $invoice) }}">Print invoice</a>
+        <a class="btn btn-secondary" target="_blank" href="{{ route('invoices.print', ['invoice' => $invoice, 'copy' => 'financial']) }}">Print financial copy</a>
+        <a class="btn btn-secondary" target="_blank" href="{{ route('invoices.print', ['invoice' => $invoice, 'copy' => 'student']) }}">Print parent/student copy</a>
         @if ($invoice->status !== 'cancelled' && auth()->user()->hasPermission('returns.manage'))
             <a class="btn btn-secondary" href="{{ route('returns.form', $invoice) }}">Return books</a>
         @endif
