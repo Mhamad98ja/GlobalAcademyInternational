@@ -10,7 +10,9 @@ use App\Models\BookGradeUsage;
 use App\Models\Branch;
 use App\Models\ClassBookList;
 use App\Models\Grade;
+use App\Models\StockAdjustment;
 use App\Models\User;
+use App\Services\InventoryService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -24,7 +26,7 @@ class ImportBookList extends Command
         {--branch=MAIN : Branch code that owns the packages}
         {--dry-run : Validate the workbook without changing the database}';
 
-    protected $description = 'Import a school book list, grade usage, and student book packages while ignoring source quantities.';
+    protected $description = 'Import a school book list, grade usage, student book packages, and source stock quantities.';
 
     public function handle(): int
     {
@@ -58,7 +60,7 @@ class ImportBookList extends Command
             $workbook['duplicate_rows'],
         ));
         $this->table(['Grade', 'Student resources', 'Teacher resources'], $this->summaryRows($workbook['rows']));
-        $this->comment('Quantity is deliberately ignored. Every imported package item has quantity 1.');
+        $this->comment('Each Excel Qty value will set the Main Branch on-hand stock for that catalogue book. Student package items remain quantity 1.');
 
         if ($this->option('dry-run')) {
             $this->comment('Dry run complete. No books, grade usages, or packages were changed.');
@@ -76,7 +78,13 @@ class ImportBookList extends Command
         try {
             $result = DB::transaction(function () use ($workbook, $grades, $branch): array {
                 $year = $this->findOrCreateAcademicYear((string) $this->option('year'));
+                $importedBy = User::query()->where('is_active', true)->orderBy('id')->first();
+                if ($importedBy === null) {
+                    throw new RuntimeException('An active user is required to record the imported stock quantities.');
+                }
+                $inventory = app(InventoryService::class);
                 $studentPackages = [];
+                $bookQuantities = [];
                 $createdBooks = 0;
                 $updatedBooks = 0;
                 $createdUsages = 0;
@@ -84,6 +92,8 @@ class ImportBookList extends Command
 
                 foreach ($workbook['rows'] as $row) {
                     $book = $this->storeBook($row, $createdBooks, $updatedBooks);
+                    $bookQuantities[$book->id] ??= ['book' => $book, 'quantity' => 0];
+                    $bookQuantities[$book->id]['quantity'] += $row['quantity'];
 
                     foreach ($row['grades'] as $gradeName) {
                         $grade = $grades[$gradeName];
@@ -147,6 +157,46 @@ class ImportBookList extends Command
                     }
                 }
 
+                $stockBooksUpdated = 0;
+                $stockUnitsAdded = 0;
+                $stockUnitsRemoved = 0;
+                foreach ($bookQuantities as $sourceStock) {
+                    /** @var Book $book */
+                    $book = $sourceStock['book'];
+                    $targetQuantity = $sourceStock['quantity'];
+                    $currentQuantity = (int) $inventory->balance($book, $branch)->quantity_on_hand;
+                    $quantityChange = $targetQuantity - $currentQuantity;
+                    if ($quantityChange === 0) {
+                        continue;
+                    }
+
+                    $adjustment = new StockAdjustment([
+                        'book_id' => $book->id,
+                        'quantity_change' => $quantityChange,
+                        'reason' => 'Excel book-list quantity import',
+                        'notes' => 'Stock set from the Excel Qty column.',
+                        'approved_by' => $importedBy->id,
+                        'created_by' => $importedBy->id,
+                    ]);
+                    $adjustment->branch_id = $branch->id;
+                    $adjustment->save();
+                    $inventory->change(
+                        $book,
+                        $quantityChange,
+                        'excel_import_adjustment',
+                        $adjustment,
+                        $year,
+                        $importedBy,
+                        'Excel book-list quantity import',
+                        'Stock set from the Excel Qty column.',
+                        false,
+                        $branch,
+                    );
+                    $stockBooksUpdated++;
+                    $stockUnitsAdded += max($quantityChange, 0);
+                    $stockUnitsRemoved += max(-$quantityChange, 0);
+                }
+
                 return compact(
                     'year',
                     'createdBooks',
@@ -156,6 +206,9 @@ class ImportBookList extends Command
                     'createdPackages',
                     'createdPackageItems',
                     'existingPackageItems',
+                    'stockBooksUpdated',
+                    'stockUnitsAdded',
+                    'stockUnitsRemoved',
                 );
             });
         } catch (\Throwable $exception) {
@@ -178,11 +231,17 @@ class ImportBookList extends Command
             $result['existingPackageItems'],
             $result['existingUsages'],
         ));
+        $this->comment(sprintf(
+            'Main Branch stock set for %d books: %d unit(s) added and %d unit(s) removed to match the Excel Qty totals.',
+            $result['stockBooksUpdated'],
+            $result['stockUnitsAdded'],
+            $result['stockUnitsRemoved'],
+        ));
 
         return self::SUCCESS;
     }
 
-    /** @return array{sheet_count: int, rows: list<array{grades: list<string>, audience: string, media_format: string, subject: string, title: string, publisher: string|null, isbn: string|null}>, blank_rows: int, duplicate_rows: int} */
+    /** @return array{sheet_count: int, rows: list<array{grades: list<string>, audience: string, media_format: string, subject: string, title: string, publisher: string|null, isbn: string|null, quantity: int}>, blank_rows: int, duplicate_rows: int} */
     private function readWorkbook(string $path): array
     {
         $archive = new ZipArchive;
@@ -248,7 +307,7 @@ class ImportBookList extends Command
         ];
     }
 
-    /** @return list<array{grades: list<string>, audience: string, media_format: string, subject: string, title: string, publisher: string|null, isbn: string|null}|null> */
+    /** @return list<array{grades: list<string>, audience: string, media_format: string, subject: string, title: string, publisher: string|null, isbn: string|null, quantity: int}|null> */
     private function worksheetRows(ZipArchive $archive, string $path, array $sharedStrings, string $sheetName): array
     {
         $worksheet = $this->xml($archive, $path);
@@ -277,6 +336,9 @@ class ImportBookList extends Command
             if (! $this->hasRequiredHeaders($headers)) {
                 throw new RuntimeException("Worksheet '{$sheetName}' is missing Grade, User, Format, Subject, Program, Publisher, or ISBN headings.");
             }
+            if (! isset($headers['QTY']) && ! isset($headers['QUANTITY'])) {
+                throw new RuntimeException("Worksheet '{$sheetName}' is missing a Qty or Quantity heading.");
+            }
 
             $row = $this->normaliseRow($values, $headers, $sheetName, (int) $sheetRow['r']);
             $rows[] = $row;
@@ -296,13 +358,15 @@ class ImportBookList extends Command
         return true;
     }
 
-    /** @return array{grades: list<string>, audience: string, media_format: string, subject: string, title: string, publisher: string|null, isbn: string|null}|null */
+    /** @return array{grades: list<string>, audience: string, media_format: string, subject: string, title: string, publisher: string|null, isbn: string|null, quantity: int}|null */
     private function normaliseRow(array $values, array $headers, string $sheetName, int $rowNumber): ?array
     {
         $raw = [];
         foreach (['GRADE', 'USER', 'FORMAT', 'SUBJECT', 'PROGRAM', 'PUBLISHER', 'ISBN'] as $header) {
             $raw[$header] = $this->normalise($values[$headers[$header]] ?? '');
         }
+        $quantityHeader = $headers['QTY'] ?? $headers['QUANTITY'] ?? null;
+        $raw['QUANTITY'] = $this->normalise($quantityHeader === null ? '' : ($values[$quantityHeader] ?? ''));
 
         if (collect($raw)->filter()->isEmpty()) {
             return null;
@@ -320,7 +384,17 @@ class ImportBookList extends Command
             'title' => $raw['PROGRAM'],
             'publisher' => $raw['PUBLISHER'] !== '' ? $raw['PUBLISHER'] : null,
             'isbn' => $raw['ISBN'] !== '' ? $raw['ISBN'] : null,
+            'quantity' => $this->normaliseQuantity($raw['QUANTITY'], $sheetName, $rowNumber),
         ];
+    }
+
+    private function normaliseQuantity(string $value, string $sheetName, int $rowNumber): int
+    {
+        if (! preg_match('/^\d+(?:\.0+)?$/', $value)) {
+            throw new RuntimeException("Worksheet '{$sheetName}', row {$rowNumber} has an invalid Qty '{$value}'.");
+        }
+
+        return (int) $value;
     }
 
     /** @return list<string> */
@@ -406,7 +480,7 @@ class ImportBookList extends Command
             'media_format' => $row['media_format'],
             'default_audience' => $this->combinedAudience($book?->default_audience, $row['audience']),
             'is_active' => true,
-            'notes' => 'Imported from the Lebanon book list. Source quantity intentionally not imported.',
+            'notes' => 'Imported from the Lebanon book list. Stock is controlled from the Excel Qty column.',
         ];
 
         if ($book === null) {

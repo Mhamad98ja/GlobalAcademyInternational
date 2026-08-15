@@ -7,9 +7,13 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreBookRequest;
 use App\Models\Book;
 use App\Models\ClassBookList;
+use App\Models\StockAdjustment;
+use App\Models\User;
 use App\Services\AuditService;
+use App\Services\InventoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class BooksController extends Controller
@@ -58,11 +62,18 @@ class BooksController extends Controller
     public function store(StoreBookRequest $request): RedirectResponse
     {
         $data = $request->validated();
+        $stockQuantity = (int) $data['stock_quantity'];
+        unset($data['stock_quantity']);
         $data['purchase_price'] = '0.00';
         $data['is_active'] = $request->boolean('is_active', true);
-        $book = Book::create($data);
+        $book = DB::transaction(function () use ($data, $stockQuantity, $request): Book {
+            $book = Book::create($data);
+            $this->setStockQuantity($book, $stockQuantity, $request->user(), app(InventoryService::class), app(AuditService::class));
 
-        return redirect()->route('books.show', $book)->with('success', 'Book added to the catalogue. Add a supplier purchase to set its purchase price.');
+            return $book;
+        });
+
+        return redirect()->route('books.show', $book)->with('success', 'Book added to the catalogue and its current-branch stock was recorded.');
     }
 
     public function show(Book $book): View
@@ -80,8 +91,16 @@ class BooksController extends Controller
     public function update(StoreBookRequest $request, Book $book): RedirectResponse
     {
         $data = $request->validated();
+        $stockQuantity = (int) $data['stock_quantity'];
+        unset($data['stock_quantity']);
         $data['is_active'] = $request->boolean('is_active');
-        $book->update($data);
+        $book = DB::transaction(function () use ($book, $data, $stockQuantity, $request): Book {
+            $book = Book::query()->lockForUpdate()->findOrFail($book->id);
+            $book->update($data);
+            $this->setStockQuantity($book, $stockQuantity, $request->user(), app(InventoryService::class), app(AuditService::class));
+
+            return $book;
+        });
 
         return redirect()->route('books.show', $book)->with('success', 'Book updated.');
     }
@@ -92,5 +111,35 @@ class BooksController extends Controller
         $audit->log('book.deleted', $book);
 
         return redirect()->route('books.index')->with('success', 'Book moved to recycle bin.');
+    }
+
+    private function setStockQuantity(Book $book, int $targetQuantity, User $user, InventoryService $inventory, AuditService $audit): void
+    {
+        $currentQuantity = (int) $inventory->balance($book)->quantity_on_hand;
+        $quantityChange = $targetQuantity - $currentQuantity;
+
+        if ($quantityChange === 0) {
+            return;
+        }
+
+        $adjustment = StockAdjustment::create([
+            'book_id' => $book->id,
+            'quantity_change' => $quantityChange,
+            'reason' => 'Stock quantity set from book editor',
+            'approved_by' => $user->id,
+            'created_by' => $user->id,
+        ]);
+        $inventory->change(
+            $book,
+            $quantityChange,
+            'manual_adjustment',
+            $adjustment,
+            null,
+            $user,
+            'Stock quantity set from book editor',
+            null,
+            $user->hasPermission('stock.allow-negative'),
+        );
+        $audit->log('stock.adjusted', $adjustment, [], ['quantity_change' => $quantityChange], 'Stock quantity set from book editor');
     }
 }

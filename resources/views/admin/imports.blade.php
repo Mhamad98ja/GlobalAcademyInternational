@@ -16,7 +16,7 @@
     <section class="panel"><div class="panel-header"><h2 class="panel-title">Book list</h2></div><form method="POST" action="{{ route('admin.imports.books') }}" enctype="multipart/form-data" class="space-y-4 p-5" data-submit-lock>@csrf
         <div><label class="form-label">Book-list Excel file *</label><input type="file" name="workbook" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>@error('workbook')<p class="form-error">{{ $message }}</p>@enderror</div>
         <div><label class="form-label">Academic year *</label><input name="year" list="book-import-years" value="{{ old('year', '2024-2025') }}" pattern="\d{4}-\d{4}" required><datalist id="book-import-years">@foreach($years as $year)<option value="{{ $year->name }}">@endforeach</datalist></div>
-        <p class="text-xs text-slate-500">Book quantity is ignored. Student resources enter class packages; teacher resources are recorded as teacher usage only.</p><button class="btn btn-primary w-full">Import books</button>
+        <p class="text-xs text-slate-500">The Excel Qty column sets the Main Branch stock for every book. Re-importing the same file does not double quantities. Student resources enter class packages; teacher resources are recorded as teacher usage only.</p><button class="btn btn-primary w-full">Import books</button>
     </form></section>
 </div>
 @endsection

@@ -258,12 +258,15 @@ class CoreWorkflowTest extends TestCase
             'barcode' => '978000099',
             'title' => 'Teacher guide',
             'selling_price' => '0.00',
+            'stock_quantity' => 12,
             'default_audience' => 'teacher',
             'is_active' => '1',
         ])->assertRedirect();
 
         $book = Book::where('sku', 'B-USAGE')->firstOrFail();
         $this->assertDatabaseHas('books', ['id' => $book->id, 'default_audience' => 'teacher']);
+        $this->assertDatabaseHas('branch_book_stocks', ['book_id' => $book->id, 'quantity_on_hand' => 12]);
+        $this->assertDatabaseHas('stock_movements', ['book_id' => $book->id, 'type' => 'manual_adjustment', 'quantity_change' => 12]);
         $this->actingAs($user)->get(route('books.edit', $book))->assertOk()->assertSee('Used by')->assertSee('Teacher');
 
         $this->actingAs($user)->put(route('books.update', $book), [
@@ -271,11 +274,14 @@ class CoreWorkflowTest extends TestCase
             'barcode' => $book->barcode,
             'title' => $book->title,
             'selling_price' => '0.00',
+            'stock_quantity' => 8,
             'default_audience' => 'both',
             'is_active' => '1',
         ])->assertRedirect();
 
         $this->assertDatabaseHas('books', ['id' => $book->id, 'default_audience' => 'both']);
+        $this->assertDatabaseHas('branch_book_stocks', ['book_id' => $book->id, 'quantity_on_hand' => 8]);
+        $this->assertDatabaseHas('stock_movements', ['book_id' => $book->id, 'type' => 'manual_adjustment', 'quantity_change' => -4]);
     }
 
     public function test_reports_apply_filters_that_match_the_selected_report(): void

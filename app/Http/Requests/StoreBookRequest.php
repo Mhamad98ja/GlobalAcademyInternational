@@ -35,6 +35,7 @@ class StoreBookRequest extends FormRequest
             'selling_price' => ['required', 'decimal:0,2', 'min:0'],
             'tax_rate' => ['nullable', 'decimal:0,2', 'min:0', 'max:100'],
             'minimum_stock' => ['nullable', 'integer', 'min:0'],
+            'stock_quantity' => ['required', 'integer', 'min:0', 'max:1000000'],
             'shelf_location' => ['nullable', 'string', 'max:100'],
             'is_active' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:3000'],

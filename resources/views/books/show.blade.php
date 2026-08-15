@@ -6,7 +6,7 @@
     <div class="flex gap-2"><a class="btn btn-secondary" href="{{ route('books.edit', $book) }}">Edit</a><a class="btn btn-primary" href="{{ route('inventory.adjustments') }}">Adjust stock</a></div>
 </div>
 
-<div class="grid gap-4 sm:grid-cols-3"><div class="stat"><div class="stat-label">On hand</div><div class="stat-value">{{ $book->stock_on_hand }}</div></div><div class="stat"><div class="stat-label">Reserved</div><div class="stat-value">{{ $book->reserved_quantity }}</div></div><div class="stat"><div class="stat-label">Available</div><div class="stat-value">{{ $book->available_quantity }}</div></div></div>
+<div class="grid gap-4 sm:grid-cols-3"><div class="stat"><div class="stat-label">On hand (current branch)</div><div class="stat-value">{{ $book->branch_quantity }}</div></div><div class="stat"><div class="stat-label">Reserved</div><div class="stat-value">{{ $book->branchStocks->first()?->reserved_quantity ?? $book->reserved_quantity }}</div></div><div class="stat"><div class="stat-label">Available</div><div class="stat-value">{{ $book->available_quantity }}</div></div></div>
 
 <div class="mt-6 grid gap-6 xl:grid-cols-[1fr_1.5fr]">
     <section class="panel">

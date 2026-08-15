@@ -4,7 +4,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">{{ $book->exists ? 'Edit book' : 'Add book' }}</h1>
-        <p class="page-subtitle">Stock on hand is controlled through receipts, distributions, returns, and adjustments.</p>
+        <p class="page-subtitle">Set the stock quantity for the current branch; the change is recorded in the inventory ledger.</p>
     </div>
     <a class="btn btn-secondary" href="{{ $book->exists ? route('books.show', $book) : route('books.index') }}">Cancel</a>
 </div>
@@ -50,6 +50,7 @@
                 </div>
                 <div><label class="form-label">Tax rate (%)</label><input type="number" step="0.01" min="0" max="100" name="tax_rate" value="{{ old('tax_rate', $book->tax_rate ?? '0.00') }}"></div>
                 <div><label class="form-label">Minimum stock</label><input type="number" min="0" name="minimum_stock" value="{{ old('minimum_stock', $book->minimum_stock ?? 0) }}"></div>
+                <div><label class="form-label">Stock quantity *</label><input type="number" min="0" max="1000000" name="stock_quantity" required value="{{ old('stock_quantity', $book->branch_quantity) }}"><p class="mt-1 text-xs text-slate-500">On-hand quantity in the active branch. Saving records any change as an adjustment.</p></div>
                 <div class="md:col-span-2"><label class="flex items-center gap-2 text-sm font-medium text-slate-700"><input type="checkbox" name="is_active" value="1" @checked(old('is_active', $book->exists ? $book->is_active : true))>Active in catalogue</label></div>
                 <div class="md:col-span-2"><label class="form-label">Notes</label><textarea name="notes" rows="3">{{ old('notes', $book->notes) }}</textarea></div>
             </div>
