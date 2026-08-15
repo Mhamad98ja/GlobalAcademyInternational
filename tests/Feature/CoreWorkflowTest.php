@@ -334,6 +334,62 @@ class CoreWorkflowTest extends TestCase
             ->assertRedirect(route('books.index', ['tab' => 'packages']));
     }
 
+    public function test_book_packages_use_case_insensitive_barcode_scanning_for_books(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $book = Book::create(['sku' => 'B-PACKAGE-SCAN', 'barcode' => 'PACKAGE-Scan-001', 'title' => 'Package scanned book', 'selling_price' => '14.00']);
+
+        $this->actingAs($user)->get(route('class-lists.create'))
+            ->assertOk()
+            ->assertSee('Scan barcode')
+            ->assertSee('data-package-barcode', false)
+            ->assertDontSee('items[0][book_id]', false);
+
+        $this->actingAs($user)->post(route('class-lists.store'), [
+            'academic_year_id' => $registration->academic_year_id,
+            'grade_id' => $registration->grade_id,
+            'section_id' => $registration->section_id,
+            'name' => 'Scanned Grade 4 package',
+            'is_active' => '1',
+            'items' => [[
+                'barcode' => 'package-scan-001',
+                'quantity' => 1,
+                'price_type' => 'paid',
+                'unit_price' => '0.00',
+                'is_mandatory' => '1',
+            ]],
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $package = ClassBookList::where('name', 'Scanned Grade 4 package')->firstOrFail();
+        $this->assertDatabaseHas('class_book_list_items', [
+            'class_book_list_id' => $package->id,
+            'book_id' => $book->id,
+            'quantity' => 1,
+        ]);
+
+        $this->actingAs($user)->put(route('class-lists.update', $package), [
+            'academic_year_id' => $registration->academic_year_id,
+            'grade_id' => $registration->grade_id,
+            'section_id' => $registration->section_id,
+            'name' => $package->name,
+            'is_active' => '1',
+            'items' => [[
+                'barcode' => 'PACKAGE-SCAN-001',
+                'quantity' => 2,
+                'price_type' => 'paid',
+                'unit_price' => '0.00',
+                'is_mandatory' => '1',
+            ]],
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('class_book_list_items', [
+            'class_book_list_id' => $package->id,
+            'book_id' => $book->id,
+            'quantity' => 2,
+        ]);
+    }
+
     public function test_book_usage_can_be_selected_when_creating_and_editing_a_book(): void
     {
         $user = $this->administrator();
@@ -484,6 +540,7 @@ class CoreWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Cedar Grove School')
             ->assertSee('/images/global-academy-international-logo.png', false)
+            ->assertSee('Prepared by: '.$user->name)
             ->assertSee('Student Book Invoice')
             ->assertSee('Parent / guardian acknowledgement');
         $this->actingAs($user)->get(route('reports.print', ['report' => 'students']))
@@ -491,6 +548,7 @@ class CoreWorkflowTest extends TestCase
             ->assertSee('Cedar Grove School')
             ->assertSee('/images/global-academy-international-logo.png', false)
             ->assertSee('Official report')
+            ->assertSee('Prepared by: '.$user->name)
             ->assertSee('Prepared by');
     }
 

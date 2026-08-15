@@ -30,6 +30,7 @@ class ClassBookListsController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validated($request);
+        $data['items'] = $this->itemsFromBarcodes($data['items']);
 
         $list = DB::transaction(function () use ($data): ClassBookList {
             $this->ensureUniqueScope($data);
@@ -44,7 +45,7 @@ class ClassBookListsController extends Controller
 
     public function edit(ClassBookList $classBookList): View
     {
-        $classBookList->load('items');
+        $classBookList->load('items.book');
 
         return $this->form($classBookList);
     }
@@ -52,6 +53,7 @@ class ClassBookListsController extends Controller
     public function update(Request $request, ClassBookList $classBookList): RedirectResponse
     {
         $data = $this->validated($request);
+        $data['items'] = $this->itemsFromBarcodes($data['items']);
 
         DB::transaction(function () use ($classBookList, $data): void {
             $this->ensureUniqueScope($data, $classBookList);
@@ -64,11 +66,17 @@ class ClassBookListsController extends Controller
 
     private function form(ClassBookList $classBookList): View
     {
+        $books = Book::active()->orderBy('title')->get();
+
         return view('class-lists.form', [
             'list' => $classBookList,
             'years' => AcademicYear::orderByDesc('starts_on')->get(),
             'grades' => Grade::with('sections')->orderBy('sort_order')->get(),
-            'books' => Book::active()->orderBy('title')->get(),
+            'bookData' => $books->map(fn (Book $book) => [
+                'barcode' => $book->barcode,
+                'title' => $book->title,
+                'selling_price' => (string) $book->selling_price,
+            ])->values(),
         ]);
     }
 
@@ -84,7 +92,7 @@ class ClassBookListsController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.book_id' => ['required', 'distinct', 'exists:books,id'],
+            'items.*.barcode' => ['required', 'string', 'max:100'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.is_mandatory' => ['nullable', 'boolean'],
             'items.*.price_type' => ['required', 'in:free,discounted,paid'],
@@ -136,5 +144,31 @@ class ClassBookListsController extends Controller
                 'teacher_child_discount' => $item['teacher_child_discount'] ?? 0,
             ]);
         }
+    }
+
+    /** @param list<array{barcode: string, quantity: int|string}> $items */
+    private function itemsFromBarcodes(array $items): array
+    {
+        $resolved = collect($items)->map(function (array $item): array {
+            $barcode = trim($item['barcode']);
+            $book = Book::active()
+                ->whereRaw('LOWER(barcode) = ?', [mb_strtolower($barcode)])
+                ->first();
+
+            if ($book === null) {
+                throw ValidationException::withMessages(['items' => "No active book matches barcode {$barcode}."]);
+            }
+
+            $item['book_id'] = $book->id;
+            unset($item['barcode']);
+
+            return $item;
+        })->values();
+
+        if ($resolved->pluck('book_id')->unique()->count() !== $resolved->count()) {
+            throw ValidationException::withMessages(['items' => 'Scan each book barcode only once. Increase its quantity instead.']);
+        }
+
+        return $resolved->all();
     }
 }

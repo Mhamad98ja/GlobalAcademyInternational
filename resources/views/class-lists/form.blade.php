@@ -4,13 +4,13 @@
 @php
     $packageItems = old('items', $list->exists
         ? $list->items->map(fn ($item) => [
-            'book_id' => $item->book_id,
+            'barcode' => $item->book?->barcode,
             'quantity' => $item->quantity,
             'price_type' => $item->price_type,
             'unit_price' => $item->price_type === 'discounted' ? $item->unit_price : 0,
             'is_mandatory' => $item->is_mandatory,
         ])->values()->all()
-        : [['book_id' => '', 'quantity' => 1, 'price_type' => 'paid', 'unit_price' => 0, 'is_mandatory' => true]]);
+        : [['barcode' => '', 'quantity' => 1, 'price_type' => 'paid', 'unit_price' => 0, 'is_mandatory' => true]]);
 @endphp
 
 <div class="page-header">
@@ -21,7 +21,7 @@
     <a class="btn btn-secondary" href="{{ route('class-lists.index') }}">Cancel</a>
 </div>
 
-<form method="POST" action="{{ $list->exists ? route('class-lists.update', $list) : route('class-lists.store') }}" class="panel" data-submit-lock>
+<form method="POST" action="{{ $list->exists ? route('class-lists.update', $list) : route('class-lists.store') }}" class="panel" data-submit-lock data-package-form data-package-book-data="#package-book-data">
     @csrf
     @if ($list->exists)
         @method('PUT')
@@ -72,26 +72,22 @@
             <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 class="panel-title">Package books</h2>
-                    <p class="mt-1 text-xs text-slate-500">Paid books always use their current catalogue sale price. Use Discounted only when this package needs a lower unit price; Free issues the book at zero.</p>
+                    <p class="mt-1 text-xs text-slate-500">Scan each book barcode to add it. Paid books always use their current catalogue sale price. Use Discounted only when this package needs a lower unit price; Free issues the book at zero.</p>
                 </div>
                 <button type="button" class="btn btn-secondary btn-small" data-add-row="#package-lines" data-template="#package-line-template">Add book</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table min-w-[760px]">
                     <thead>
-                        <tr><th>Book</th><th>Qty</th><th>Price type</th><th>Discounted unit price</th><th>Mandatory</th><th></th></tr>
+                        <tr><th>Scan barcode *</th><th>Book</th><th>Qty</th><th>Price type</th><th>Discounted unit price</th><th>Mandatory</th><th></th></tr>
                     </thead>
                     <tbody id="package-lines">
                         @foreach ($packageItems as $index => $item)
                             <tr data-line>
                                 <td>
-                                    <select name="items[{{ $index }}][book_id]" required>
-                                        <option value="">Select book</option>
-                                        @foreach ($books as $book)
-                                            <option value="{{ $book->id }}" @selected(data_get($item, 'book_id') == $book->id)>{{ $book->title }} (Sale: {{ number_format((float) $book->selling_price, 2) }})</option>
-                                        @endforeach
-                                    </select>
+                                    <input name="items[{{ $index }}][barcode]" data-package-barcode required autocomplete="off" placeholder="Scan or type barcode" value="{{ data_get($item, 'barcode') }}" @if ($loop->first) autofocus @endif>
                                 </td>
+                                <td class="font-medium text-sm" data-package-book-summary>Awaiting barcode scan</td>
                                 <td><input type="number" min="1" value="{{ data_get($item, 'quantity', 1) }}" name="items[{{ $index }}][quantity]" required></td>
                                 <td>
                                     <select name="items[{{ $index }}][price_type]">
@@ -119,13 +115,9 @@
 <template id="package-line-template">
     <tr data-line>
         <td>
-            <select name="items[__INDEX__][book_id]" required>
-                <option value="">Select book</option>
-                @foreach ($books as $book)
-                    <option value="{{ $book->id }}">{{ $book->title }} (Sale: {{ number_format((float) $book->selling_price, 2) }})</option>
-                @endforeach
-            </select>
+            <input name="items[__INDEX__][barcode]" data-package-barcode required autocomplete="off" placeholder="Scan or type barcode">
         </td>
+        <td class="font-medium text-sm" data-package-book-summary>Awaiting barcode scan</td>
         <td><input type="number" min="1" value="1" name="items[__INDEX__][quantity]" required></td>
         <td>
             <select name="items[__INDEX__][price_type]">
@@ -139,4 +131,5 @@
         <td><button type="button" class="link text-xs text-rose-700" data-remove-row>Remove</button></td>
     </tr>
 </template>
+<script type="application/json" id="package-book-data">{!! json_encode($bookData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}</script>
 @endsection

@@ -85,7 +85,7 @@
         </div>@endif
 
         <div class="print-signatures">
-            <div class="print-signature">Prepared by {{ $invoice->createdBy?->name ?? 'School staff' }}</div>
+            <div class="print-signature">Prepared by: {{ $invoice->createdBy?->name ?? auth()->user()->name }}</div>
             <div class="print-signature">Checked by</div>
             <div class="print-signature">Parent / guardian acknowledgement</div>
         </div>

@@ -277,3 +277,36 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     refreshPackages();
     lines.querySelectorAll('[data-line]').forEach(refreshBookSummary);
 });
+
+document.querySelectorAll('[data-package-form]').forEach((form) => {
+    const bookData = document.querySelector(form.dataset.packageBookData);
+    if (!bookData) return;
+
+    const booksByBarcode = new Map(JSON.parse(bookData.textContent || '[]')
+        .map((book) => [String(book.barcode).toLocaleLowerCase(), book]));
+    const refreshBookSummary = (line) => {
+        const barcodeInput = line.querySelector('[data-package-barcode]');
+        const summary = line.querySelector('[data-package-book-summary]');
+        if (!barcodeInput || !summary) return;
+
+        const book = booksByBarcode.get(barcodeInput.value.trim().toLocaleLowerCase());
+        summary.textContent = book
+            ? `${book.title} — sale ${Number(book.selling_price).toFixed(2)}`
+            : (barcodeInput.value.trim() ? 'Barcode not found' : 'Awaiting barcode scan');
+    };
+
+    form.addEventListener('input', (event) => {
+        if (event.target.matches('[data-package-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
+    });
+    form.addEventListener('change', (event) => {
+        if (event.target.matches('[data-package-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
+    });
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-add-row]');
+        if (button?.dataset.addRow === '#package-lines') {
+            requestAnimationFrame(() => form.querySelectorAll('[data-line]').forEach(refreshBookSummary));
+        }
+    });
+
+    form.querySelectorAll('[data-line]').forEach(refreshBookSummary);
+});

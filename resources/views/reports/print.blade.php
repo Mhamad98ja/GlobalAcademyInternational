@@ -66,7 +66,7 @@
         @include('reports.table')
 
         <div class="print-signatures">
-            <div class="print-signature">Prepared by</div>
+            <div class="print-signature">Prepared by: {{ auth()->user()->name }}</div>
             <div class="print-signature">Checked by</div>
             <div class="print-signature">Approved by</div>
         </div>
