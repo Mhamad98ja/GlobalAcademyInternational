@@ -456,7 +456,9 @@ class MultiBranchWorkflowTest extends TestCase
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
             ->get(route('distributions.create'))
             ->assertOk()
-            ->assertDontSee('Payment at distribution');
+            ->assertDontSee('Payment at distribution')
+            ->assertDontSee('Total sale')
+            ->assertDontSee('data-distribution-sale-total', false);
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('invoices.index'))->assertForbidden();
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('payments.index'))->assertForbidden();
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('operations.index'))->assertForbidden();

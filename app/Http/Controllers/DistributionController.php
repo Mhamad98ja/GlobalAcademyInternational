@@ -51,10 +51,18 @@ class DistributionController extends Controller
                 'grade_id' => $package->grade_id,
                 'section_id' => $package->section_id,
                 'section_label' => $package->section?->name ?? 'All sections',
-                'items' => $package->items->map(fn ($item) => [
-                    'book_id' => $item->book_id,
-                    'quantity' => $item->quantity,
-                ])->values(),
+                'items' => $package->items->map(function ($item) use ($canViewFinancials): array {
+                    $data = [
+                        'book_id' => $item->book_id,
+                        'quantity' => $item->quantity,
+                    ];
+                    if ($canViewFinancials) {
+                        $data['price_type'] = $item->price_type;
+                        $data['unit_price'] = (string) $item->unit_price;
+                    }
+
+                    return $data;
+                })->values(),
             ])->values(),
             'bookData' => $books->map(function (Book $book) use ($canViewFinancials): array {
                 $data = [
@@ -65,6 +73,7 @@ class DistributionController extends Controller
                 ];
                 if ($canViewFinancials) {
                     $data['selling_price'] = (string) $book->selling_price;
+                    $data['tax_rate'] = (string) $book->tax_rate;
                 }
 
                 return $data;

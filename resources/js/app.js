@@ -193,6 +193,9 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     const packageData = document.querySelector(form.dataset.packageData);
     const bookData = document.querySelector('#distribution-book-data');
     const packageHint = form.querySelector('[data-package-hint]');
+    const saleTotal = form.querySelector('[data-distribution-sale-total]');
+    const saleSubtotal = form.querySelector('[data-distribution-sale-subtotal]');
+    const saleTax = form.querySelector('[data-distribution-sale-tax]');
 
     if (!registrationSelect || !packageSelect || !lines || !lineTemplate || !packageData || !bookData) return;
 
@@ -202,6 +205,40 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     const booksByBarcode = new Map([...booksById.values()].map((book) => [String(book.barcode).toLocaleLowerCase(), book]));
     const booksByTitle = new Map(books.map((book) => [String(book.title).toLocaleLowerCase(), book]));
     const sameId = (left, right) => String(left) === String(right);
+    const cents = (value) => Math.round(Number(value || 0) * 100);
+    const money = (value) => (value / 100).toFixed(2);
+    const selectedPackage = () => packages.find((bookPackage) => sameId(bookPackage.id, packageSelect.value));
+    const priceForLine = (book, packageItem) => {
+        const cataloguePrice = cents(book.selling_price);
+        if (!packageItem || packageItem.price_type === 'paid') return cataloguePrice;
+        if (packageItem.price_type === 'free') return 0;
+
+        return Math.min(cataloguePrice, Math.max(0, cents(packageItem.unit_price)));
+    };
+    const refreshSaleTotal = () => {
+        if (!saleTotal || !saleSubtotal || !saleTax) return;
+
+        const packageItems = new Map((selectedPackage()?.items ?? []).map((item) => [String(item.book_id), item]));
+        let subtotal = 0;
+        let tax = 0;
+        lines.querySelectorAll('[data-line]').forEach((line) => {
+            const barcodeInput = line.querySelector('[data-distribution-barcode]');
+            const quantityInput = line.querySelector('input[name$="[quantity]"]');
+            const book = booksByBarcode.get(barcodeInput?.value.trim().toLocaleLowerCase())
+                ?? booksByTitle.get(barcodeInput?.value.trim().toLocaleLowerCase());
+            const quantity = Math.max(0, Number.parseInt(quantityInput?.value || '0', 10) || 0);
+            if (!book || quantity === 0 || !Object.hasOwn(book, 'selling_price')) return;
+
+            const base = priceForLine(book, packageItems.get(String(book.id))) * quantity;
+            const taxRate = cents(book.tax_rate);
+            subtotal += base;
+            tax += Math.floor((base * taxRate + 5000) / 10000);
+        });
+
+        saleSubtotal.textContent = money(subtotal);
+        saleTax.textContent = money(tax);
+        saleTotal.textContent = money(subtotal + tax);
+    };
     const refreshBookSummary = (line) => {
         const barcodeInput = line.querySelector('[data-distribution-barcode]');
         const summary = line.querySelector('[data-book-summary]');
@@ -211,6 +248,7 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
         summary.textContent = book
             ? `${book.title} — ${book.available_quantity} available${Object.hasOwn(book, 'selling_price') ? `, sale ${Number(book.selling_price).toFixed(2)}` : ''}`
             : (barcodeInput.value.trim() ? 'Barcode not found' : 'Awaiting barcode scan');
+        refreshSaleTotal();
     };
     const renderLines = (items = []) => {
         const fragment = document.createDocumentFragment();
@@ -230,6 +268,7 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
         });
 
         lines.replaceChildren(fragment);
+        refreshSaleTotal();
     };
 
     const updateHint = (bookPackage, sameGradePackages = []) => {
@@ -290,6 +329,7 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
             packageSelect.value = '';
             if (previousPackageId) renderLines();
             updateHint(null, sameGradePackages);
+            refreshSaleTotal();
             return;
         }
 
@@ -301,28 +341,46 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
         packageSelect.value = String(selectedPackage.id);
         renderLines(selectedPackage.items);
         updateHint(selectedPackage);
+        refreshSaleTotal();
     };
 
     registrationSelect.addEventListener('change', refreshPackages);
     form.addEventListener('input', (event) => {
         if (event.target.matches('[data-distribution-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
+        if (event.target.matches('input[name$="[quantity]"]')) refreshSaleTotal();
     });
     form.addEventListener('change', (event) => {
         if (event.target.matches('[data-distribution-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
+        if (event.target.matches('input[name$="[quantity]"]')) refreshSaleTotal();
     });
     packageSelect.addEventListener('change', () => {
         const selectedPackage = packages.find((bookPackage) => sameId(bookPackage.id, packageSelect.value));
         if (!selectedPackage) {
             renderLines();
             updateHint(null);
+            refreshSaleTotal();
             return;
         }
         renderLines(selectedPackage.items);
         updateHint(selectedPackage);
+        refreshSaleTotal();
     });
 
     refreshPackages();
     lines.querySelectorAll('[data-line]').forEach(refreshBookSummary);
+    refreshSaleTotal();
+
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-add-row]');
+        if (button?.dataset.addRow === '#distribution-lines') {
+            requestAnimationFrame(refreshSaleTotal);
+        }
+    });
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('[data-remove-row]')) {
+            requestAnimationFrame(refreshSaleTotal);
+        }
+    });
 });
 
 document.querySelectorAll('[data-package-form]').forEach((form) => {

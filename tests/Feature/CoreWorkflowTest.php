@@ -94,6 +94,10 @@ class CoreWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Distribute books')
             ->assertSee(route('distributions.create', ['registration' => $registration->id]), false);
+        $this->actingAs($user)->get(route('distributions.create', ['registration' => $registration->id]))
+            ->assertOk()
+            ->assertSee('Total sale')
+            ->assertSee('data-distribution-sale-total', false);
 
         $this->actingAs($user)->post(route('distributions.store'), [
             'student_registration_id' => $registration->id,

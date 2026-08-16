@@ -64,6 +64,12 @@
                     </tbody>
                 </table>
             </div>
+            @if ($canViewFinancials)
+                <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-teal-200 bg-teal-50 px-4 py-3" aria-live="polite" data-distribution-sale-summary>
+                    <div><div class="text-sm font-semibold text-teal-950">Total sale</div><div class="text-xs text-teal-800">Calculated from the current books, quantities, package prices, and tax.</div></div>
+                    <div class="text-right"><div class="text-xs font-medium uppercase tracking-wide text-teal-800">Invoice total</div><output class="text-2xl font-bold text-teal-950" data-distribution-sale-total>0.00</output><div class="text-xs text-teal-800">Subtotal <span data-distribution-sale-subtotal>0.00</span> · Tax <span data-distribution-sale-tax>0.00</span></div></div>
+                </div>
+            @endif
         </div>
 
         @if ($canViewFinancials)<div>
