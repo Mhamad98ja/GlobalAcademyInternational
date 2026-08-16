@@ -50,21 +50,23 @@
                 </div>
                 <div class="border-t border-slate-200 pt-3">
                     <h3 class="font-medium text-slate-800">Branch authority</h3>
+                    @php($assignedBranchIds = collect(old('branch_ids', [$currentBranchId]))->map(fn ($id) => (int) $id)->all())
+                    @php($branchAdministratorIds = collect(old('branch_administrator_ids', []))->map(fn ($id) => (int) $id)->all())
                     <div class="mt-3">
                         <label class="form-label">Assigned branches</label>
-                        <select name="branch_ids[]" multiple size="4">
+                        <div class="max-h-40 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
                             @foreach ($branches as $branch)
-                                <option value="{{ $branch->id }}" @selected($branch->id === $currentBranchId)>{{ $branch->name }}</option>
+                                <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="branch_ids[]" value="{{ $branch->id }}" @checked(in_array($branch->id, $assignedBranchIds, true))>{{ $branch->name }}</label>
                             @endforeach
-                        </select>
+                        </div>
                     </div>
                     <div class="mt-3">
                         <label class="form-label">Branch Super Administrator for selected branches</label>
-                        <select name="branch_administrator_ids[]" multiple size="4">
+                        <div class="max-h-40 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
                             @foreach ($branches as $branch)
-                                <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                                <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="branch_administrator_ids[]" value="{{ $branch->id }}" @checked(in_array($branch->id, $branchAdministratorIds, true))>{{ $branch->name }}</label>
                             @endforeach
-                        </select>
+                        </div>
                     </div>
                     <p class="mt-2 text-xs text-slate-500">Only the Controller Administrator assigns branches and designates a Branch Super Administrator. Only one Branch Super Administrator can be responsible for each branch. This never permits branch creation, editing, or removal.</p>
                 </div>

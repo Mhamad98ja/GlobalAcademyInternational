@@ -2,6 +2,8 @@
 
 @section('content')
 @php($canTransferControllerAuthority = auth()->user()->isControllerAdministrator() && ! $managedUser->is_controller_administrator && $managedUser->is_active && $managedUser->hasPermission('admin.manage'))
+@php($assignedBranchIds = collect(old('branch_ids', $managedUser->branches->pluck('id')->all()))->map(fn ($id) => (int) $id)->all())
+@php($branchAdministratorIds = collect(old('branch_administrator_ids', $managedUser->branches->filter(fn ($branch) => $branch->pivot->is_branch_administrator)->pluck('id')->all()))->map(fn ($id) => (int) $id)->all())
 <div class="page-header">
     <div>
         <h1 class="page-title">Edit user</h1>
@@ -41,11 +43,11 @@
             <p class="mt-1 text-xs text-slate-500">Users can work only in assigned branches. The Controller Administrator is the only account with whole-school branch authority.</p>
             <div class="mt-3">
                 <label class="form-label">Assigned branches</label>
-                <select name="branch_ids[]" multiple size="5">
+                <div class="max-h-48 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
                     @foreach ($branches as $branch)
-                        <option value="{{ $branch->id }}" @selected(in_array($branch->id, old('branch_ids', $managedUser->branches->pluck('id')->all())))>{{ $branch->name }} ({{ $branch->code }})</option>
+                        <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="branch_ids[]" value="{{ $branch->id }}" @checked(in_array($branch->id, $assignedBranchIds, true))>{{ $branch->name }} ({{ $branch->code }})</label>
                     @endforeach
-                </select>
+                </div>
             </div>
             <div class="mt-3">
                 <label class="form-label">Default branch</label>
@@ -53,11 +55,11 @@
             </div>
             <div class="mt-3">
                 <label class="form-label">Branch Super Administrator for selected branches</label>
-                <select name="branch_administrator_ids[]" multiple size="5">
+                <div class="max-h-48 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
                     @foreach ($branches as $branch)
-                        <option value="{{ $branch->id }}" @selected(in_array($branch->id, old('branch_administrator_ids', $managedUser->branches->filter(fn ($branch) => $branch->pivot->is_branch_administrator)->pluck('id')->all())))>{{ $branch->name }} ({{ $branch->code }})</option>
+                        <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="branch_administrator_ids[]" value="{{ $branch->id }}" @checked(in_array($branch->id, $branchAdministratorIds, true))>{{ $branch->name }} ({{ $branch->code }})</label>
                     @endforeach
-                </select>
+                </div>
                 <p class="mt-1 text-xs text-slate-500">A Branch Super Administrator has full operational and financial control only in the selected branches. One responsible Branch Super Administrator is allowed for each branch.</p>
             </div>
         </div>

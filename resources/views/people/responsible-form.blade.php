@@ -1,7 +1,7 @@
 @extends('layouts.app', ['title' => 'Edit responsible person'])
 
 @section('content')
-@php($linkedStudentIds = old('student_ids', $person->students->pluck('id')->all()))
+@php($linkedStudentIds = collect(old('student_ids', $person->students->pluck('id')->all()))->map(fn ($id) => (int) $id)->all())
 <div class="page-header">
     <div><h1 class="page-title">Edit responsible person</h1><p class="page-subtitle">Update the contact and the students connected to this person.</p></div>
     <a class="btn btn-secondary" href="{{ route('responsible.index') }}">Cancel</a>
@@ -21,11 +21,11 @@
         </div>
         <div>
             <label class="form-label">Students linked to this person</label>
-            <select name="student_ids[]" multiple size="8">
+            <div class="max-h-60 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
                 @foreach ($students as $student)
-                    <option value="{{ $student->id }}" @selected(in_array($student->id, $linkedStudentIds))>{{ $student->student_number }} — {{ $student->full_name }}</option>
+                    <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="student_ids[]" value="{{ $student->id }}" @checked(in_array($student->id, $linkedStudentIds, true))>{{ $student->student_number }} — {{ $student->full_name }}</label>
                 @endforeach
-            </select>
+            </div>
             <p class="mt-1 text-xs text-slate-500">A person can be connected to more than one student.</p>
         </div>
         <div><label class="form-label">Notes</label><textarea name="notes" rows="3">{{ old('notes', $person->notes) }}</textarea></div>

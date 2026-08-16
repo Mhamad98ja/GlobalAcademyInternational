@@ -10,6 +10,7 @@ use App\Models\ClassBookList;
 use App\Models\StockAdjustment;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\BranchContext;
 use App\Services\InventoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class BooksController extends Controller
         $canManagePackages = $request->user()->hasPermission('class-lists.manage');
         $canManageBooks = $request->user()->hasPermission('books.manage');
         $canViewFinancials = $request->user()->canViewFinancials();
+        $branchId = app(BranchContext::class)->id();
         $tab = $canManagePackages && $request->string('tab')->toString() === 'packages' ? 'packages' : 'books';
         $search = trim($request->string('search')->toString());
         $books = null;
@@ -42,6 +44,7 @@ class BooksController extends Controller
                 ->withQueryString();
         } else {
             $books = Book::query()->withBranchStock()->with('gradeUsages')
+                ->knownInBranch($branchId)
                 ->when($search !== '', fn ($query) => $query->where(fn ($books) => $books
                     ->whereInsensitiveLike('title', $search)
                     ->orWhereInsensitiveLike('barcode', $search)
@@ -79,18 +82,22 @@ class BooksController extends Controller
 
     public function show(Book $book, Request $request): View
     {
+        $this->ensureBookAccessible($book, $request);
         $book->load(['branchStocks' => fn ($stocks) => $stocks->where('branch_id', app(\App\Services\BranchContext::class)->id()), 'movements' => fn ($query) => $query->with('user')->latest()->take(20), 'gradeUsages.grade']);
 
         return view('books.show', ['book' => $book, 'canViewFinancials' => $request->user()->canViewFinancials()]);
     }
 
-    public function edit(Book $book): View
+    public function edit(Book $book, Request $request): View
     {
+        $this->ensureBookAccessible($book, $request);
+
         return view('books.form', compact('book'));
     }
 
     public function update(StoreBookRequest $request, Book $book): RedirectResponse
     {
+        $this->ensureBookAccessible($book, $request);
         $data = $request->validated();
         $stockQuantity = (int) $data['stock_quantity'];
         unset($data['stock_quantity']);
@@ -106,8 +113,9 @@ class BooksController extends Controller
         return redirect()->route('books.show', $book)->with('success', 'Book updated.');
     }
 
-    public function destroy(Book $book, AuditService $audit): RedirectResponse
+    public function destroy(Book $book, AuditService $audit, Request $request): RedirectResponse
     {
+        $this->ensureBookAccessible($book, $request);
         $book->delete();
         $audit->log('book.deleted', $book);
 
@@ -142,5 +150,15 @@ class BooksController extends Controller
             $user->hasPermission('stock.allow-negative'),
         );
         $audit->log('stock.adjusted', $adjustment, [], ['quantity_change' => $quantityChange], 'Stock quantity set from book editor');
+    }
+
+    private function ensureBookAccessible(Book $book, Request $request): void
+    {
+        if ($request->user()->isControllerAdministrator()) {
+            return;
+        }
+
+        $branchId = app(BranchContext::class)->id();
+        abort_unless($branchId !== null && $book->branchStocks()->where('branch_id', $branchId)->exists(), 404);
     }
 }

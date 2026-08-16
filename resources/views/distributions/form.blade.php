@@ -43,19 +43,19 @@
             <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 class="panel-title">Books to issue</h2>
-                    <p class="mt-1 text-xs text-slate-500">Scan each book barcode and confirm the quantity before issuing it.@if ($canViewFinancials) Books use their current catalogue sale price. @endif</p>
+                    <p class="mt-1 text-xs text-slate-500">Scan a barcode or search by book name, then confirm the quantity before issuing it.@if ($canViewFinancials) Books use their current catalogue sale price. @endif</p>
                 </div>
                 <button type="button" class="btn btn-secondary btn-small" data-add-row="#distribution-lines" data-template="#distribution-line-template">Add book</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table min-w-[650px]">
                     <thead>
-                        <tr><th>Scan barcode *</th><th>Book</th><th>Quantity</th><th></th></tr>
+                        <tr><th>Barcode or book name *</th><th>Book</th><th>Quantity</th><th></th></tr>
                     </thead>
                     <tbody id="distribution-lines">
                         <tr data-line>
                             <td>
-                                <input name="items[0][barcode]" data-distribution-barcode required autofocus autocomplete="off" placeholder="Scan or type barcode" inputmode="none">
+                                <input name="items[0][barcode]" data-distribution-barcode required autofocus autocomplete="off" placeholder="Scan barcode or type book name" list="distribution-book-options">
                             </td>
                             <td class="font-medium text-sm" data-book-summary>Awaiting barcode scan</td>
                             <td><input name="items[0][quantity]" type="number" min="1" value="1" required></td>
@@ -111,7 +111,7 @@
 <template id="distribution-line-template">
     <tr data-line>
         <td>
-            <input name="items[__INDEX__][barcode]" data-distribution-barcode required autocomplete="off" placeholder="Scan or type barcode" inputmode="none">
+            <input name="items[__INDEX__][barcode]" data-distribution-barcode required autocomplete="off" placeholder="Scan barcode or type book name" list="distribution-book-options">
         </td>
         <td class="font-medium text-sm" data-book-summary>Awaiting barcode scan</td>
         <td><input name="items[__INDEX__][quantity]" type="number" min="1" value="1" required></td>
@@ -121,4 +121,5 @@
 
 <script type="application/json" id="distribution-package-data">{!! json_encode($packageData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}</script>
 <script type="application/json" id="distribution-book-data">{!! json_encode($bookData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}</script>
+<datalist id="distribution-book-options">@foreach ($bookData as $book)<option value="{{ $book['barcode'] }}">{{ $book['title'] }}</option><option value="{{ $book['title'] }}">{{ $book['barcode'] }}</option>@endforeach</datalist>
 @endsection

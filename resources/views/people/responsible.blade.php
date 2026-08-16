@@ -18,11 +18,12 @@
             <div><label class="form-label">Linked teacher (optional)</label><select name="teacher_id"><option value="">No linked teacher</option>@foreach ($teachers as $teacher)<option value="{{ $teacher->id }}" @selected(old('teacher_id') == $teacher->id)>{{ $teacher->full_name }}</option>@endforeach</select></div>
             <div>
                 <label class="form-label">Students linked to this person</label>
-                <select name="student_ids[]" multiple size="6">
+                @php($linkedStudentIds = collect(old('student_ids', []))->map(fn ($id) => (int) $id)->all())
+                <div class="max-h-52 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
                     @foreach ($students as $student)
-                        <option value="{{ $student->id }}" @selected(in_array($student->id, old('student_ids', [])))>{{ $student->student_number }} — {{ $student->full_name }}</option>
+                        <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="student_ids[]" value="{{ $student->id }}" @checked(in_array($student->id, $linkedStudentIds, true))>{{ $student->student_number }} — {{ $student->full_name }}</label>
                     @endforeach
-                </select>
+                </div>
                 <p class="mt-1 text-xs text-slate-500">Select every child connected to this responsible person. You can change these links later.</p>
             </div>
             <div><label class="form-label">Phone</label><input name="phone" value="{{ old('phone') }}"></div>

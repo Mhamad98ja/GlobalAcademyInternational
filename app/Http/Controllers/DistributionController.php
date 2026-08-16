@@ -35,7 +35,7 @@ class DistributionController extends Controller
             ->with('items.book', 'section')
             ->orderBy('name')
             ->get();
-        $books = Book::active()->withBranchStock()->orderBy('title')->get();
+        $books = Book::active()->stockedInBranch()->withBranchStock()->orderBy('title')->get();
 
         return view('distributions.form', [
             'registrations' => StudentRegistration::with('student', 'academicYear', 'grade', 'section')
@@ -130,19 +130,19 @@ class DistributionController extends Controller
     private function itemsFromBarcodes(array $items): array
     {
         $resolved = collect($items)->map(function (array $item): array {
-            $barcode = trim($item['barcode']);
-            $book = Book::active()
-                ->whereRaw('LOWER(barcode) = ?', [mb_strtolower($barcode)])
-                ->first();
+            $search = trim($item['barcode']);
+            $searchTerm = mb_strtolower($search);
+            $book = Book::active()->stockedInBranch()->whereRaw('LOWER(barcode) = ?', [$searchTerm])->first();
+            $book ??= Book::active()->stockedInBranch()->whereRaw('LOWER(title) = ?', [$searchTerm])->first();
             if ($book === null) {
-                throw ValidationException::withMessages(['items' => "No active book matches barcode {$barcode}."]);
+                throw ValidationException::withMessages(['items' => "No active book matches barcode or title {$search}."]);
             }
 
             return ['book_id' => $book->id, 'quantity' => (int) $item['quantity']];
         })->values();
 
         if ($resolved->pluck('book_id')->unique()->count() !== $resolved->count()) {
-            throw ValidationException::withMessages(['items' => 'Scan each book barcode only once. Increase its quantity instead.']);
+            throw ValidationException::withMessages(['items' => 'Select each book only once. Increase its quantity instead.']);
         }
 
         return $resolved->all();

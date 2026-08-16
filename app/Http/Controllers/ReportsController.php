@@ -176,6 +176,7 @@ class ReportsController extends Controller
     {
         return match ($report) {
             'stock' => Book::query()->withBranchStock()
+                ->knownInBranch()
                 ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where(fn (Builder $books) => $books
                     ->whereInsensitiveLike('title', $search)
                     ->orWhereInsensitiveLike('sku', $search)

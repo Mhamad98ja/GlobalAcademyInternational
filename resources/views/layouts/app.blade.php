@@ -55,7 +55,7 @@
                 @php($branchContext = app(\App\Services\BranchContext::class))
                 @php($activeBranch = $branchContext->branch())
                 @php($availableBranches = $branchContext->accessibleBranches(auth()->user()))
-                @if ($availableBranches->isNotEmpty())
+                @if ($signedInUser->isControllerAdministrator() && $availableBranches->count() > 1)
                     <form method="POST" action="{{ route('branches.select') }}" class="hidden lg:block">
                         @csrf
                         <label class="sr-only" for="branch-switcher">Active branch</label>
@@ -68,6 +68,8 @@
                             @endforeach
                         </select>
                     </form>
+                @elseif ($activeBranch)
+                    <span class="hidden rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 lg:block">{{ $activeBranch->name }}</span>
                 @endif
                 <div class="h-8 w-px bg-slate-200"></div>
                 <div class="max-w-40 text-right"><div class="truncate text-sm font-medium text-slate-800">{{ $signedInUser->name }}</div><div class="truncate text-xs text-slate-500">{{ $signedInUser->isControllerAdministrator() ? 'Controller Administrator' : ($signedInUser->roles->first()?->label ?? 'User') }}</div></div>

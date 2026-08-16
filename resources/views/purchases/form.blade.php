@@ -58,12 +58,15 @@
                     <tbody id="purchase-lines">
                         <tr data-line>
                             <td>
-                                <select name="items[0][book_id]" required data-purchase-book>
+                                <div data-book-picker>
+                                    <input type="search" list="purchase-book-options" data-book-search autocomplete="off" placeholder="Search barcode or book name">
+                                    <select name="items[0][book_id]" required data-book-select data-purchase-book>
                                     <option value="">Select book</option>
                                     @foreach ($books as $book)
-                                        <option value="{{ $book->id }}" data-purchase-price="{{ $book->purchase_price }}" data-selling-price="{{ $book->selling_price }}">{{ $book->title }} (Sale: {{ number_format((float) $book->selling_price, 2) }})</option>
+                                        <option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-title="{{ $book->title }}" data-purchase-price="{{ $book->purchase_price }}" data-selling-price="{{ $book->selling_price }}">{{ $book->barcode }} — {{ $book->title }} (Sale: {{ number_format((float) $book->selling_price, 2) }})</option>
                                     @endforeach
-                                </select>
+                                    </select>
+                                </div>
                             </td>
                             <td><input type="number" min="1" name="items[0][quantity_ordered]" value="1" required></td>
                             <td><input type="number" min="0" step="0.01" name="items[0][unit_purchase_price]" required data-unit-purchase-price></td>
@@ -88,12 +91,15 @@
 <template id="purchase-line-template">
     <tr data-line>
         <td>
-            <select name="items[__INDEX__][book_id]" required data-purchase-book>
+            <div data-book-picker>
+                <input type="search" list="purchase-book-options" data-book-search autocomplete="off" placeholder="Search barcode or book name">
+                <select name="items[__INDEX__][book_id]" required data-book-select data-purchase-book>
                 <option value="">Select book</option>
                 @foreach ($books as $book)
-                    <option value="{{ $book->id }}" data-purchase-price="{{ $book->purchase_price }}" data-selling-price="{{ $book->selling_price }}">{{ $book->title }} (Sale: {{ number_format((float) $book->selling_price, 2) }})</option>
+                    <option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-title="{{ $book->title }}" data-purchase-price="{{ $book->purchase_price }}" data-selling-price="{{ $book->selling_price }}">{{ $book->barcode }} — {{ $book->title }} (Sale: {{ number_format((float) $book->selling_price, 2) }})</option>
                 @endforeach
-            </select>
+                </select>
+            </div>
         </td>
         <td><input type="number" min="1" name="items[__INDEX__][quantity_ordered]" value="1" required></td>
         <td><input type="number" min="0" step="0.01" name="items[__INDEX__][unit_purchase_price]" required data-unit-purchase-price></td>
@@ -103,4 +109,5 @@
         <td><button type="button" class="link text-xs text-rose-700" data-remove-row>Remove</button></td>
     </tr>
 </template>
+<x-book-search-options id="purchase-book-options" :books="$books" />
 @endsection

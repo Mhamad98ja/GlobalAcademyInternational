@@ -16,12 +16,12 @@ class BookTransfer extends Model
     protected $fillable = [
         'transfer_number', 'transfer_type', 'source_branch_id', 'destination_branch_id',
         'source_user_id', 'destination_user_id', 'academic_year_id', 'transferred_on',
-        'status', 'notes', 'created_by', 'completed_by',
+        'status', 'notes', 'reversal_notes', 'created_by', 'completed_by', 'reversed_by', 'reversed_at',
     ];
 
     protected function casts(): array
     {
-        return ['transferred_on' => 'date'];
+        return ['transferred_on' => 'date', 'reversed_at' => 'datetime'];
     }
 
     public function sourceBranch(): BelongsTo { return $this->belongsTo(Branch::class, 'source_branch_id'); }
@@ -29,6 +29,7 @@ class BookTransfer extends Model
     public function sourceUser(): BelongsTo { return $this->belongsTo(User::class, 'source_user_id'); }
     public function destinationUser(): BelongsTo { return $this->belongsTo(User::class, 'destination_user_id'); }
     public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function reversedBy(): BelongsTo { return $this->belongsTo(User::class, 'reversed_by'); }
     public function academicYear(): BelongsTo { return $this->belongsTo(AcademicYear::class); }
     public function items(): HasMany { return $this->hasMany(BookTransferItem::class); }
 }

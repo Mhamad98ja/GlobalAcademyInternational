@@ -96,6 +96,104 @@ final class BookTransferService
         });
     }
 
+    public function reverse(BookTransfer $transfer, User $performedBy, ?string $notes = null): BookTransfer
+    {
+        return DB::transaction(function () use ($transfer, $performedBy, $notes): BookTransfer {
+            $transfer = BookTransfer::query()->lockForUpdate()->findOrFail($transfer->id);
+            if ($transfer->status !== 'completed') {
+                throw ValidationException::withMessages(['transfer' => 'This transfer has already been reversed.']);
+            }
+
+            $items = $transfer->items()->lockForUpdate()->get();
+            if ($items->isEmpty()) {
+                throw ValidationException::withMessages(['transfer' => 'A transfer without books cannot be reversed.']);
+            }
+
+            $transfer->loadMissing('sourceBranch', 'destinationBranch', 'sourceUser', 'destinationUser', 'academicYear');
+            match ($transfer->transfer_type) {
+                'branch_to_branch' => $this->reverseBranchTransfer($transfer, $items->all(), $performedBy, $notes),
+                'branch_to_user' => $this->reverseBranchCustodyTransfer($transfer, $items->all(), $performedBy, $notes),
+                'user_to_user' => $this->reverseUserTransfer($transfer, $items->all(), $performedBy, $notes),
+                default => throw ValidationException::withMessages(['transfer' => 'This transfer type cannot be reversed.']),
+            };
+
+            $transfer->update([
+                'status' => 'reversed',
+                'reversal_notes' => $notes,
+                'reversed_by' => $performedBy->id,
+                'reversed_at' => now(),
+            ]);
+            $this->audit->log('book_transfer.reversed', $transfer, ['status' => 'completed'], ['status' => 'reversed', 'items' => $items->count()], $notes);
+
+            return $transfer;
+        }, 3);
+    }
+
+    /** @param list<\App\Models\BookTransferItem> $items */
+    private function reverseBranchTransfer(BookTransfer $transfer, array $items, User $performedBy, ?string $notes): void
+    {
+        $source = $transfer->sourceBranch;
+        $destination = $transfer->destinationBranch;
+        if ($source === null || $destination === null) {
+            throw ValidationException::withMessages(['transfer' => 'Both branches must still exist to reverse this transfer.']);
+        }
+
+        foreach ($items as $item) {
+            $book = Book::query()->findOrFail($item->book_id);
+            $this->inventory->change($book, -(int) $item->quantity, 'branch_transfer_reversal_out', $transfer, $transfer->academicYear, $performedBy, 'Transfer reversal to '.$source->name, $notes, false, $destination);
+            $this->inventory->change($book, (int) $item->quantity, 'branch_transfer_reversal_in', $transfer, $transfer->academicYear, $performedBy, 'Transfer reversal from '.$destination->name, $notes, false, $source);
+        }
+    }
+
+    /** @param list<\App\Models\BookTransferItem> $items */
+    private function reverseBranchCustodyTransfer(BookTransfer $transfer, array $items, User $performedBy, ?string $notes): void
+    {
+        $branch = $transfer->sourceBranch;
+        $holder = $transfer->destinationUser;
+        if ($branch === null || $holder === null) {
+            throw ValidationException::withMessages(['transfer' => 'The branch and user must still exist to reverse this custody transfer.']);
+        }
+
+        foreach ($items as $item) {
+            $book = Book::query()->findOrFail($item->book_id);
+            $custody = $this->custody($branch, $holder, $book, true);
+            if ((int) $custody->quantity_on_hand < (int) $item->quantity) {
+                throw ValidationException::withMessages(['transfer' => "{$holder->name} no longer holds enough copies of {$book->title} to reverse this transfer."]);
+            }
+
+            $before = (int) $custody->quantity_on_hand;
+            $custody->decrement('quantity_on_hand', (int) $item->quantity);
+            $this->recordCustodyMovement($book, $before, -(int) $item->quantity, $transfer, $transfer->academicYear, $performedBy, $branch, $holder, 'Transfer reversal to branch stock', $notes);
+        }
+    }
+
+    /** @param list<\App\Models\BookTransferItem> $items */
+    private function reverseUserTransfer(BookTransfer $transfer, array $items, User $performedBy, ?string $notes): void
+    {
+        $branch = $transfer->sourceBranch;
+        $source = $transfer->sourceUser;
+        $destination = $transfer->destinationUser;
+        if ($branch === null || $source === null || $destination === null) {
+            throw ValidationException::withMessages(['transfer' => 'The branch and users must still exist to reverse this custody transfer.']);
+        }
+
+        foreach ($items as $item) {
+            $book = Book::query()->findOrFail($item->book_id);
+            $from = $this->custody($branch, $destination, $book, true);
+            if ((int) $from->quantity_on_hand < (int) $item->quantity) {
+                throw ValidationException::withMessages(['transfer' => "{$destination->name} no longer holds enough copies of {$book->title} to reverse this transfer."]);
+            }
+            $to = $this->custody($branch, $source, $book, true);
+
+            $fromBefore = (int) $from->quantity_on_hand;
+            $toBefore = (int) $to->quantity_on_hand;
+            $from->decrement('quantity_on_hand', (int) $item->quantity);
+            $to->increment('quantity_on_hand', (int) $item->quantity);
+            $this->recordCustodyMovement($book, $fromBefore, -(int) $item->quantity, $transfer, $transfer->academicYear, $performedBy, $branch, $destination, 'Transfer reversal to '.$source->name, $notes);
+            $this->recordCustodyMovement($book, $toBefore, (int) $item->quantity, $transfer, $transfer->academicYear, $performedBy, $branch, $source, 'Transfer reversal from '.$destination->name, $notes);
+        }
+    }
+
     private function makeTransfer(string $type, Branch $source, Branch $destination, ?User $sourceUser, ?User $destinationUser, ?AcademicYear $year, User $user, ?string $notes): BookTransfer
     {
         return BookTransfer::create([
@@ -125,7 +223,14 @@ final class BookTransferService
 
     private function normalise(array $items): array
     {
-        $lines = collect($items)->filter(fn (array $item) => (int) ($item['quantity'] ?? 0) > 0)->values()->all();
+        $lines = collect($items)
+            ->map(fn (array $item): array => [
+                'book_id' => (int) ($item['book_id'] ?? 0),
+                'quantity' => (int) ($item['quantity'] ?? 0),
+            ])
+            ->filter(fn (array $item): bool => $item['quantity'] > 0)
+            ->values()
+            ->all();
         if ($lines === []) {
             throw ValidationException::withMessages(['items' => 'Add at least one book and quantity.']);
         }

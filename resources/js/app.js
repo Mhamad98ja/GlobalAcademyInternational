@@ -108,6 +108,50 @@ document.querySelectorAll('[data-grade-select]').forEach((gradeSelect) => {
     filterSections();
 });
 
+const normaliseBookSearch = (value) => String(value ?? '').trim().toLocaleLowerCase();
+
+const refreshBookPicker = (searchInput) => {
+    const picker = searchInput.closest('[data-book-picker]');
+    const select = picker?.querySelector('[data-book-select]');
+    if (!select) return;
+
+    const query = normaliseBookSearch(searchInput.value);
+    const options = [...select.options].filter((option) => option.value);
+    const exactMatch = options.find((option) => (
+        normaliseBookSearch(option.dataset.bookBarcode) === query
+        || normaliseBookSearch(option.dataset.bookTitle) === query
+    ));
+
+    options.forEach((option) => {
+        const searchable = `${option.dataset.bookBarcode ?? ''} ${option.dataset.bookTitle ?? ''}`;
+        const matches = !query || normaliseBookSearch(searchable).includes(query);
+        option.hidden = !matches;
+        option.disabled = !matches;
+    });
+
+    if (exactMatch && select.value !== exactMatch.value) {
+        select.value = exactMatch.value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+};
+
+document.addEventListener('input', (event) => {
+    if (event.target.matches('[data-book-search]')) refreshBookPicker(event.target);
+});
+
+document.addEventListener('change', (event) => {
+    if (!event.target.matches('[data-book-select]')) return;
+
+    const picker = event.target.closest('[data-book-picker]');
+    const searchInput = picker?.querySelector('[data-book-search]');
+    const option = event.target.options[event.target.selectedIndex];
+    if (searchInput && option?.value) {
+        searchInput.value = `${option.dataset.bookBarcode ?? ''} — ${option.dataset.bookTitle ?? ''}`.trim();
+    }
+});
+
+document.querySelectorAll('[data-book-search]').forEach(refreshBookPicker);
+
 document.querySelectorAll('[data-supplier-purchase-form]').forEach((form) => {
     const updatePurchaseLine = (line) => {
         const bookSelect = line.querySelector('[data-purchase-book]');
@@ -153,14 +197,17 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     if (!registrationSelect || !packageSelect || !lines || !lineTemplate || !packageData || !bookData) return;
 
     const packages = JSON.parse(packageData.textContent || '[]');
-    const booksById = new Map(JSON.parse(bookData.textContent || '[]').map((book) => [String(book.id), book]));
+    const books = JSON.parse(bookData.textContent || '[]');
+    const booksById = new Map(books.map((book) => [String(book.id), book]));
     const booksByBarcode = new Map([...booksById.values()].map((book) => [String(book.barcode).toLocaleLowerCase(), book]));
+    const booksByTitle = new Map(books.map((book) => [String(book.title).toLocaleLowerCase(), book]));
     const sameId = (left, right) => String(left) === String(right);
     const refreshBookSummary = (line) => {
         const barcodeInput = line.querySelector('[data-distribution-barcode]');
         const summary = line.querySelector('[data-book-summary]');
         if (!barcodeInput || !summary) return;
-        const book = booksByBarcode.get(barcodeInput.value.trim().toLocaleLowerCase());
+        const search = barcodeInput.value.trim().toLocaleLowerCase();
+        const book = booksByBarcode.get(search) ?? booksByTitle.get(search);
         summary.textContent = book
             ? `${book.title} — ${book.available_quantity} available${Object.hasOwn(book, 'selling_price') ? `, sale ${Number(book.selling_price).toFixed(2)}` : ''}`
             : (barcodeInput.value.trim() ? 'Barcode not found' : 'Awaiting barcode scan');
@@ -282,14 +329,16 @@ document.querySelectorAll('[data-package-form]').forEach((form) => {
     const bookData = document.querySelector(form.dataset.packageBookData);
     if (!bookData) return;
 
-    const booksByBarcode = new Map(JSON.parse(bookData.textContent || '[]')
-        .map((book) => [String(book.barcode).toLocaleLowerCase(), book]));
+    const books = JSON.parse(bookData.textContent || '[]');
+    const booksByBarcode = new Map(books.map((book) => [String(book.barcode).toLocaleLowerCase(), book]));
+    const booksByTitle = new Map(books.map((book) => [String(book.title).toLocaleLowerCase(), book]));
     const refreshBookSummary = (line) => {
         const barcodeInput = line.querySelector('[data-package-barcode]');
         const summary = line.querySelector('[data-package-book-summary]');
         if (!barcodeInput || !summary) return;
 
-        const book = booksByBarcode.get(barcodeInput.value.trim().toLocaleLowerCase());
+        const search = barcodeInput.value.trim().toLocaleLowerCase();
+        const book = booksByBarcode.get(search) ?? booksByTitle.get(search);
         summary.textContent = book
             ? `${book.title} — sale ${Number(book.selling_price).toFixed(2)}`
             : (barcodeInput.value.trim() ? 'Barcode not found' : 'Awaiting barcode scan');

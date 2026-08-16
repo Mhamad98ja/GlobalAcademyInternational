@@ -150,13 +150,13 @@ class ClassBookListsController extends Controller
     private function itemsFromBarcodes(array $items): array
     {
         $resolved = collect($items)->map(function (array $item): array {
-            $barcode = trim($item['barcode']);
-            $book = Book::active()
-                ->whereRaw('LOWER(barcode) = ?', [mb_strtolower($barcode)])
-                ->first();
+            $search = trim($item['barcode']);
+            $searchTerm = mb_strtolower($search);
+            $book = Book::active()->whereRaw('LOWER(barcode) = ?', [$searchTerm])->first();
+            $book ??= Book::active()->whereRaw('LOWER(title) = ?', [$searchTerm])->first();
 
             if ($book === null) {
-                throw ValidationException::withMessages(['items' => "No active book matches barcode {$barcode}."]);
+                throw ValidationException::withMessages(['items' => "No active book matches barcode or title {$search}."]);
             }
 
             $item['book_id'] = $book->id;
@@ -166,7 +166,7 @@ class ClassBookListsController extends Controller
         })->values();
 
         if ($resolved->pluck('book_id')->unique()->count() !== $resolved->count()) {
-            throw ValidationException::withMessages(['items' => 'Scan each book barcode only once. Increase its quantity instead.']);
+            throw ValidationException::withMessages(['items' => 'Select each book only once. Increase its quantity instead.']);
         }
 
         return $resolved->all();

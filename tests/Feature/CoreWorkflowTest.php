@@ -41,7 +41,7 @@ class CoreWorkflowTest extends TestCase
     private function administrator(): User
     {
         $role = Role::create(['name'=>'super-administrator','label'=>'Super Administrator']);
-        $user = User::factory()->create(['is_active'=>true]);
+        $user = User::factory()->create(['is_active'=>true, 'is_controller_administrator' => true, 'has_all_branch_access' => true]);
         $user->roles()->attach($role);
         return $user;
     }
@@ -101,6 +101,21 @@ class CoreWorkflowTest extends TestCase
         ])->assertRedirect()->assertSessionHas('success');
 
         $this->assertDatabaseHas('book_distributions', ['student_registration_id' => $registration->id, 'distributed_by' => $user->id]);
+        $this->assertDatabaseHas('books', ['id' => $book->id, 'stock_on_hand' => 1]);
+    }
+
+    public function test_distribution_can_find_a_book_by_its_name(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $book = Book::create(['sku' => 'B-NAME', 'barcode' => 'ISBN-Name-001', 'title' => 'Book Found By Name', 'selling_price' => '10.00']);
+        app(InventoryService::class)->change($book, 2, 'opening_stock', null, $registration->academicYear, $user, 'Initial stock');
+
+        $this->actingAs($user)->post(route('distributions.store'), [
+            'student_registration_id' => $registration->id,
+            'items' => [['barcode' => 'book found by name', 'quantity' => 1]],
+        ])->assertRedirect()->assertSessionHas('success');
+
         $this->assertDatabaseHas('books', ['id' => $book->id, 'stock_on_hand' => 1]);
     }
 
@@ -312,6 +327,7 @@ class CoreWorkflowTest extends TestCase
         $user = $this->administrator();
         $registration = $this->registration($user);
         $book = Book::create(['sku' => 'B-COMBINED', 'barcode' => '978000031', 'title' => 'Combined catalogue title', 'selling_price' => '12.00', 'minimum_stock' => 1]);
+        app(InventoryService::class)->balance($book);
         $package = ClassBookList::create([
             'academic_year_id' => $registration->academic_year_id,
             'grade_id' => $registration->grade_id,
@@ -353,7 +369,7 @@ class CoreWorkflowTest extends TestCase
             'name' => 'Scanned Grade 4 package',
             'is_active' => '1',
             'items' => [[
-                'barcode' => 'package-scan-001',
+                'barcode' => 'package scanned book',
                 'quantity' => 1,
                 'price_type' => 'paid',
                 'unit_price' => '0.00',
@@ -462,7 +478,8 @@ class CoreWorkflowTest extends TestCase
             'payment_date' => '2026-09-06', 'amount' => '6.00', 'method' => 'card', 'status' => 'valid',
             'idempotency_key' => (string) Str::uuid(), 'received_by' => $user->id,
         ]);
-        Book::create(['sku' => 'B-REPORT-LOW', 'barcode' => '978000032', 'title' => 'Out of stock report title', 'selling_price' => '10.00', 'minimum_stock' => 1]);
+        $outOfStockBook = Book::create(['sku' => 'B-REPORT-LOW', 'barcode' => '978000032', 'title' => 'Out of stock report title', 'selling_price' => '10.00', 'minimum_stock' => 1]);
+        app(InventoryService::class)->balance($outOfStockBook);
         $inStockBook = Book::create(['sku' => 'B-REPORT-OK', 'barcode' => '978000033', 'title' => 'In stock report title', 'selling_price' => '10.00', 'minimum_stock' => 1]);
         app(InventoryService::class)->change($inStockBook, 3, 'opening_stock', null, $registration->academicYear, $user, 'Report test stock');
 

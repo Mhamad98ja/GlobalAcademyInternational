@@ -98,7 +98,7 @@ class User extends Authenticatable
 
     public function hasGlobalBranchAccess(): bool
     {
-        return $this->isControllerAdministrator() || $this->has_all_branch_access;
+        return $this->isControllerAdministrator();
     }
 
     public function isBranchAdministrator(?int $branchId = null): bool

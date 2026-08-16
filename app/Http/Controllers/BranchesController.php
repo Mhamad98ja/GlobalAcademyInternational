@@ -65,6 +65,7 @@ class BranchesController extends Controller
 
     public function select(Request $request, BranchContext $branches): RedirectResponse
     {
+        abort_unless($request->user()->isControllerAdministrator(), 403);
         $data = $request->validate(['branch_id' => ['required', 'integer', 'exists:branches,id']]);
         abort_unless($branches->canUse($request->user(), (int) $data['branch_id']), 403);
         session(['current_branch_id' => (int) $data['branch_id']]);

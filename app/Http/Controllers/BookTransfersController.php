@@ -38,7 +38,7 @@ class BookTransfersController extends Controller
             'branch' => $branch,
             'branches' => Branch::where('is_active', true)->whereKeyNot($branch->id)->orderBy('name')->get(),
             'users' => $branch->users()->where('is_active', true)->orderBy('name')->get(),
-            'books' => Book::active()->withBranchStock()->orderBy('title')->get(),
+            'books' => Book::active()->stockedInBranch($branch->id)->withBranchStock($branch->id)->orderBy('title')->get(),
             'years' => AcademicYear::orderByDesc('starts_on')->get(),
         ]);
     }
@@ -79,8 +79,19 @@ class BookTransfersController extends Controller
     {
         $branchId = $context->id();
         abort_unless($transfer->source_branch_id === $branchId || $transfer->destination_branch_id === $branchId, 404);
-        $transfer->load('sourceBranch', 'destinationBranch', 'sourceUser', 'destinationUser', 'academicYear', 'items.book', 'createdBy');
+        $transfer->load('sourceBranch', 'destinationBranch', 'sourceUser', 'destinationUser', 'academicYear', 'items.book', 'createdBy', 'reversedBy');
 
         return view('transfers.show', compact('transfer'));
+    }
+
+    public function reverse(Request $request, BookTransfer $transfer, BookTransferService $transfers, BranchContext $context): RedirectResponse
+    {
+        $branchId = $context->id();
+        abort_unless($transfer->source_branch_id === $branchId || $transfer->destination_branch_id === $branchId, 404);
+        $data = $request->validate(['reversal_notes' => ['nullable', 'string', 'max:3000']]);
+
+        $transfers->reverse($transfer, $request->user(), $data['reversal_notes'] ?? null);
+
+        return redirect()->route('transfers.show', $transfer)->with('success', 'Book transfer reversed and recorded in both ledgers.');
     }
 }

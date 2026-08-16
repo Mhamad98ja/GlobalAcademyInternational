@@ -472,7 +472,7 @@ class ImportBookList extends Command
         $attributes = [
             'sku' => $sku,
             'isbn' => $row['isbn'],
-            'barcode' => "IMPBK-{$token}",
+            'barcode' => $this->barcodeFor($book, $row['isbn'], $token),
             'title' => $row['title'],
             'publisher' => $row['publisher'],
             'subject' => $row['subject'],
@@ -496,6 +496,28 @@ class ImportBookList extends Command
         $updatedBooks++;
 
         return $book;
+    }
+
+    private function barcodeFor(?Book $book, ?string $isbn, string $token): string
+    {
+        $isbn = trim((string) $isbn);
+        if ($isbn === '') {
+            return "IMPBK-{$token}";
+        }
+
+        $matchingBarcode = Book::withTrashed()->where('barcode', $isbn);
+        if ($book !== null) {
+            $matchingBarcode->where('id', '!=', $book->id);
+        }
+
+        // A barcode is unique. When the workbook repeats an ISBN for separate
+        // catalogue entries, keep the first exact ISBN barcode and give each
+        // additional entry a stable internal barcode.
+        if ($matchingBarcode->doesntExist()) {
+            return $isbn;
+        }
+
+        return "IMPBK-{$token}";
     }
 
     private function combinedAudience(?string $current, string $incoming): string

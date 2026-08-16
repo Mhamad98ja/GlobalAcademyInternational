@@ -17,6 +17,15 @@ final class BranchContext
             return Branch::query()->where('code', 'MAIN')->value('id') ?? Branch::query()->value('id');
         }
 
+        $managedBranch = $user->branches()
+            ->where('is_active', true)
+            ->wherePivot('is_branch_administrator', true)
+            ->orderByDesc('branch_user.is_default')
+            ->value('branches.id');
+        if ($managedBranch) {
+            return (int) $managedBranch;
+        }
+
         $selected = session('current_branch_id');
         if ($selected && $this->canUse($user, (int) $selected)) {
             return (int) $selected;

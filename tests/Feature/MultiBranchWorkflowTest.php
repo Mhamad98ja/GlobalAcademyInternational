@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Models\AcademicYear;
 use App\Models\Book;
+use App\Models\BookTransfer;
 use App\Models\Branch;
 use App\Models\BranchBookStock;
 use App\Models\Permission;
@@ -67,7 +68,14 @@ class MultiBranchWorkflowTest extends TestCase
         BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 12]);
         BranchBookStock::create(['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 2]);
 
-        $transfer = app(BookTransferService::class)->betweenBranches($main, $north, [['book_id' => $book->id, 'quantity' => 5]], null, $user);
+        $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
+            ->post(route('transfers.store'), [
+                'transfer_type' => 'branch_to_branch',
+                'destination_branch_id' => (string) $north->id,
+                'items' => [['book_id' => (string) $book->id, 'quantity' => '5']],
+            ])->assertRedirect()->assertSessionHas('success');
+
+        $transfer = BookTransfer::query()->firstOrFail();
 
         $this->assertSame('branch_to_branch', $transfer->transfer_type);
         $this->assertMatchesRegularExpression('/^TRF-\d{8}-[A-Z0-9]{10}$/', $transfer->transfer_number);
@@ -75,6 +83,42 @@ class MultiBranchWorkflowTest extends TestCase
         $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 7]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'type' => 'branch_transfer_out', 'quantity_change' => -5]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'type' => 'branch_transfer_in', 'quantity_change' => 5]);
+    }
+
+    public function test_completed_branch_transfer_can_be_reversed_once_and_restores_branch_stock(): void
+    {
+        $user = $this->user('manager@example.test');
+        [$main, $north] = $this->branches($user);
+        $book = Book::create(['sku' => 'REVERSE-BOOK', 'barcode' => '978000096', 'title' => 'Reversible Transfer Book']);
+        BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 12]);
+        BranchBookStock::create(['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 2]);
+
+        $transfer = app(BookTransferService::class)->betweenBranches($main, $north, [['book_id' => $book->id, 'quantity' => 5]], null, $user);
+
+        $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
+            ->post(route('transfers.reverse', $transfer), ['reversal_notes' => 'Entered by mistake'])
+            ->assertRedirect(route('transfers.show', $transfer))
+            ->assertSessionHas('success');
+
+        $transfer->refresh();
+        $this->assertSame('reversed', $transfer->status);
+        $this->assertSame($user->id, $transfer->reversed_by);
+        $this->assertNotNull($transfer->reversed_at);
+        $this->assertSame('Entered by mistake', $transfer->reversal_notes);
+        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 12]);
+        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 2]);
+        $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'type' => 'branch_transfer_reversal_out', 'quantity_change' => -5]);
+        $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'type' => 'branch_transfer_reversal_in', 'quantity_change' => 5]);
+
+        $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
+            ->get(route('transfers.show', $transfer))
+            ->assertOk()
+            ->assertSee('Reversed')
+            ->assertDontSee('Reverse transfer');
+
+        $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
+            ->post(route('transfers.reverse', $transfer))
+            ->assertSessionHasErrors('transfer');
     }
 
     public function test_user_custody_assignment_and_transfer_preserve_branch_stock(): void
@@ -96,6 +140,40 @@ class MultiBranchWorkflowTest extends TestCase
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'holder_user_id' => $bob->id, 'type' => 'user_custody_transfer', 'quantity_change' => 4]);
     }
 
+    public function test_custody_transfers_can_be_reversed_when_the_recipient_still_holds_the_books(): void
+    {
+        $manager = $this->user('manager@example.test');
+        $alice = $this->user('alice@example.test');
+        $bob = $this->user('bob@example.test');
+        [$main] = $this->branches($manager, $alice, $bob);
+        $book = Book::create(['sku' => 'REVERSE-CUSTODY', 'barcode' => '978000097', 'title' => 'Reversible Custody Book']);
+        BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 10]);
+
+        $service = app(BookTransferService::class);
+        $assignment = $service->assignToUser($main, $alice, [['book_id' => $book->id, 'quantity' => 6]], null, $manager);
+        $userTransfer = $service->betweenUsers($main, $alice, $bob, [['book_id' => $book->id, 'quantity' => 4]], null, $manager);
+
+        $this->actingAs($manager)->withSession(['current_branch_id' => $main->id])
+            ->post(route('transfers.reverse', $assignment))
+            ->assertSessionHasErrors('transfer');
+
+        $this->actingAs($manager)->withSession(['current_branch_id' => $main->id])
+            ->post(route('transfers.reverse', $userTransfer))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('user_book_stocks', ['branch_id' => $main->id, 'user_id' => $alice->id, 'book_id' => $book->id, 'quantity_on_hand' => 6]);
+        $this->assertDatabaseHas('user_book_stocks', ['branch_id' => $main->id, 'user_id' => $bob->id, 'book_id' => $book->id, 'quantity_on_hand' => 0]);
+
+        $this->actingAs($manager)->withSession(['current_branch_id' => $main->id])
+            ->post(route('transfers.reverse', $assignment))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('user_book_stocks', ['branch_id' => $main->id, 'user_id' => $alice->id, 'book_id' => $book->id, 'quantity_on_hand' => 0]);
+        $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'holder_user_id' => $alice->id, 'type' => 'user_custody_transfer', 'quantity_change' => -6, 'reason' => 'Transfer reversal to branch stock']);
+    }
+
     public function test_branch_scopes_student_records_to_the_active_branch(): void
     {
         $user = $this->user('manager@example.test');
@@ -109,6 +187,58 @@ class MultiBranchWorkflowTest extends TestCase
 
         $this->actingAs($user)->withSession(['current_branch_id' => $main->id])->get(route('students.index'))->assertOk()->assertDontSee('North Student');
         $this->actingAs($user)->withSession(['current_branch_id' => $north->id])->get(route('students.index'))->assertOk()->assertSee('North Student');
+    }
+
+    public function test_branch_administrator_is_locked_to_their_branch_and_sees_only_its_stocked_books(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        $beirutAdministrator = $this->user('beirut-administrator@example.test');
+        $beirutAdministrator->update(['has_all_branch_access' => true]);
+        $main = Branch::firstOrCreate(['code' => 'MAIN'], ['name' => 'Main Branch', 'is_active' => true]);
+        $beirut = Branch::create(['code' => 'BEIRUT', 'name' => 'Beirut Branch', 'is_active' => true]);
+        $beirutAdministrator->branches()->attach([
+            $main->id => ['is_default' => true, 'is_branch_administrator' => false],
+            $beirut->id => ['is_default' => false, 'is_branch_administrator' => true],
+        ]);
+        $mainBook = Book::create(['sku' => 'MAIN-ONLY', 'barcode' => '978000094', 'title' => 'Main Only Book']);
+        $beirutBook = Book::create(['sku' => 'BEIRUT-ONLY', 'barcode' => '978000095', 'title' => 'Beirut Only Book']);
+        BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $mainBook->id, 'quantity_on_hand' => 5]);
+        BranchBookStock::create(['branch_id' => $beirut->id, 'book_id' => $beirutBook->id, 'quantity_on_hand' => 5]);
+
+        $this->actingAs($beirutAdministrator)->withSession(['current_branch_id' => $main->id])
+            ->get(route('books.index'))
+            ->assertOk()
+            ->assertSee('Beirut Only Book')
+            ->assertDontSee('Main Only Book')
+            ->assertSee('Beirut Branch')
+            ->assertDontSee('branch-switcher', false);
+        $this->actingAs($beirutAdministrator)->withSession(['current_branch_id' => $main->id])
+            ->get(route('transfers.create'))
+            ->assertOk()
+            ->assertSee('Beirut Only Book')
+            ->assertDontSee('Main Only Book');
+        $this->actingAs($beirutAdministrator)->withSession(['current_branch_id' => $main->id])
+            ->post(route('branches.select'), ['branch_id' => $main->id])
+            ->assertForbidden();
+        $this->actingAs($beirutAdministrator)->withSession(['current_branch_id' => $main->id])
+            ->get(route('books.show', $mainBook))
+            ->assertNotFound();
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('books.index'))
+            ->assertOk()
+            ->assertSee('Main Only Book')
+            ->assertDontSee('Beirut Only Book')
+            ->assertSee('branch-switcher', false);
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->post(route('branches.select'), ['branch_id' => $beirut->id])
+            ->assertRedirect();
+        $this->actingAs($controller)->withSession(['current_branch_id' => $beirut->id])
+            ->get(route('books.index'))
+            ->assertOk()
+            ->assertSee('Beirut Only Book')
+            ->assertDontSee('Main Only Book');
     }
 
     public function test_administrator_can_create_and_update_a_branch_with_user_assignments(): void
@@ -293,6 +423,7 @@ class MultiBranchWorkflowTest extends TestCase
         $main->users()->updateExistingPivot($branchAdministrator->id, ['is_branch_administrator' => true]);
         $branchUser->branches()->attach([$main->id => ['is_default' => true, 'is_branch_administrator' => false]]);
         $book = Book::create(['sku' => 'FIN-BOOK', 'barcode' => '978000092', 'title' => 'Financially Protected Book', 'selling_price' => '12.50']);
+        BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 1]);
 
         $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $main->id])
             ->post(route('admin.users.store'), [
