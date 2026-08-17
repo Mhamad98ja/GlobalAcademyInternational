@@ -2,7 +2,7 @@
 
 @section('content')
 @php($reportQuery = array_merge(request()->except('page'), ['report' => $report]))
-@php($canSelectReportRows = in_array($report, ['students', 'student_information'], true))
+@php($canSelectReportRows = $selectableReportRows ?? false)
 <div class="page-header">
     <div>
         <h1 class="page-title">Reports</h1>
@@ -11,7 +11,7 @@
     <div class="flex flex-wrap gap-2">
         <a class="btn btn-secondary" target="_blank" rel="noopener" href="{{ route('reports.print', $reportQuery) }}">Print report</a>
         @if ($canSelectReportRows)
-            <button type="button" class="btn btn-secondary" data-print-selected-students data-print-url="{{ route('reports.print') }}" data-selection-key="{{ $report === 'students' ? 'registration_ids' : 'student_ids' }}" data-report="{{ $report }}">Print selected students</button>
+            <button type="button" class="btn btn-secondary" data-print-selected-students data-print-url="{{ route('reports.print') }}" data-selection-key="{{ $selectionKey }}" data-report="{{ $report }}">Print selected records</button>
         @endif
         <a class="btn btn-primary" href="{{ route('reports.csv', $reportQuery) }}">Export CSV</a>
     </div>
@@ -170,22 +170,22 @@
 
 @if ($canSelectReportRows)
 <script>
-const selectAllStudents = document.querySelector('[data-select-all-students]');
-const selectedStudentsCount = document.querySelector('[data-selected-students-count]');
-const selectedStudentInputs = () => [...document.querySelectorAll('[data-report-row-select]')];
-const refreshSelectedStudents = () => {
-    const selected = selectedStudentInputs().filter((input) => input.checked);
-    if (selectedStudentsCount) selectedStudentsCount.textContent = `${selected.length} selected`;
-    if (selectAllStudents) selectAllStudents.checked = selected.length > 0 && selected.length === selectedStudentInputs().length;
+const selectAllReportRows = document.querySelector('[data-select-all-report-rows]');
+const selectedReportRowsCount = document.querySelector('[data-selected-report-rows-count]');
+const selectedReportRows = () => [...document.querySelectorAll('[data-report-row-select]')];
+const refreshSelectedReportRows = () => {
+    const selected = selectedReportRows().filter((input) => input.checked);
+    if (selectedReportRowsCount) selectedReportRowsCount.textContent = `${selected.length} selected`;
+    if (selectAllReportRows) selectAllReportRows.checked = selected.length > 0 && selected.length === selectedReportRows().length;
 };
-selectAllStudents?.addEventListener('change', () => {
-    selectedStudentInputs().forEach((input) => { input.checked = selectAllStudents.checked; });
-    refreshSelectedStudents();
+selectAllReportRows?.addEventListener('change', () => {
+    selectedReportRows().forEach((input) => { input.checked = selectAllReportRows.checked; });
+    refreshSelectedReportRows();
 });
-selectedStudentInputs().forEach((input) => input.addEventListener('change', refreshSelectedStudents));
+selectedReportRows().forEach((input) => input.addEventListener('change', refreshSelectedReportRows));
 document.querySelector('[data-print-selected-students]')?.addEventListener('click', (event) => {
-    const studentIds = selectedStudentInputs().filter((input) => input.checked).map((input) => input.value);
-    if (studentIds.length === 0) {
+    const selectedIds = selectedReportRows().filter((input) => input.checked).map((input) => input.value);
+    if (selectedIds.length === 0) {
         window.alert('Select at least one record to print.');
         return;
     }
@@ -196,11 +196,11 @@ document.querySelector('[data-print-selected-students]')?.addEventListener('clic
     parameters.delete(`${selectionKey}[]`);
     parameters.delete(selectionKey);
     parameters.set('report', event.currentTarget.dataset.report);
-    studentIds.forEach((studentId) => parameters.append(`${selectionKey}[]`, studentId));
+    selectedIds.forEach((selectedId) => parameters.append(`${selectionKey}[]`, selectedId));
     printUrl.search = parameters.toString();
     window.open(printUrl.toString(), '_blank', 'noopener');
 });
-refreshSelectedStudents();
+refreshSelectedReportRows();
 </script>
 @endif
 @endsection

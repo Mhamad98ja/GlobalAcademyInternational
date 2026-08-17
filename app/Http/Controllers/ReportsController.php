@@ -37,6 +37,7 @@ class ReportsController extends Controller
     public function index(Request $request): View
     {
         [$report, $rows, $filters] = $this->reportData($request);
+        $selectionKey = $this->selectionKey($report);
 
         return view('reports.index', [
             'report' => $report,
@@ -47,7 +48,8 @@ class ReportsController extends Controller
             'canViewFinancials' => $request->user()->canViewFinancials(),
             'studentInformationFields' => $this->studentInformationFields($filters),
             'studentInformationFieldOptions' => self::STUDENT_INFORMATION_FIELDS,
-            'selectableStudentRows' => in_array($report, ['students', 'student_information'], true),
+            'selectableReportRows' => $selectionKey !== null,
+            'selectionKey' => $selectionKey,
         ]);
     }
 
@@ -66,7 +68,8 @@ class ReportsController extends Controller
             'filterSummary' => $this->filterSummary($filters),
             'canViewFinancials' => $request->user()->canViewFinancials(),
             'studentInformationFields' => $this->studentInformationFields($filters),
-            'selectableStudentRows' => false,
+            'selectableReportRows' => false,
+            'selectionKey' => null,
         ]);
     }
 
@@ -191,6 +194,7 @@ class ReportsController extends Controller
                     ->whereInsensitiveLike('title', $search)
                     ->orWhereInsensitiveLike('sku', $search)
                     ->orWhereInsensitiveLike('barcode', $search)))
+                ->when($filters['book_ids'] ?? [], fn (Builder $query, array $bookIds) => $query->whereKey($bookIds))
                 ->orderBy('title'),
             'invoices' => Invoice::query()
                 ->with('student', 'createdBy')
@@ -206,6 +210,7 @@ class ReportsController extends Controller
                 ->when($filters['invoice_payment_status'] ?? null, fn (Builder $query, string $status) => $query->where('payment_status', $status))
                 ->when($filters['date_from'] ?? null, fn (Builder $query, string $date) => $query->whereDate('invoice_date', '>=', $date))
                 ->when($filters['date_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('invoice_date', '<=', $date))
+                ->when($filters['invoice_ids'] ?? [], fn (Builder $query, array $invoiceIds) => $query->whereKey($invoiceIds))
                 ->latest('invoice_date'),
             'distributions' => BookDistribution::query()
                 ->with('student', 'distributedBy', 'items')
@@ -229,6 +234,7 @@ class ReportsController extends Controller
                 ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->where('section_id', $id))
                 ->when($filters['date_from'] ?? null, fn (Builder $query, string $date) => $query->whereDate('distributed_on', '>=', $date))
                 ->when($filters['date_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('distributed_on', '<=', $date))
+                ->when($filters['distribution_ids'] ?? [], fn (Builder $query, array $distributionIds) => $query->whereKey($distributionIds))
                 ->latest('distributed_on'),
             'payments' => Payment::query()
                 ->with('student', 'invoice')
@@ -251,6 +257,7 @@ class ReportsController extends Controller
                         ->when($filters['grade_id'] ?? null, fn (Builder $invoices, int $id) => $invoices->where('grade_id', $id))
                         ->when($filters['section_id'] ?? null, fn (Builder $invoices, int $id) => $invoices->where('section_id', $id))),
                 )
+                ->when($filters['payment_ids'] ?? [], fn (Builder $query, array $paymentIds) => $query->whereKey($paymentIds))
                 ->latest('payment_date'),
             'student_information' => Student::query()
                 ->with(['registrations' => fn ($registrations) => $registrations
@@ -308,6 +315,14 @@ class ReportsController extends Controller
             'student_ids.*' => ['required', 'integer', 'distinct', 'exists:students,id'],
             'registration_ids' => ['nullable', 'array'],
             'registration_ids.*' => ['required', 'integer', 'distinct', 'exists:student_registrations,id'],
+            'book_ids' => ['nullable', 'array'],
+            'book_ids.*' => ['required', 'integer', 'distinct', 'exists:books,id'],
+            'invoice_ids' => ['nullable', 'array'],
+            'invoice_ids.*' => ['required', 'integer', 'distinct', 'exists:invoices,id'],
+            'distribution_ids' => ['nullable', 'array'],
+            'distribution_ids.*' => ['required', 'integer', 'distinct', 'exists:book_distributions,id'],
+            'payment_ids' => ['nullable', 'array'],
+            'payment_ids.*' => ['required', 'integer', 'distinct', 'exists:payments,id'],
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
             'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
@@ -323,6 +338,10 @@ class ReportsController extends Controller
         $filters['student_fields'] = array_values(array_unique($filters['student_fields'] ?? []));
         $filters['student_ids'] = array_values(array_unique(array_map('intval', $filters['student_ids'] ?? [])));
         $filters['registration_ids'] = array_values(array_unique(array_map('intval', $filters['registration_ids'] ?? [])));
+        $filters['book_ids'] = array_values(array_unique(array_map('intval', $filters['book_ids'] ?? [])));
+        $filters['invoice_ids'] = array_values(array_unique(array_map('intval', $filters['invoice_ids'] ?? [])));
+        $filters['distribution_ids'] = array_values(array_unique(array_map('intval', $filters['distribution_ids'] ?? [])));
+        $filters['payment_ids'] = array_values(array_unique(array_map('intval', $filters['payment_ids'] ?? [])));
 
         if ($request->has('student_fields_selection') && $filters['student_fields'] === []) {
             throw \Illuminate\Validation\ValidationException::withMessages([
@@ -331,6 +350,19 @@ class ReportsController extends Controller
         }
 
         return $filters;
+    }
+
+    private function selectionKey(string $report): ?string
+    {
+        return match ($report) {
+            'stock' => 'book_ids',
+            'invoices' => 'invoice_ids',
+            'distributions' => 'distribution_ids',
+            'payments' => 'payment_ids',
+            'student_information' => 'student_ids',
+            'students', 'class_sections' => 'registration_ids',
+            default => null,
+        };
     }
 
     private function normaliseReport(string $report, bool $canViewFinancials): string

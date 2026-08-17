@@ -62,6 +62,8 @@ class BookTransfersController extends Controller
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:100000'],
             'package_ids' => ['nullable', 'array', 'max:50'],
             'package_ids.*' => ['required', 'integer', 'distinct', 'exists:class_book_lists,id'],
+            'package_quantities' => ['nullable', 'array', 'max:50'],
+            'package_quantities.*' => ['required', 'integer', 'min:1', 'max:100000'],
         ]);
         $year = isset($data['academic_year_id']) ? AcademicYear::find($data['academic_year_id']) : null;
 
@@ -70,10 +72,19 @@ class BookTransfersController extends Controller
             if (empty($data['package_ids'])) {
                 throw \Illuminate\Validation\ValidationException::withMessages(['package_ids' => 'Choose at least one book package.']);
             }
-            $destination = Branch::query()->where('is_active', true)->findOrFail($data['destination_branch_id']);
-            $transfer = $packageTransfers->transferToBranch($branch, $destination, $data['package_ids'] ?? [], $year, $request->user(), $data['notes'] ?? null);
+            $packageQuantities = collect($data['package_ids'])->mapWithKeys(function ($packageId) use ($data): array {
+                $packageId = (int) $packageId;
+                $quantity = (int) ($data['package_quantities'][$packageId] ?? 0);
 
-            return redirect()->route('transfers.show', $transfer)->with('success', count($data['package_ids']).' book package(s) and all of their book quantities were transferred to '.$destination->name.'.');
+                return [$packageId => $quantity];
+            })->all();
+            if (in_array(0, $packageQuantities, true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['package_quantities' => 'Enter a quantity for every selected book package.']);
+            }
+            $destination = Branch::query()->where('is_active', true)->findOrFail($data['destination_branch_id']);
+            $transfer = $packageTransfers->transferToBranch($branch, $destination, $packageQuantities, $year, $request->user(), $data['notes'] ?? null);
+
+            return redirect()->route('transfers.show', $transfer)->with('success', count($packageQuantities).' book package(s) and their selected quantities were transferred to '.$destination->name.'.');
         }
 
         if ($data['transfer_type'] === 'branch_to_branch') {

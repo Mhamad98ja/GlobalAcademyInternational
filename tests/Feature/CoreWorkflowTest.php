@@ -160,6 +160,8 @@ class CoreWorkflowTest extends TestCase
         $this->actingAs($user)->get(route('reports.index', ['report' => 'distributions', 'search' => 'lina']))
             ->assertOk()
             ->assertSee('Distributed by')
+            ->assertSee('Print selected records')
+            ->assertSee('data-report-row-select', false)
             ->assertSee($user->name);
     }
 
@@ -490,25 +492,36 @@ class CoreWorkflowTest extends TestCase
         $this->actingAs($user)->get(route('reports.index', ['report' => 'students', 'grade_id' => $registration->grade_id]))
             ->assertOk()->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
         $this->actingAs($user)->get(route('reports.index', ['report' => 'students', 'registration_ids' => [$registration->id]]))
-            ->assertOk()->assertSee('Print selected students')->assertSee('data-report-row-select', false)->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
+            ->assertOk()->assertSee('Print selected records')->assertSee('data-report-row-select', false)->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
         $this->actingAs($user)->get(route('reports.print', ['report' => 'students', 'registration_ids' => [$registration->id]]))
             ->assertOk()->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
         $this->actingAs($user)->get(route('reports.index', ['report' => 'student_information', 'gender' => 'female']))
             ->assertOk()->assertSee('Student general information')->assertSee('03 123 456')->assertDontSee('Omar Saleh');
         $studentFieldSelection = ['full_name', 'phone'];
         $this->actingAs($user)->get(route('reports.index', ['report' => 'student_information', 'student_fields_selection' => 1, 'student_fields' => $studentFieldSelection]))
-            ->assertOk()->assertSee('Student information to include')->assertSee('Print selected students')->assertSee('data-student-select', false)->assertSee('Lina Haddad')->assertSee('03 123 456')->assertDontSee('lina@example.test');
+            ->assertOk()->assertSee('Student information to include')->assertSee('Print selected records')->assertSee('data-student-select', false)->assertSee('Lina Haddad')->assertSee('03 123 456')->assertDontSee('lina@example.test');
         $this->actingAs($user)->get(route('reports.print', ['report' => 'student_information', 'student_fields' => $studentFieldSelection, 'student_ids' => [$registration->student_id]]))
             ->assertOk()->assertSee('Lina Haddad')->assertSee('03 123 456')->assertDontSee('Omar Saleh')->assertDontSee('lina@example.test');
         $this->actingAs($user)->get(route('reports.print', ['report' => 'class_sections', 'section_id' => $registration->section_id]))
             ->assertOk()->assertSee('Students by class and section report')->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
+        $this->actingAs($user)->get(route('reports.print', ['report' => 'class_sections', 'registration_ids' => [$registration->id]]))
+            ->assertOk()->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
         $this->actingAs($user)->get(route('reports.index', ['report' => 'invoices', 'grade_id' => $registration->grade_id, 'date_from' => '2026-09-03', 'date_to' => '2026-09-03']))
             ->assertOk()->assertSee('INV-REPORT-001')->assertDontSee('INV-REPORT-002');
+        $this->actingAs($user)->get(route('reports.index', ['report' => 'invoices', 'invoice_ids' => [$invoice->id]]))
+            ->assertOk()->assertSee('Print selected records')->assertSee('data-report-row-select', false)->assertSee('INV-REPORT-001')->assertDontSee('INV-REPORT-002');
         $this->actingAs($user)->get(route('reports.print', ['report' => 'invoices', 'grade_id' => $registration->grade_id]))
+            ->assertOk()->assertSee('INV-REPORT-001')->assertDontSee('INV-REPORT-002');
+        $this->actingAs($user)->get(route('reports.print', ['report' => 'invoices', 'invoice_ids' => [$invoice->id]]))
             ->assertOk()->assertSee('INV-REPORT-001')->assertDontSee('INV-REPORT-002');
         $this->actingAs($user)->get(route('reports.index', ['report' => 'payments', 'grade_id' => $registration->grade_id, 'payment_method' => 'cash']))
             ->assertOk()->assertSee('PAY-REPORT-001')->assertDontSee('PAY-REPORT-002');
+        $paymentId = Payment::query()->where('payment_number', 'PAY-REPORT-001')->value('id');
+        $this->actingAs($user)->get(route('reports.print', ['report' => 'payments', 'payment_ids' => [$paymentId]]))
+            ->assertOk()->assertSee('PAY-REPORT-001')->assertDontSee('PAY-REPORT-002');
         $this->actingAs($user)->get(route('reports.index', ['report' => 'stock', 'stock_level' => 'out_of_stock']))
+            ->assertOk()->assertSee('Out of stock report title')->assertDontSee('In stock report title');
+        $this->actingAs($user)->get(route('reports.print', ['report' => 'stock', 'book_ids' => [$outOfStockBook->id]]))
             ->assertOk()->assertSee('Out of stock report title')->assertDontSee('In stock report title');
     }
 

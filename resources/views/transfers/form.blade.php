@@ -4,7 +4,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">New transfer</h1>
-        <p class="page-subtitle">Current branch: {{ $branch->name }}. Package transfers move every listed book quantity and mirror the package in the destination branch.</p>
+        <p class="page-subtitle">Current branch: {{ $branch->name }}. Choose how many of each package to move; every included book is multiplied by that quantity.</p>
     </div>
     <a class="btn btn-secondary" href="{{ route('transfers.index') }}">Back</a>
 </div>
@@ -51,14 +51,26 @@
         </div>
 
         <div class="hidden" data-package-fields>
-            <label class="form-label" for="transfer-packages">Book packages *</label>
-            <select id="transfer-packages" name="package_ids[]" multiple size="6" data-package-select>
-                @foreach($packages as $package)
-                    <option value="{{ $package->id }}" @selected(in_array($package->id, old('package_ids', [])))>{{ $package->name }} - {{ $package->academicYear?->name }} - {{ $package->grade?->name }}{{ $package->section ? '. '.$package->section->name : '' }} ({{ $package->items->count() }} books)</option>
-                @endforeach
-            </select>
-            <p class="mt-1 text-xs text-slate-500">Select one or more packages. Every listed book quantity will be deducted from this branch and added to the destination branch, and the package setup and prices will be mirrored there.</p>
+            <label class="form-label">Book packages and quantities *</label>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>Transfer</th><th>Package</th><th>Books in each package</th><th>Package quantity</th></tr></thead>
+                    <tbody>
+                        @foreach($packages as $package)
+                            @php($isSelected = in_array($package->id, old('package_ids', [])))
+                            <tr data-package-row>
+                                <td><label class="flex items-center gap-2"><input type="checkbox" name="package_ids[]" value="{{ $package->id }}" data-package-choice @checked($isSelected)><span class="sr-only">Transfer {{ $package->name }}</span></label></td>
+                                <td>{{ $package->name }} <span class="text-xs text-slate-500">{{ $package->academicYear?->name }} · {{ $package->grade?->name }}{{ $package->section ? '. '.$package->section->name : '' }}</span></td>
+                                <td>{{ $package->items->count() }}</td>
+                                <td><input type="number" name="package_quantities[{{ $package->id }}]" min="1" max="100000" value="{{ old('package_quantities.'.$package->id, 1) }}" data-package-quantity aria-label="Quantity of {{ $package->name }} packages"></td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">For example, quantity 10 for Grade 1 sends 10 times every book in the Grade 1 package. The package setup is also mirrored in the destination branch.</p>
             @error('package_ids')<p class="form-error">{{ $message }}</p>@enderror
+            @error('package_quantities')<p class="form-error">{{ $message }}</p>@enderror
         </div>
 
         <div data-book-fields>
@@ -97,7 +109,6 @@ const branchFields = document.querySelector('[data-branch-fields]');
 const userFields = document.querySelector('[data-user-fields]');
 const sourceUser = document.querySelector('[data-source-user]');
 const packageFields = document.querySelector('[data-package-fields]');
-const packageSelect = document.querySelector('[data-package-select]');
 const bookFields = document.querySelector('[data-book-fields]');
 const lines = document.querySelector('[data-transfer-lines]');
 const template = document.getElementById('transfer-line-template');
@@ -110,10 +121,18 @@ function swap() {
     userFields.classList.toggle('hidden', isBranchTransfer);
     sourceUser.classList.toggle('hidden', type === 'branch_to_user');
     packageFields.classList.toggle('hidden', !isPackageTransfer);
-    packageSelect.disabled = !isPackageTransfer;
-    packageSelect.required = isPackageTransfer;
+    refreshPackageInputs(isPackageTransfer);
     bookFields.classList.toggle('hidden', isPackageTransfer);
     bookFields.querySelectorAll('input, select').forEach((field) => { field.disabled = isPackageTransfer; });
+}
+
+function refreshPackageInputs(isPackageTransfer = kind.value === 'package_to_branch') {
+    document.querySelectorAll('[data-package-choice]').forEach((choice) => {
+        const quantity = choice.closest('[data-package-row]').querySelector('[data-package-quantity]');
+        choice.disabled = !isPackageTransfer;
+        quantity.disabled = !isPackageTransfer || !choice.checked;
+        quantity.required = isPackageTransfer && choice.checked;
+    });
 }
 
 function names() {
@@ -124,6 +143,7 @@ function names() {
 }
 
 kind.addEventListener('change', swap);
+document.querySelectorAll('[data-package-choice]').forEach((choice) => choice.addEventListener('change', () => refreshPackageInputs()));
 document.querySelector('[data-add-line]').addEventListener('click', () => { lines.append(template.content.cloneNode(true)); names(); });
 lines.addEventListener('click', (event) => {
     if (event.target.matches('[data-remove-line]') && lines.children.length > 1) {

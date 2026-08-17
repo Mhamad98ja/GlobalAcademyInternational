@@ -23,15 +23,21 @@ final class ClassBookListTransferService
      * Transfer every book quantity in the selected packages, then mirror the
      * package definitions in the destination branch.
      *
-     * @param list<int> $packageIds
+     * @param array<int, int> $packageQuantities package ID => number of packages to transfer
      */
-    public function transferToBranch(Branch $source, Branch $destination, array $packageIds, ?AcademicYear $year, User $user, ?string $notes = null): BookTransfer
+    public function transferToBranch(Branch $source, Branch $destination, array $packageQuantities, ?AcademicYear $year, User $user, ?string $notes = null): BookTransfer
     {
         if ($source->is($destination)) {
             throw ValidationException::withMessages(['destination_branch_id' => 'Choose a different destination branch.']);
         }
 
-        $packageIds = array_values(array_unique(array_map('intval', $packageIds)));
+        $packageQuantities = collect($packageQuantities)
+            ->mapWithKeys(fn ($quantity, $packageId): array => [(int) $packageId => (int) $quantity])
+            ->all();
+        if ($packageQuantities === [] || collect($packageQuantities)->contains(fn (int $quantity): bool => $quantity < 1)) {
+            throw ValidationException::withMessages(['package_quantities' => 'Enter a quantity of at least one for every selected book package.']);
+        }
+        $packageIds = array_keys($packageQuantities);
         $packages = ClassBookList::query()
             ->with('items')
             ->whereIn('id', $packageIds)
@@ -41,9 +47,12 @@ final class ClassBookListTransferService
             throw ValidationException::withMessages(['package_ids' => 'Choose only packages from the current branch.']);
         }
 
-        return DB::transaction(function () use ($packages, $source, $destination, $year, $user, $notes): BookTransfer {
+        return DB::transaction(function () use ($packages, $packageQuantities, $source, $destination, $year, $user, $notes): BookTransfer {
             $items = $packages
-                ->flatMap(fn (ClassBookList $package) => $package->items)
+                ->flatMap(fn (ClassBookList $package) => $package->items->map(fn ($item): array => [
+                    'book_id' => $item->book_id,
+                    'quantity' => $item->quantity * $packageQuantities[$package->id],
+                ]))
                 ->groupBy('book_id')
                 ->map(fn (Collection $packageItems, int|string $bookId): array => [
                     'book_id' => (int) $bookId,
@@ -53,7 +62,7 @@ final class ClassBookListTransferService
                 ->all();
             $transfer = $this->bookTransfers->betweenBranches($source, $destination, $items, $year, $user, $notes);
 
-            $packages->each(function (ClassBookList $package) use ($destination, $user, $notes, $transfer): void {
+            $packages->each(function (ClassBookList $package) use ($packageQuantities, $destination, $user, $notes, $transfer): void {
                 $target = ClassBookList::withoutGlobalScopes()
                     ->where('branch_id', $destination->id)
                     ->where('academic_year_id', $package->academic_year_id)
@@ -93,8 +102,9 @@ final class ClassBookListTransferService
                     'destination_branch' => $destination->name,
                     'destination_package_id' => $target->id,
                     'destination_package_action' => $wasCreated ? 'created' : 'updated',
+                    'package_quantity' => $packageQuantities[$package->id],
                     'item_count' => $package->items->count(),
-                    'book_quantity' => $package->items->sum('quantity'),
+                    'book_quantity' => $package->items->sum('quantity') * $packageQuantities[$package->id],
                     'performed_by' => $user->id,
                 ], $notes);
             });
