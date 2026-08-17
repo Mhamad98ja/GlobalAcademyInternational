@@ -31,7 +31,14 @@
         </table>
     @elseif ($report === 'student_information')
         <table class="data-table">
-            <thead><tr>@foreach ($studentInformationFields as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+            <thead>
+                <tr>
+                    @if ($selectableStudentRows ?? false)
+                        <th><label class="flex items-center gap-2 normal-case tracking-normal"><input type="checkbox" data-select-all-students aria-label="Select all students">Select</label></th>
+                    @endif
+                    @foreach ($studentInformationFields as $label)<th>{{ $label }}</th>@endforeach
+                </tr>
+            </thead>
             <tbody>
                 @foreach ($rows as $student)
                     @php($registration = $student->registrations->first())
@@ -46,10 +53,16 @@
                         'enrollment_date' => $student->enrollment_date?->format('d M Y'),
                         'latest_class' => $registration ? collect([$registration->academicYear?->name, $registration->grade?->name, $registration->section?->name])->filter()->implode(' · ') : null,
                     ])
-                    <tr>@foreach ($studentInformationFields as $field => $label)<td>{{ $studentInformationValues[$field] ?: '—' }}</td>@endforeach</tr>
+                    <tr>
+                        @if ($selectableStudentRows ?? false)
+                            <td><label class="flex items-center gap-2"><input type="checkbox" value="{{ $student->id }}" data-student-select @checked(in_array($student->id, $filters['student_ids'] ?? [], true))><span class="sr-only">Select {{ $student->full_name }}</span></label></td>
+                        @endif
+                        @foreach ($studentInformationFields as $field => $label)<td>{{ $studentInformationValues[$field] ?: '—' }}</td>@endforeach
+                    </tr>
                 @endforeach
             </tbody>
         </table>
+        @if ($selectableStudentRows ?? false)<div class="border-t border-slate-200 px-4 py-3 text-sm text-slate-600"><span data-selected-students-count>0 selected</span><span class="ml-2 text-xs text-slate-500">Select records, then choose “Print selected students”.</span></div>@endif
     @elseif ($report === 'class_sections')
         <table class="data-table">
             <thead><tr><th>Academic year</th><th>Grade</th><th>Section</th><th>Student no.</th><th>Registration no.</th><th>Student</th><th>Gender</th><th>Status</th><th>Left school on</th></tr></thead>

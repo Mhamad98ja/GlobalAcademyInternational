@@ -9,6 +9,7 @@
     </div>
     <div class="flex flex-wrap gap-2">
         <a class="btn btn-secondary" target="_blank" rel="noopener" href="{{ route('reports.print', $reportQuery) }}">Print report</a>
+        @if ($report === 'student_information')<button type="button" class="btn btn-secondary" data-print-selected-students data-print-url="{{ route('reports.print') }}">Print selected students</button>@endif
         <a class="btn btn-primary" href="{{ route('reports.csv', $reportQuery) }}">Export CSV</a>
     </div>
 </div>
@@ -163,4 +164,39 @@
     </div>
     @include('reports.table')
 </section>
+
+@if ($report === 'student_information')
+<script>
+const selectAllStudents = document.querySelector('[data-select-all-students]');
+const selectedStudentsCount = document.querySelector('[data-selected-students-count]');
+const selectedStudentInputs = () => [...document.querySelectorAll('[data-student-select]')];
+const refreshSelectedStudents = () => {
+    const selected = selectedStudentInputs().filter((input) => input.checked);
+    if (selectedStudentsCount) selectedStudentsCount.textContent = `${selected.length} selected`;
+    if (selectAllStudents) selectAllStudents.checked = selected.length > 0 && selected.length === selectedStudentInputs().length;
+};
+selectAllStudents?.addEventListener('change', () => {
+    selectedStudentInputs().forEach((input) => { input.checked = selectAllStudents.checked; });
+    refreshSelectedStudents();
+});
+selectedStudentInputs().forEach((input) => input.addEventListener('change', refreshSelectedStudents));
+document.querySelector('[data-print-selected-students]')?.addEventListener('click', (event) => {
+    const studentIds = selectedStudentInputs().filter((input) => input.checked).map((input) => input.value);
+    if (studentIds.length === 0) {
+        window.alert('Select at least one student to print.');
+        return;
+    }
+    const printUrl = new URL(event.currentTarget.dataset.printUrl, window.location.origin);
+    const parameters = new URLSearchParams(window.location.search);
+    parameters.delete('page');
+    parameters.delete('student_ids[]');
+    parameters.delete('student_ids');
+    parameters.set('report', 'student_information');
+    studentIds.forEach((studentId) => parameters.append('student_ids[]', studentId));
+    printUrl.search = parameters.toString();
+    window.open(printUrl.toString(), '_blank', 'noopener');
+});
+refreshSelectedStudents();
+</script>
+@endif
 @endsection
