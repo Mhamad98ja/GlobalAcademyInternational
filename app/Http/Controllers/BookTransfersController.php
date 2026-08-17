@@ -71,9 +71,9 @@ class BookTransfersController extends Controller
                 throw \Illuminate\Validation\ValidationException::withMessages(['package_ids' => 'Choose at least one book package.']);
             }
             $destination = Branch::query()->where('is_active', true)->findOrFail($data['destination_branch_id']);
-            $copiedPackages = $packageTransfers->copyToBranch($branch, $destination, $data['package_ids'] ?? [], $request->user(), $data['notes'] ?? null);
+            $transfer = $packageTransfers->transferToBranch($branch, $destination, $data['package_ids'] ?? [], $year, $request->user(), $data['notes'] ?? null);
 
-            return redirect()->route('books.index', ['tab' => 'packages'])->with('success', $copiedPackages->count().' book package(s) copied to '.$destination->name.'. Transfer physical book stock separately when needed.');
+            return redirect()->route('transfers.show', $transfer)->with('success', count($data['package_ids']).' book package(s) and all of their book quantities were transferred to '.$destination->name.'.');
         }
 
         if ($data['transfer_type'] === 'branch_to_branch') {

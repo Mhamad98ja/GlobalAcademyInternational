@@ -4,7 +4,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">New transfer</h1>
-        <p class="page-subtitle">Current branch: {{ $branch->name }}. Book transfers move physical stock; package transfers copy the package configuration.</p>
+        <p class="page-subtitle">Current branch: {{ $branch->name }}. Package transfers move every listed book quantity and mirror the package in the destination branch.</p>
     </div>
     <a class="btn btn-secondary" href="{{ route('transfers.index') }}">Back</a>
 </div>
@@ -17,7 +17,7 @@
                 <label class="form-label" for="transfer-type">Transfer type *</label>
                 <select name="transfer_type" id="transfer-type">
                     <option value="branch_to_branch" @selected(old('transfer_type', 'branch_to_branch') === 'branch_to_branch')>Books: branch to branch</option>
-                    <option value="package_to_branch" @selected(old('transfer_type') === 'package_to_branch')>Packages: copy to another branch</option>
+                    <option value="package_to_branch" @selected(old('transfer_type') === 'package_to_branch')>Packages: transfer stock to another branch</option>
                     <option value="branch_to_user" @selected(old('transfer_type') === 'branch_to_user')>Books: branch stock to user custody</option>
                     <option value="user_to_user" @selected(old('transfer_type') === 'user_to_user')>Books: user to user custody</option>
                 </select>
@@ -57,7 +57,7 @@
                     <option value="{{ $package->id }}" @selected(in_array($package->id, old('package_ids', [])))>{{ $package->name }} - {{ $package->academicYear?->name }} - {{ $package->grade?->name }}{{ $package->section ? '. '.$package->section->name : '' }} ({{ $package->items->count() }} books)</option>
                 @endforeach
             </select>
-            <p class="mt-1 text-xs text-slate-500">Select one or more packages. The destination receives the same package setup and prices; book stock is not moved by this action.</p>
+            <p class="mt-1 text-xs text-slate-500">Select one or more packages. Every listed book quantity will be deducted from this branch and added to the destination branch, and the package setup and prices will be mirrored there.</p>
             @error('package_ids')<p class="form-error">{{ $message }}</p>@enderror
         </div>
 

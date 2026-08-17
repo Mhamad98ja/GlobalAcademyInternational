@@ -90,7 +90,7 @@ class MultiBranchWorkflowTest extends TestCase
         $this->assertSame(['from' => 'Main Branch', 'to' => 'North Branch'], $movement->transferEndpoints());
     }
 
-    public function test_book_packages_can_be_copied_to_another_branch_without_moving_stock(): void
+    public function test_book_packages_transfer_their_book_quantities_to_another_branch(): void
     {
         $user = $this->user('manager@example.test');
         [$main, $north] = $this->branches($user);
@@ -111,14 +111,18 @@ class MultiBranchWorkflowTest extends TestCase
                 'package_ids' => [$package->id],
                 'notes' => 'Use the same starter package',
             ])
-            ->assertRedirect(route('books.index', ['tab' => 'packages']))
+            ->assertRedirect()
             ->assertSessionHas('success');
 
+        $packageTransfer = BookTransfer::query()->latest('id')->firstOrFail();
+        $this->assertSame('branch_to_branch', $packageTransfer->transfer_type);
         $copiedPackage = ClassBookList::withoutGlobalScopes()->where('branch_id', $north->id)->where('name', 'Grade 1 starter package')->firstOrFail();
         $this->assertSame($year->id, $copiedPackage->academic_year_id);
         $this->assertDatabaseHas('class_book_list_items', ['class_book_list_id' => $copiedPackage->id, 'book_id' => $book->id, 'quantity' => 2]);
-        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 8]);
-        $this->assertDatabaseMissing('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id]);
+        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 6]);
+        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 2]);
+        $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'book_id' => $book->id, 'type' => 'branch_transfer_out', 'quantity_change' => -2]);
+        $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'book_id' => $book->id, 'type' => 'branch_transfer_in', 'quantity_change' => 2]);
     }
 
     public function test_completed_branch_transfer_can_be_reversed_once_and_restores_branch_stock(): void
