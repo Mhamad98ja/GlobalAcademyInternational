@@ -87,6 +87,6 @@
         </table>
     </div>
 
-    <div class="border-t border-slate-200 px-4 py-3">{{ $students->links() }}</div>
+    <div class="border-t border-slate-200 px-4 py-3"><x-pagination :paginator="$students" /></div>
 </section>
 @endsection

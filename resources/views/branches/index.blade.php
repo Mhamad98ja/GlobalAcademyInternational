@@ -35,7 +35,7 @@
             <form method="POST" action="{{ route('branches.update', $branch) }}" class="panel" data-submit-lock>
                 @csrf
                 @method('PUT')
-                <div class="panel-header"><h2 class="panel-title">{{ $branch->name }}</h2><span class="badge {{ $branch->is_active ? 'badge-green' : 'badge-red' }}">{{ $branch->is_active ? 'Active' : 'Inactive' }}</span></div>
+                <div class="panel-header"><div><h2 class="panel-title">{{ $branch->name }}</h2><p class="mt-1 text-xs text-slate-500">Total students: {{ number_format($branch->students_count) }} · Assigned users: {{ number_format($branch->users_count) }}</p></div><span class="badge {{ $branch->is_active ? 'badge-green' : 'badge-red' }}">{{ $branch->is_active ? 'Active' : 'Inactive' }}</span></div>
                 <div class="grid gap-3 p-5 md:grid-cols-2">
                     <div><label class="form-label">Code *</label><input name="code" required value="{{ $branch->code }}" @readonly(strtoupper($branch->code) === 'MAIN')></div>
                     <div><label class="form-label">Name *</label><input name="name" required value="{{ $branch->name }}"></div>

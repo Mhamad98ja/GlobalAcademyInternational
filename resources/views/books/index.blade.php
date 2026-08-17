@@ -49,7 +49,7 @@
                 </tbody>
             </table>
         </div>
-        <div class="border-t border-slate-200 px-4 py-3">{{ $lists->links() }}</div>
+        <div class="border-t border-slate-200 px-4 py-3"><x-pagination :paginator="$lists" /></div>
     @else
         <div class="table-wrap">
             <table class="data-table min-w-[760px]">
@@ -70,7 +70,7 @@
                 </tbody>
             </table>
         </div>
-        <div class="border-t border-slate-200 px-4 py-3">{{ $books->links() }}</div>
+        <div class="border-t border-slate-200 px-4 py-3"><x-pagination :paginator="$books" /></div>
     @endif
 </section>
 @endsection

@@ -9,6 +9,7 @@ use App\Models\Book;
 use App\Models\BookTransfer;
 use App\Models\Branch;
 use App\Models\BranchBookStock;
+use App\Models\ClassBookList;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SchoolLevel;
@@ -16,6 +17,7 @@ use App\Models\Grade;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentRegistration;
+use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\UserBookStock;
 use App\Services\BookTransferService;
@@ -83,6 +85,40 @@ class MultiBranchWorkflowTest extends TestCase
         $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 7]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'type' => 'branch_transfer_out', 'quantity_change' => -5]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'type' => 'branch_transfer_in', 'quantity_change' => 5]);
+
+        $movement = StockMovement::withoutGlobalScopes()->where('type', 'branch_transfer_out')->firstOrFail();
+        $this->assertSame(['from' => 'Main Branch', 'to' => 'North Branch'], $movement->transferEndpoints());
+    }
+
+    public function test_book_packages_can_be_copied_to_another_branch_without_moving_stock(): void
+    {
+        $user = $this->user('manager@example.test');
+        [$main, $north] = $this->branches($user);
+        $year = AcademicYear::create(['name' => '2026-2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'open', 'created_by' => $user->id]);
+        $level = SchoolLevel::create(['name' => 'Primary']);
+        $grade = Grade::create(['school_level_id' => $level->id, 'name' => 'Grade 1']);
+        $book = Book::create(['sku' => 'PACKAGE-BOOK', 'barcode' => '978000098', 'title' => 'Package Book']);
+        BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 8]);
+        $package = new ClassBookList(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => 'Grade 1 starter package', 'is_active' => true]);
+        $package->branch_id = $main->id;
+        $package->save();
+        $package->items()->create(['book_id' => $book->id, 'quantity' => 2, 'is_mandatory' => true, 'price_type' => 'paid', 'unit_price' => '0.00']);
+
+        $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
+            ->post(route('transfers.store'), [
+                'transfer_type' => 'package_to_branch',
+                'destination_branch_id' => $north->id,
+                'package_ids' => [$package->id],
+                'notes' => 'Use the same starter package',
+            ])
+            ->assertRedirect(route('books.index', ['tab' => 'packages']))
+            ->assertSessionHas('success');
+
+        $copiedPackage = ClassBookList::withoutGlobalScopes()->where('branch_id', $north->id)->where('name', 'Grade 1 starter package')->firstOrFail();
+        $this->assertSame($year->id, $copiedPackage->academic_year_id);
+        $this->assertDatabaseHas('class_book_list_items', ['class_book_list_id' => $copiedPackage->id, 'book_id' => $book->id, 'quantity' => 2]);
+        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 8]);
+        $this->assertDatabaseMissing('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id]);
     }
 
     public function test_completed_branch_transfer_can_be_reversed_once_and_restores_branch_stock(): void

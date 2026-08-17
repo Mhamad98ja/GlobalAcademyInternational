@@ -17,10 +17,23 @@ use App\Models\SystemSetting;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\StreamedResponse;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ReportsController extends Controller
 {
+    private const STUDENT_INFORMATION_FIELDS = [
+        'student_number' => 'Student no.',
+        'registration_number' => 'Registration no.',
+        'full_name' => 'Student',
+        'gender' => 'Gender',
+        'date_of_birth' => 'Date of birth',
+        'phone' => 'Phone',
+        'email' => 'Email',
+        'enrollment_date' => 'Enrollment',
+        'latest_class' => 'Latest class',
+    ];
+
     public function index(Request $request): View
     {
         [$report, $rows, $filters] = $this->reportData($request);
@@ -32,6 +45,8 @@ class ReportsController extends Controller
             'years' => AcademicYear::orderByDesc('starts_on')->get(),
             'grades' => Grade::with('sections')->orderBy('sort_order')->get(),
             'canViewFinancials' => $request->user()->canViewFinancials(),
+            'studentInformationFields' => $this->studentInformationFields($filters),
+            'studentInformationFieldOptions' => self::STUDENT_INFORMATION_FIELDS,
         ]);
     }
 
@@ -49,6 +64,7 @@ class ReportsController extends Controller
             'school' => $school,
             'filterSummary' => $this->filterSummary($filters),
             'canViewFinancials' => $request->user()->canViewFinancials(),
+            'studentInformationFields' => $this->studentInformationFields($filters),
         ]);
     }
 
@@ -118,20 +134,12 @@ class ReportsController extends Controller
                     ]);
                 }
             } elseif ($report === 'student_information') {
-                fputcsv($output, ['Student number', 'Registration number', 'Student', 'Gender', 'Date of birth', 'Phone', 'Email', 'Enrollment date', 'Latest class']);
+                $studentInformationFields = $this->studentInformationFields($filters);
+                fputcsv($output, array_values($studentInformationFields));
                 foreach ($query->lazy() as $student) {
                     $registration = $student->registrations->first();
-                    fputcsv($output, [
-                        $student->student_number,
-                        $student->registration_number,
-                        $student->full_name,
-                        $student->gender ? (string) str($student->gender)->headline() : '',
-                        $student->date_of_birth?->format('Y-m-d'),
-                        $student->phone,
-                        $student->email,
-                        $student->enrollment_date?->format('Y-m-d'),
-                        $registration ? trim(implode(' ', array_filter([$registration->academicYear?->name, $registration->grade?->name, $registration->section?->name]))) : '',
-                    ]);
+                    $row = $this->studentInformationRow($student, $registration);
+                    fputcsv($output, array_values(array_intersect_key($row, $studentInformationFields)));
                 }
             } else {
                 fputcsv($output, $report === 'class_sections'
@@ -287,9 +295,11 @@ class ReportsController extends Controller
     /** @return array<string, mixed> */
     private function filters(Request $request): array
     {
-        return $request->validate([
+        $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
             'gender' => ['nullable', 'in:male,female'],
+            'student_fields' => ['nullable', 'array'],
+            'student_fields.*' => ['required', 'string', Rule::in(array_keys(self::STUDENT_INFORMATION_FIELDS))],
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
             'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
@@ -301,6 +311,16 @@ class ReportsController extends Controller
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
         ]);
+
+        $filters['student_fields'] = array_values(array_unique($filters['student_fields'] ?? []));
+
+        if ($request->has('student_fields_selection') && $filters['student_fields'] === []) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'student_fields' => 'Select at least one student information field.',
+            ]);
+        }
+
+        return $filters;
     }
 
     private function normaliseReport(string $report, bool $canViewFinancials): string
@@ -325,6 +345,7 @@ class ReportsController extends Controller
         return array_values(array_filter([
             isset($filters['search']) ? 'Search: '.$filters['search'] : null,
             isset($filters['gender']) ? 'Gender: '.str($filters['gender'])->headline() : null,
+            isset($filters['student_fields']) && $filters['student_fields'] !== [] ? 'Student fields: '.implode(', ', $this->studentInformationFields($filters)) : null,
             $academicYear ? 'Academic year: '.$academicYear->name : null,
             $grade ? 'Grade: '.$grade->name : null,
             $section ? 'Section: '.$section->name : null,
@@ -336,5 +357,34 @@ class ReportsController extends Controller
             isset($filters['date_from']) ? 'From: '.$filters['date_from'] : null,
             isset($filters['date_to']) ? 'To: '.$filters['date_to'] : null,
         ]));
+    }
+
+    /** @param array<string, mixed> $filters
+     *  @return array<string, string>
+     */
+    private function studentInformationFields(array $filters): array
+    {
+        $selected = $filters['student_fields'] ?? [];
+        if ($selected === []) {
+            $selected = array_keys(self::STUDENT_INFORMATION_FIELDS);
+        }
+
+        return array_intersect_key(self::STUDENT_INFORMATION_FIELDS, array_flip($selected));
+    }
+
+    /** @return array<string, string|null> */
+    private function studentInformationRow(Student $student, ?StudentRegistration $registration): array
+    {
+        return [
+            'student_number' => $student->student_number,
+            'registration_number' => $student->registration_number,
+            'full_name' => $student->full_name,
+            'gender' => $student->gender ? (string) str($student->gender)->headline() : null,
+            'date_of_birth' => $student->date_of_birth?->format('Y-m-d'),
+            'phone' => $student->phone,
+            'email' => $student->email,
+            'enrollment_date' => $student->enrollment_date?->format('Y-m-d'),
+            'latest_class' => $registration ? trim(implode(' ', array_filter([$registration->academicYear?->name, $registration->grade?->name, $registration->section?->name]))) : null,
+        ];
     }
 }

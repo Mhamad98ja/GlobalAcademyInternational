@@ -56,6 +56,17 @@
                         <option value="female" @selected(($filters['gender'] ?? '') === 'female')>Female</option>
                     </select>
                 </div>
+                <fieldset class="md:col-span-2 xl:col-span-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <input type="hidden" name="student_fields_selection" value="1">
+                    <legend class="px-1 text-sm font-medium text-slate-700">Student information to include</legend>
+                    <p class="mb-2 text-xs text-slate-500">Choose the columns for the report, printout, and CSV export.</p>
+                    <div class="flex flex-wrap gap-x-4 gap-y-2">
+                        @foreach ($studentInformationFieldOptions as $field => $label)
+                            <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="student_fields[]" value="{{ $field }}" @checked(in_array($field, $filters['student_fields'] ?? array_keys($studentInformationFieldOptions), true))>{{ $label }}</label>
+                        @endforeach
+                    </div>
+                    @error('student_fields')<p class="form-error">{{ $message }}</p>@enderror
+                </fieldset>
             @else
                 <div>
                     <label class="form-label" for="report-search">{{ $report === 'invoices' ? 'Search invoices or students' : ($report === 'distributions' ? ($canViewFinancials ? 'Search distributions, invoices or students' : 'Search distributions or students') : ($report === 'payments' ? 'Search payments, invoices or students' : 'Search students')) }}</label>

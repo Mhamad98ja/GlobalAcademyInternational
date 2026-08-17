@@ -30,7 +30,7 @@
 ])
 @foreach($nav as [$route,$label,$permission,$icon])
     @if($signedInUser->hasPermission($permission))
-        <a href="{{ route($route) }}" class="sidebar-link {{ request()->routeIs(str_replace('.index','.*',$route)) || request()->routeIs($route) || ($route === 'books.index' && request()->routeIs('class-lists.*')) ? 'active' : '' }}" aria-label="{{ __($label) }}" title="{{ __($label) }}">
+        <a href="{{ route($route) }}" class="sidebar-link {{ $route === 'books.index' ? 'mt-2' : '' }} {{ request()->routeIs(str_replace('.index','.*',$route)) || request()->routeIs($route) || ($route === 'books.index' && request()->routeIs('class-lists.*')) ? 'active' : '' }}" aria-label="{{ __($label) }}" title="{{ __($label) }}">
             <span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon :name="$icon" /></span><span class="sidebar-link-label">{{ __($label) }}</span>
         </a>
     @endif

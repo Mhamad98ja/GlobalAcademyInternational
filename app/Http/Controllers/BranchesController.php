@@ -22,7 +22,7 @@ class BranchesController extends Controller
         $users = \App\Models\User::query()->with('roles')->where('is_active', true)->orderBy('name')->get();
 
         return view('branches.index', [
-            'branches' => Branch::with('users')->withCount('users')->orderBy('name')->get(),
+            'branches' => Branch::with('users')->withCount('users', 'students')->orderBy('name')->get(),
             'users' => $users,
             'controllerAdministrator' => \App\Models\User::query()->where('is_controller_administrator', true)->first(),
         ]);
