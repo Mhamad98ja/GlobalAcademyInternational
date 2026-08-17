@@ -47,7 +47,7 @@ class ReportsController extends Controller
             'canViewFinancials' => $request->user()->canViewFinancials(),
             'studentInformationFields' => $this->studentInformationFields($filters),
             'studentInformationFieldOptions' => self::STUDENT_INFORMATION_FIELDS,
-            'selectableStudentRows' => $report === 'student_information',
+            'selectableStudentRows' => in_array($report, ['students', 'student_information'], true),
         ]);
     }
 
@@ -286,6 +286,7 @@ class ReportsController extends Controller
             ->when($filters['grade_id'] ?? null, fn (Builder $query, int $id) => $query->where('grade_id', $id))
             ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->where('section_id', $id))
             ->when($filters['registration_status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when($filters['registration_ids'] ?? [], fn (Builder $query, array $registrationIds) => $query->whereKey($registrationIds))
             ->when(! $classList && ($filters['date_from'] ?? null), fn (Builder $query) => $query->whereDate('registered_on', '>=', $filters['date_from']))
             ->when(! $classList && ($filters['date_to'] ?? null), fn (Builder $query) => $query->whereDate('registered_on', '<=', $filters['date_to']))
             ->when($classList, fn (Builder $query) => $query
@@ -305,6 +306,8 @@ class ReportsController extends Controller
             'student_fields.*' => ['required', 'string', Rule::in(array_keys(self::STUDENT_INFORMATION_FIELDS))],
             'student_ids' => ['nullable', 'array'],
             'student_ids.*' => ['required', 'integer', 'distinct', 'exists:students,id'],
+            'registration_ids' => ['nullable', 'array'],
+            'registration_ids.*' => ['required', 'integer', 'distinct', 'exists:student_registrations,id'],
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
             'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
@@ -319,6 +322,7 @@ class ReportsController extends Controller
 
         $filters['student_fields'] = array_values(array_unique($filters['student_fields'] ?? []));
         $filters['student_ids'] = array_values(array_unique(array_map('intval', $filters['student_ids'] ?? [])));
+        $filters['registration_ids'] = array_values(array_unique(array_map('intval', $filters['registration_ids'] ?? [])));
 
         if ($request->has('student_fields_selection') && $filters['student_fields'] === []) {
             throw \Illuminate\Validation\ValidationException::withMessages([

@@ -2,6 +2,7 @@
 
 @section('content')
 @php($reportQuery = array_merge(request()->except('page'), ['report' => $report]))
+@php($canSelectReportRows = in_array($report, ['students', 'student_information'], true))
 <div class="page-header">
     <div>
         <h1 class="page-title">Reports</h1>
@@ -9,7 +10,9 @@
     </div>
     <div class="flex flex-wrap gap-2">
         <a class="btn btn-secondary" target="_blank" rel="noopener" href="{{ route('reports.print', $reportQuery) }}">Print report</a>
-        @if ($report === 'student_information')<button type="button" class="btn btn-secondary" data-print-selected-students data-print-url="{{ route('reports.print') }}">Print selected students</button>@endif
+        @if ($canSelectReportRows)
+            <button type="button" class="btn btn-secondary" data-print-selected-students data-print-url="{{ route('reports.print') }}" data-selection-key="{{ $report === 'students' ? 'registration_ids' : 'student_ids' }}" data-report="{{ $report }}">Print selected students</button>
+        @endif
         <a class="btn btn-primary" href="{{ route('reports.csv', $reportQuery) }}">Export CSV</a>
     </div>
 </div>
@@ -165,11 +168,11 @@
     @include('reports.table')
 </section>
 
-@if ($report === 'student_information')
+@if ($canSelectReportRows)
 <script>
 const selectAllStudents = document.querySelector('[data-select-all-students]');
 const selectedStudentsCount = document.querySelector('[data-selected-students-count]');
-const selectedStudentInputs = () => [...document.querySelectorAll('[data-student-select]')];
+const selectedStudentInputs = () => [...document.querySelectorAll('[data-report-row-select]')];
 const refreshSelectedStudents = () => {
     const selected = selectedStudentInputs().filter((input) => input.checked);
     if (selectedStudentsCount) selectedStudentsCount.textContent = `${selected.length} selected`;
@@ -183,16 +186,17 @@ selectedStudentInputs().forEach((input) => input.addEventListener('change', refr
 document.querySelector('[data-print-selected-students]')?.addEventListener('click', (event) => {
     const studentIds = selectedStudentInputs().filter((input) => input.checked).map((input) => input.value);
     if (studentIds.length === 0) {
-        window.alert('Select at least one student to print.');
+        window.alert('Select at least one record to print.');
         return;
     }
     const printUrl = new URL(event.currentTarget.dataset.printUrl, window.location.origin);
     const parameters = new URLSearchParams(window.location.search);
+    const selectionKey = event.currentTarget.dataset.selectionKey;
     parameters.delete('page');
-    parameters.delete('student_ids[]');
-    parameters.delete('student_ids');
-    parameters.set('report', 'student_information');
-    studentIds.forEach((studentId) => parameters.append('student_ids[]', studentId));
+    parameters.delete(`${selectionKey}[]`);
+    parameters.delete(selectionKey);
+    parameters.set('report', event.currentTarget.dataset.report);
+    studentIds.forEach((studentId) => parameters.append(`${selectionKey}[]`, studentId));
     printUrl.search = parameters.toString();
     window.open(printUrl.toString(), '_blank', 'noopener');
 });

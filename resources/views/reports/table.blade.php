@@ -55,7 +55,7 @@
                     ])
                     <tr>
                         @if ($selectableStudentRows ?? false)
-                            <td><label class="flex items-center gap-2"><input type="checkbox" value="{{ $student->id }}" data-student-select @checked(in_array($student->id, $filters['student_ids'] ?? [], true))><span class="sr-only">Select {{ $student->full_name }}</span></label></td>
+                            <td><label class="flex items-center gap-2"><input type="checkbox" value="{{ $student->id }}" data-student-select data-report-row-select @checked(in_array($student->id, $filters['student_ids'] ?? [], true))><span class="sr-only">Select {{ $student->full_name }}</span></label></td>
                         @endif
                         @foreach ($studentInformationFields as $field => $label)<td>{{ $studentInformationValues[$field] ?: '—' }}</td>@endforeach
                     </tr>
@@ -70,8 +70,27 @@
         </table>
     @else
         <table class="data-table">
-            <thead><tr><th>Student no.</th><th>Registration no.</th><th>Student</th><th>Academic year</th><th>Grade</th><th>Section</th><th>Registered on</th><th>Status</th><th>Left school on</th></tr></thead>
-            <tbody>@foreach ($rows as $registration)<tr><td>{{ $registration->student?->student_number }}</td><td>{{ $registration->student?->registration_number ?: '—' }}</td><td>{{ $registration->student?->full_name }}</td><td>{{ $registration->academicYear?->name }}</td><td>{{ $registration->grade?->name }}</td><td>{{ $registration->section?->name ?? '—' }}</td><td>{{ $registration->registered_on?->format('d M Y') }}</td><td>{{ str($registration->status)->headline() }}</td><td>{{ $registration->withdrawn_on?->format('d M Y') ?? '—' }}</td></tr>@endforeach</tbody>
+            <thead>
+                <tr>
+                    @if ($selectableStudentRows ?? false)
+                        <th><label class="flex items-center gap-2 normal-case tracking-normal"><input type="checkbox" data-select-all-students aria-label="Select all students">Select</label></th>
+                    @endif
+                    <th>Student no.</th><th>Registration no.</th><th>Student</th><th>Academic year</th><th>Grade</th><th>Section</th><th>Registered on</th><th>Status</th><th>Left school on</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($rows as $registration)
+                    <tr>
+                        @if ($selectableStudentRows ?? false)
+                            <td><label class="flex items-center gap-2"><input type="checkbox" value="{{ $registration->id }}" data-report-row-select @checked(in_array($registration->id, $filters['registration_ids'] ?? [], true))><span class="sr-only">Select {{ $registration->student?->full_name }}</span></label></td>
+                        @endif
+                        <td>{{ $registration->student?->student_number }}</td><td>{{ $registration->student?->registration_number ?: '-' }}</td><td>{{ $registration->student?->full_name }}</td><td>{{ $registration->academicYear?->name }}</td><td>{{ $registration->grade?->name }}</td><td>{{ $registration->section?->name ?? '-' }}</td><td>{{ $registration->registered_on?->format('d M Y') }}</td><td>{{ str($registration->status)->headline() }}</td><td>{{ $registration->withdrawn_on?->format('d M Y') ?? '-' }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
         </table>
+        @if ($selectableStudentRows ?? false)
+            <div class="border-t border-slate-200 px-4 py-3 text-sm text-slate-600"><span data-selected-students-count>0 selected</span><span class="ml-2 text-xs text-slate-500">Select records, then choose “Print selected students”.</span></div>
+        @endif
     @endif
 </div>

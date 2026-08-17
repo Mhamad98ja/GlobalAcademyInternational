@@ -489,6 +489,10 @@ class CoreWorkflowTest extends TestCase
 
         $this->actingAs($user)->get(route('reports.index', ['report' => 'students', 'grade_id' => $registration->grade_id]))
             ->assertOk()->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
+        $this->actingAs($user)->get(route('reports.index', ['report' => 'students', 'registration_ids' => [$registration->id]]))
+            ->assertOk()->assertSee('Print selected students')->assertSee('data-report-row-select', false)->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
+        $this->actingAs($user)->get(route('reports.print', ['report' => 'students', 'registration_ids' => [$registration->id]]))
+            ->assertOk()->assertSee('Lina Haddad')->assertDontSee('Omar Saleh');
         $this->actingAs($user)->get(route('reports.index', ['report' => 'student_information', 'gender' => 'female']))
             ->assertOk()->assertSee('Student general information')->assertSee('03 123 456')->assertDontSee('Omar Saleh');
         $studentFieldSelection = ['full_name', 'phone'];
