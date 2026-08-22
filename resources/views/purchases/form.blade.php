@@ -46,7 +46,7 @@
             <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 class="panel-title">Purchase items</h2>
-                    <p class="mt-1 text-xs text-slate-500">Sale price is shown for reference. Only the supplier purchase price is saved on this purchase and updates the catalogue cost.</p>
+                    <p class="mt-1 text-xs text-slate-500">Scan a barcode or ISBN and press Enter to add the book, then continue scanning. Sale price is shown for reference; only the supplier purchase price is saved on this purchase and updates the catalogue cost.</p>
                 </div>
                 <button type="button" class="btn btn-secondary btn-small" data-add-row="#purchase-lines" data-template="#purchase-line-template">Add line</button>
             </div>
@@ -55,15 +55,15 @@
                     <thead>
                         <tr><th>Book</th><th>Quantity</th><th>Unit purchase price</th><th>Catalogue sale price</th><th>Discount %</th><th>Tax %</th><th></th></tr>
                     </thead>
-                    <tbody id="purchase-lines">
+                    <tbody id="purchase-lines" data-scanner-managed-lines>
                         <tr data-line>
                             <td>
                                 <div data-book-picker>
-                                    <input type="search" list="purchase-book-options" data-book-search autocomplete="off" placeholder="Search barcode or book name">
+                                    <input type="search" list="purchase-book-options" data-book-search autocomplete="off" placeholder="Scan ISBN, barcode, or search book" autofocus>
                                     <select name="items[0][book_id]" required data-book-select data-purchase-book>
                                     <option value="">Select book</option>
                                     @foreach ($books as $book)
-                                        <option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-title="{{ $book->title }}" data-purchase-price="{{ $book->purchase_price }}" data-selling-price="{{ $book->selling_price }}">{{ $book->barcode }} — {{ $book->title }} (Sale: {{ number_format((float) $book->selling_price, 2) }})</option>
+                                        <option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-isbn="{{ $book->isbn }}" data-book-title="{{ $book->title }}" data-purchase-price="{{ $book->purchase_price }}" data-selling-price="{{ $book->selling_price }}">{{ $book->barcode }} — {{ $book->title }} (Sale: {{ number_format((float) $book->selling_price, 2) }})</option>
                                     @endforeach
                                     </select>
                                 </div>
@@ -92,11 +92,11 @@
     <tr data-line>
         <td>
             <div data-book-picker>
-                <input type="search" list="purchase-book-options" data-book-search autocomplete="off" placeholder="Search barcode or book name">
+                <input type="search" list="purchase-book-options" data-book-search autocomplete="off" placeholder="Scan ISBN, barcode, or search book">
                 <select name="items[__INDEX__][book_id]" required data-book-select data-purchase-book>
                 <option value="">Select book</option>
                 @foreach ($books as $book)
-                    <option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-title="{{ $book->title }}" data-purchase-price="{{ $book->purchase_price }}" data-selling-price="{{ $book->selling_price }}">{{ $book->barcode }} — {{ $book->title }} (Sale: {{ number_format((float) $book->selling_price, 2) }})</option>
+                    <option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-isbn="{{ $book->isbn }}" data-book-title="{{ $book->title }}" data-purchase-price="{{ $book->purchase_price }}" data-selling-price="{{ $book->selling_price }}">{{ $book->barcode }} — {{ $book->title }} (Sale: {{ number_format((float) $book->selling_price, 2) }})</option>
                 @endforeach
                 </select>
             </div>

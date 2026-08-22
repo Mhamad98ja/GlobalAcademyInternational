@@ -81,7 +81,7 @@
                     <thead>
                         <tr><th>ISBN, barcode or book name *</th><th>Book</th><th>Qty</th><th>Price type</th><th>Discounted unit price</th><th>Mandatory</th><th></th></tr>
                     </thead>
-                    <tbody id="package-lines">
+                    <tbody id="package-lines" data-scanner-managed-lines>
                         @foreach ($packageItems as $index => $item)
                             <tr data-line>
                                 <td>

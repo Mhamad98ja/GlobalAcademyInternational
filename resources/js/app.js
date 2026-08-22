@@ -72,6 +72,7 @@ document.addEventListener('click', (event) => {
     const container = document.querySelector(button.dataset.addRow);
     const template = document.querySelector(button.dataset.template);
     if (!container || !template) return;
+    if (container.matches('[data-scanner-managed-lines]')) return;
     const index = Math.max(-1, ...[...container.querySelectorAll('[name]')]
         .map((field) => Number.parseInt(field.name.match(/^items\[(\d+)]/)?.[1] ?? '-1', 10))) + 1;
     const fragment = template.content.cloneNode(true);
@@ -170,6 +171,10 @@ document.addEventListener('change', (event) => {
 document.querySelectorAll('[data-book-search]').forEach(refreshBookPicker);
 
 document.querySelectorAll('[data-supplier-purchase-form]').forEach((form) => {
+    const lines = form.querySelector('#purchase-lines');
+    const lineTemplate = document.querySelector('#purchase-line-template');
+    if (!lines || !lineTemplate) return;
+
     const updatePurchaseLine = (line) => {
         const bookSelect = line.querySelector('[data-purchase-book]');
         const purchasePriceInput = line.querySelector('[data-unit-purchase-price]');
@@ -189,15 +194,100 @@ document.querySelectorAll('[data-supplier-purchase-form]').forEach((form) => {
         purchasePriceInput.dataset.suggestedPrice = suggestedPurchasePrice;
     };
 
+    const setPurchaseLinePending = (line, isPending) => {
+        line.dataset.scannerPending = String(isPending);
+        line.querySelectorAll('input, select, textarea').forEach((field) => {
+            if (isPending && field.name) {
+                field.dataset.scannerFieldName = field.name;
+                field.removeAttribute('name');
+            } else if (!isPending && field.dataset.scannerFieldName) {
+                field.name = field.dataset.scannerFieldName;
+                delete field.dataset.scannerFieldName;
+            }
+            if (isPending && field.required) {
+                field.dataset.scannerRequired = 'true';
+                field.required = false;
+            } else if (!isPending && field.dataset.scannerRequired) {
+                field.required = true;
+                delete field.dataset.scannerRequired;
+            }
+            field.disabled = isPending && !field.matches('[data-book-search]');
+        });
+    };
+    const nextPurchaseLineIndex = () => Math.max(-1, ...[...lines.querySelectorAll('[data-purchase-book]')]
+        .map((select) => Number.parseInt(select.name.match(/^items\[(\d+)]/)?.[1] ?? '-1', 10))) + 1;
+    const appendPurchaseLine = (isPending = true) => {
+        const row = lineTemplate.content.cloneNode(true);
+        row.querySelectorAll('[name]').forEach((field) => {
+            field.name = field.name.replaceAll('__INDEX__', String(nextPurchaseLineIndex()));
+        });
+        lines.append(row);
+        const line = [...lines.querySelectorAll('[data-line]')].at(-1);
+        setPurchaseLinePending(line, isPending);
+        updatePurchaseLine(line);
+
+        return line;
+    };
+    const matchingPurchaseBook = (line) => {
+        const select = line.querySelector('[data-purchase-book]');
+        const search = line.querySelector('[data-book-search]');
+        const selected = select?.options[select.selectedIndex];
+        if (selected?.value) return selected;
+
+        const value = normaliseBookSearch(search?.value);
+        return [...(select?.options ?? [])].find((option) => option.value && [
+            option.dataset.bookBarcode,
+            option.dataset.bookIsbn,
+            option.dataset.bookTitle,
+        ].filter(Boolean).some((candidate) => normaliseBookSearch(candidate) === value)) ?? null;
+    };
+    const advancePurchaseScan = (line) => {
+        setPurchaseLinePending(line, false);
+        const option = matchingPurchaseBook(line);
+        const select = line.querySelector('[data-purchase-book]');
+        const search = line.querySelector('[data-book-search]');
+        if (!option || !select || !search) return;
+
+        const duplicate = [...lines.querySelectorAll('[data-line]')].find((candidate) => candidate !== line
+            && candidate.querySelector('[data-purchase-book]')?.value === option.value);
+        if (duplicate) {
+            const quantity = duplicate.querySelector('input[name$="[quantity_ordered]"]');
+            quantity.value = String((Number.parseInt(quantity.value, 10) || 0) + 1);
+            select.value = '';
+            search.value = '';
+            setPurchaseLinePending(line, true);
+            search.focus();
+            return;
+        }
+
+        select.value = option.value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        const currentLines = [...lines.querySelectorAll('[data-line]')];
+        const nextLine = currentLines[currentLines.indexOf(line) + 1];
+        const nextSearch = nextLine?.querySelector('[data-book-search]');
+        const target = nextSearch && !nextSearch.value.trim() ? nextLine : appendPurchaseLine();
+        requestAnimationFrame(() => target?.querySelector('[data-book-search]')?.focus());
+    };
+
     form.querySelectorAll('[data-line]').forEach(updatePurchaseLine);
     form.addEventListener('change', (event) => {
         if (event.target.matches('[data-purchase-book]')) updatePurchaseLine(event.target.closest('[data-line]'));
     });
-
-    document.addEventListener('click', (event) => {
+    form.addEventListener('input', (event) => {
+        if (event.target.matches('[data-book-search]')) {
+            setPurchaseLinePending(event.target.closest('[data-line]'), false);
+        }
+    });
+    form.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' || !event.target.matches('[data-book-search]')) return;
+        event.preventDefault();
+        advancePurchaseScan(event.target.closest('[data-line]'));
+    });
+    form.addEventListener('click', (event) => {
         const button = event.target.closest('[data-add-row]');
         if (button?.dataset.addRow === '#purchase-lines') {
-            requestAnimationFrame(() => form.querySelectorAll('[data-line]').forEach(updatePurchaseLine));
+            const line = appendPurchaseLine(false);
+            line.querySelector('[data-book-search]')?.focus();
         }
     });
 });
@@ -270,20 +360,42 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
             : (barcodeInput.value.trim() ? 'Barcode not found' : 'Awaiting barcode scan');
         refreshSaleTotal();
     };
+    const setDistributionLinePending = (line, isPending) => {
+        line.dataset.scannerPending = String(isPending);
+        line.querySelectorAll('input, select, textarea').forEach((field) => {
+            if (isPending && field.name) {
+                field.dataset.scannerFieldName = field.name;
+                field.removeAttribute('name');
+            } else if (!isPending && field.dataset.scannerFieldName) {
+                field.name = field.dataset.scannerFieldName;
+                delete field.dataset.scannerFieldName;
+            }
+            if (isPending && field.required) {
+                field.dataset.scannerRequired = 'true';
+                field.required = false;
+            } else if (!isPending && field.dataset.scannerRequired) {
+                field.required = true;
+                delete field.dataset.scannerRequired;
+            }
+            field.disabled = isPending && !field.matches('[data-distribution-barcode]');
+        });
+    };
     const nextDistributionLineIndex = () => Math.max(-1, ...[...lines.querySelectorAll('[data-distribution-barcode]')]
         .map((input) => Number.parseInt(input.name.match(/^items\[(\d+)]/)?.[1] ?? '-1', 10))) + 1;
-    const appendDistributionLine = () => {
+    const appendDistributionLine = (isPending = true) => {
         const row = lineTemplate.content.cloneNode(true);
         row.querySelectorAll('[name]').forEach((field) => {
             field.name = field.name.replaceAll('__INDEX__', String(nextDistributionLineIndex()));
         });
         lines.append(row);
         const line = [...lines.querySelectorAll('[data-line]')].at(-1);
+        setDistributionLinePending(line, isPending);
         refreshBookSummary(line);
 
         return line;
     };
     const advanceDistributionScan = (line) => {
+        setDistributionLinePending(line, false);
         const barcodeInput = line.querySelector('[data-distribution-barcode]');
         const book = findBook(barcodeInput?.value);
         if (!barcodeInput || !book) {
@@ -297,6 +409,7 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
             const quantityInput = existingLine.querySelector('input[name$="[quantity]"]');
             quantityInput.value = String((Number.parseInt(quantityInput.value, 10) || 0) + 1);
             barcodeInput.value = '';
+            setDistributionLinePending(line, true);
             refreshBookSummary(line);
             refreshSaleTotal();
             barcodeInput.focus();
@@ -328,6 +441,7 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
         });
 
         lines.replaceChildren(fragment);
+        if (items.length) appendDistributionLine();
         refreshSaleTotal();
     };
 
@@ -411,7 +525,10 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
         advanceDistributionScan(event.target.closest('[data-line]'));
     });
     form.addEventListener('input', (event) => {
-        if (event.target.matches('[data-distribution-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
+        if (event.target.matches('[data-distribution-barcode]')) {
+            setDistributionLinePending(event.target.closest('[data-line]'), false);
+            refreshBookSummary(event.target.closest('[data-line]'));
+        }
         if (event.target.matches('input[name$="[quantity]"]')) refreshSaleTotal();
     });
     form.addEventListener('change', (event) => {
@@ -435,10 +552,12 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     lines.querySelectorAll('[data-line]').forEach(refreshBookSummary);
     refreshSaleTotal();
 
-    document.addEventListener('click', (event) => {
+    form.addEventListener('click', (event) => {
         const button = event.target.closest('[data-add-row]');
         if (button?.dataset.addRow === '#distribution-lines') {
-            requestAnimationFrame(refreshSaleTotal);
+            const line = appendDistributionLine(false);
+            line.querySelector('[data-distribution-barcode]')?.focus();
+            refreshSaleTotal();
         }
     });
     document.addEventListener('click', (event) => {
@@ -471,9 +590,29 @@ document.querySelectorAll('[data-package-form]').forEach((form) => {
             : (barcodeInput.value.trim() ? 'Barcode not found' : 'Awaiting barcode scan');
     };
 
+    const setPackageLinePending = (line, isPending) => {
+        line.dataset.scannerPending = String(isPending);
+        line.querySelectorAll('input, select, textarea').forEach((field) => {
+            if (isPending && field.name) {
+                field.dataset.scannerFieldName = field.name;
+                field.removeAttribute('name');
+            } else if (!isPending && field.dataset.scannerFieldName) {
+                field.name = field.dataset.scannerFieldName;
+                delete field.dataset.scannerFieldName;
+            }
+            if (isPending && field.required) {
+                field.dataset.scannerRequired = 'true';
+                field.required = false;
+            } else if (!isPending && field.dataset.scannerRequired) {
+                field.required = true;
+                delete field.dataset.scannerRequired;
+            }
+            field.disabled = isPending && !field.matches('[data-package-barcode]');
+        });
+    };
     const nextPackageLineIndex = () => Math.max(-1, ...[...form.querySelectorAll('[data-package-barcode]')]
         .map((input) => Number.parseInt(input.name.match(/^items\[(\d+)]/)?.[1] ?? '-1', 10))) + 1;
-    const appendPackageLine = () => {
+    const appendPackageLine = (isPending = true) => {
         const container = form.querySelector('#package-lines');
         const template = document.querySelector('#package-line-template');
         if (!container || !template) return null;
@@ -484,11 +623,13 @@ document.querySelectorAll('[data-package-form]').forEach((form) => {
         });
         container.append(row);
         const line = [...container.querySelectorAll('[data-line]')].at(-1);
+        setPackageLinePending(line, isPending);
         refreshBookSummary(line);
 
         return line;
     };
     const advancePackageScan = (line) => {
+        setPackageLinePending(line, false);
         const barcodeInput = line.querySelector('[data-package-barcode]');
         const book = findBook(barcodeInput?.value);
         if (!barcodeInput || !book) {
@@ -502,6 +643,7 @@ document.querySelectorAll('[data-package-form]').forEach((form) => {
             const quantityInput = existingLine.querySelector('input[name$="[quantity]"]');
             quantityInput.value = String((Number.parseInt(quantityInput.value, 10) || 0) + 1);
             barcodeInput.value = '';
+            setPackageLinePending(line, true);
             refreshBookSummary(line);
             barcodeInput.focus();
             return;
@@ -515,7 +657,10 @@ document.querySelectorAll('[data-package-form]').forEach((form) => {
     };
 
     form.addEventListener('input', (event) => {
-        if (event.target.matches('[data-package-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
+        if (event.target.matches('[data-package-barcode]')) {
+            setPackageLinePending(event.target.closest('[data-line]'), false);
+            refreshBookSummary(event.target.closest('[data-line]'));
+        }
     });
     form.addEventListener('change', (event) => {
         if (event.target.matches('[data-package-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
@@ -525,12 +670,17 @@ document.querySelectorAll('[data-package-form]').forEach((form) => {
         event.preventDefault();
         advancePackageScan(event.target.closest('[data-line]'));
     });
-    document.addEventListener('click', (event) => {
+    form.addEventListener('click', (event) => {
         const button = event.target.closest('[data-add-row]');
         if (button?.dataset.addRow === '#package-lines') {
-            requestAnimationFrame(() => form.querySelectorAll('[data-line]').forEach(refreshBookSummary));
+            const line = appendPackageLine(false);
+            line.querySelector('[data-package-barcode]')?.focus();
         }
     });
 
     form.querySelectorAll('[data-line]').forEach(refreshBookSummary);
+    const packageLines = [...form.querySelectorAll('[data-line]')];
+    if (packageLines.length && packageLines.every((line) => line.querySelector('[data-package-barcode]')?.value.trim())) {
+        appendPackageLine();
+    }
 });

@@ -52,7 +52,7 @@
                     <thead>
                         <tr><th>ISBN, barcode or book name *</th><th>Book</th><th>Quantity</th><th></th></tr>
                     </thead>
-                    <tbody id="distribution-lines">
+                    <tbody id="distribution-lines" data-scanner-managed-lines>
                         <tr data-line>
                             <td>
                             <input name="items[0][barcode]" data-distribution-barcode required autofocus autocomplete="off" placeholder="Scan ISBN, barcode or type book name" list="distribution-book-options">
