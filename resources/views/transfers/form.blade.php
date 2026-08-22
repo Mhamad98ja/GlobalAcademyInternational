@@ -75,13 +75,14 @@
 
         <div data-book-fields>
             <div class="mb-2">
-                <div><label class="form-label mb-0">Books *</label><p class="mt-1 text-xs text-slate-500">Scan a barcode or ISBN and press Enter. The book is added with quantity 1 and the next line opens automatically; scanning the same book again increases its quantity.</p></div>
+                <div><label class="form-label mb-0">Books *</label><p class="mt-1 text-xs text-slate-500">Scan a book barcode and press Enter. The book is added with quantity 1 and the next line opens automatically; scanning the same barcode again increases its quantity.</p></div>
             </div>
             <div class="space-y-2" data-transfer-lines>
                 <div class="form-grid transfer-line">
-                    <div data-book-picker>
-                        <input type="search" list="transfer-book-options" data-book-search autocomplete="off" placeholder="Scan ISBN, barcode, or search book" autofocus>
-                        <select name="items[0][book_id]" required data-book-select><option value="">Select book</option>@foreach($books as $book)<option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-isbn="{{ $book->isbn }}" data-book-title="{{ $book->title }}" @selected(old('items.0.book_id') == $book->id)>{{ $book->barcode }} - {{ $book->title }} - available: {{ $book->available_quantity }}</option>@endforeach</select>
+                    <div>
+                        <input type="text" data-transfer-barcode autocomplete="off" placeholder="Scan book barcode" autofocus>
+                        <input type="hidden" name="items[0][book_id]" value="{{ old('items.0.book_id') }}" data-transfer-book-id>
+                        <p class="mt-1 text-xs text-slate-500" data-transfer-book-summary aria-live="polite">Awaiting barcode scan</p>
                     </div>
                     <div class="flex gap-2"><input type="number" name="items[0][quantity]" min="1" required placeholder="Quantity" value="{{ old('items.0.quantity') }}" data-transfer-quantity><button type="button" class="btn btn-secondary" data-remove-line>Remove</button></div>
                 </div>
@@ -95,12 +96,10 @@
 
 <template id="transfer-line-template">
     <div class="form-grid transfer-line">
-        <div data-book-picker><input type="search" list="transfer-book-options" data-book-search autocomplete="off" placeholder="Scan ISBN, barcode, or search book"><select required data-book-select><option value="">Select book</option>@foreach($books as $book)<option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-isbn="{{ $book->isbn }}" data-book-title="{{ $book->title }}">{{ $book->barcode }} - {{ $book->title }} - available: {{ $book->available_quantity }}</option>@endforeach</select></div>
+        <div><input type="text" data-transfer-barcode autocomplete="off" placeholder="Scan book barcode"><input type="hidden" data-transfer-book-id><p class="mt-1 text-xs text-slate-500" data-transfer-book-summary aria-live="polite">Awaiting barcode scan</p></div>
         <div class="flex gap-2"><input type="number" min="1" required placeholder="Quantity" data-transfer-quantity><button type="button" class="btn btn-secondary" data-remove-line>Remove</button></div>
     </div>
 </template>
-
-<x-book-search-options id="transfer-book-options" :books="$books" />
 
 <script>
 const kind = document.getElementById('transfer-type');
@@ -111,6 +110,11 @@ const packageFields = document.querySelector('[data-package-fields]');
 const bookFields = document.querySelector('[data-book-fields]');
 const lines = document.querySelector('[data-transfer-lines]');
 const template = document.getElementById('transfer-line-template');
+const transferBooks = [
+    @foreach ($books as $book)
+        { id: @json((string) $book->id), barcode: @json((string) $book->barcode), title: @json($book->title) },
+    @endforeach
+];
 
 function swap() {
     const type = kind.value;
@@ -128,7 +132,7 @@ function swap() {
             return;
         }
 
-        field.disabled = !field.matches('[data-book-search]')
+        field.disabled = !field.matches('[data-transfer-barcode]')
             && field.closest('.transfer-line')?.dataset.transferPending === 'true';
     });
 }
@@ -144,14 +148,14 @@ function refreshPackageInputs(isPackageTransfer = kind.value === 'package_to_bra
 
 function names() {
     lines.querySelectorAll('.transfer-line').forEach((line, index) => {
-        line.querySelector('[data-book-select]').name = `items[${index}][book_id]`;
+        line.querySelector('[data-transfer-book-id]').name = `items[${index}][book_id]`;
         line.querySelector('[data-transfer-quantity]').name = `items[${index}][quantity]`;
     });
 }
 
 function setPendingTransferLine(line, isPending) {
     line.dataset.transferPending = String(isPending);
-    line.querySelectorAll('[data-book-select], [data-transfer-quantity]').forEach((field) => {
+    line.querySelectorAll('[data-transfer-book-id], [data-transfer-quantity]').forEach((field) => {
         field.disabled = isPending;
     });
 }
@@ -166,53 +170,52 @@ function appendTransferLine(isPending = true) {
     return line;
 }
 
-function matchingBookOption(line) {
-    const search = line.querySelector('[data-book-search]');
-    const select = line.querySelector('[data-book-select]');
-    if (!search || !select) return null;
+function matchingTransferBook(line) {
+    const barcode = line.querySelector('[data-transfer-barcode]')?.value.trim().toLocaleLowerCase();
+    if (!barcode) return null;
 
-    const selected = select.options[select.selectedIndex];
-    if (selected?.value) return selected;
+    return transferBooks.find((book) => book.barcode.toLocaleLowerCase() === barcode) ?? null;
+}
 
-    const value = search.value.trim().toLocaleLowerCase();
-    if (!value) return null;
-
-    return [...select.options].find((option) => option.value && [
-        option.dataset.bookBarcode,
-        option.dataset.bookIsbn,
-        option.dataset.bookTitle,
-    ].filter(Boolean).some((candidate) => candidate.toLocaleLowerCase() === value)) ?? null;
+function setTransferBookSummary(line, message) {
+    const summary = line.querySelector('[data-transfer-book-summary]');
+    if (summary) summary.textContent = message;
 }
 
 function advanceTransferScan(line) {
     setPendingTransferLine(line, false);
-    const option = matchingBookOption(line);
-    const search = line.querySelector('[data-book-search]');
-    const select = line.querySelector('[data-book-select]');
+    const book = matchingTransferBook(line);
+    const barcode = line.querySelector('[data-transfer-barcode]');
+    const bookId = line.querySelector('[data-transfer-book-id]');
     const quantity = line.querySelector('[data-transfer-quantity]');
-    if (!option || !search || !select || !quantity) return;
-
-    const duplicate = [...lines.querySelectorAll('.transfer-line')].find((candidate) => candidate !== line
-        && candidate.querySelector('[data-book-select]')?.value === option.value);
-    if (duplicate) {
-        const duplicateQuantity = duplicate.querySelector('[data-transfer-quantity]');
-        duplicateQuantity.value = String((Number.parseInt(duplicateQuantity.value, 10) || 0) + 1);
-        select.value = '';
-        search.value = '';
-        setPendingTransferLine(line, true);
-        search.focus();
+    if (!book || !barcode || !bookId || !quantity) {
+        setTransferBookSummary(line, barcode?.value.trim() ? 'Barcode not found. Scan a barcode from the catalogue.' : 'Scan a book barcode before pressing Enter.');
+        barcode?.focus();
         return;
     }
 
-    select.value = option.value;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const duplicate = [...lines.querySelectorAll('.transfer-line')].find((candidate) => candidate !== line
+        && candidate.querySelector('[data-transfer-book-id]')?.value === book.id);
+    if (duplicate) {
+        const duplicateQuantity = duplicate.querySelector('[data-transfer-quantity]');
+        duplicateQuantity.value = String((Number.parseInt(duplicateQuantity.value, 10) || 0) + 1);
+        bookId.value = '';
+        barcode.value = '';
+        setTransferBookSummary(line, 'Awaiting barcode scan');
+        setPendingTransferLine(line, true);
+        barcode.focus();
+        return;
+    }
+
+    bookId.value = book.id;
+    setTransferBookSummary(line, book.title);
     if (!quantity.value) quantity.value = '1';
 
     const currentLines = [...lines.querySelectorAll('.transfer-line')];
     const nextLine = currentLines[currentLines.indexOf(line) + 1];
-    const nextSearch = nextLine?.querySelector('[data-book-search]');
-    const target = nextSearch && !nextSearch.value.trim() ? nextLine : appendTransferLine();
-    requestAnimationFrame(() => target?.querySelector('[data-book-search]')?.focus());
+    const nextBarcode = nextLine?.querySelector('[data-transfer-barcode]');
+    const target = nextBarcode && !nextBarcode.value.trim() ? nextLine : appendTransferLine();
+    requestAnimationFrame(() => target?.querySelector('[data-transfer-barcode]')?.focus());
 }
 
 kind.addEventListener('change', swap);
@@ -224,13 +227,28 @@ lines.addEventListener('click', (event) => {
     }
 });
 lines.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' || !event.target.matches('[data-book-search]')) return;
+    if (event.key !== 'Enter' || !event.target.matches('[data-transfer-barcode]')) return;
     event.preventDefault();
     advanceTransferScan(event.target.closest('.transfer-line'));
 });
 lines.addEventListener('input', (event) => {
-    if (event.target.matches('[data-book-search]')) {
-        setPendingTransferLine(event.target.closest('.transfer-line'), false);
+    if (event.target.matches('[data-transfer-barcode]')) {
+        const line = event.target.closest('.transfer-line');
+        line.querySelector('[data-transfer-book-id]').value = '';
+        setTransferBookSummary(line, 'Ready to scan barcode');
+        setPendingTransferLine(line, false);
+    }
+});
+names();
+lines.querySelectorAll('.transfer-line').forEach((line) => {
+    const bookId = line.querySelector('[data-transfer-book-id]');
+    const book = transferBooks.find((candidate) => candidate.id === bookId.value);
+    if (book) {
+        line.querySelector('[data-transfer-barcode]').value = book.barcode;
+        setTransferBookSummary(line, book.title);
+        setPendingTransferLine(line, false);
+    } else {
+        setPendingTransferLine(line, true);
     }
 });
 swap();

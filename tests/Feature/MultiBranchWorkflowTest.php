@@ -310,7 +310,9 @@ class MultiBranchWorkflowTest extends TestCase
             ->get(route('transfers.create'))
             ->assertOk()
             ->assertSee('Beirut Only Book')
-            ->assertDontSee('Main Only Book');
+            ->assertDontSee('Main Only Book')
+            ->assertSee('Scan book barcode')
+            ->assertDontSee('Select book');
         $this->actingAs($beirutAdministrator)->withSession(['current_branch_id' => $main->id])
             ->post(route('branches.select'), ['branch_id' => $main->id])
             ->assertForbidden();
