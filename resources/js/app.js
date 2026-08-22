@@ -72,7 +72,8 @@ document.addEventListener('click', (event) => {
     const container = document.querySelector(button.dataset.addRow);
     const template = document.querySelector(button.dataset.template);
     if (!container || !template) return;
-    const index = container.querySelectorAll('[data-line]').length;
+    const index = Math.max(-1, ...[...container.querySelectorAll('[name]')]
+        .map((field) => Number.parseInt(field.name.match(/^items\[(\d+)]/)?.[1] ?? '-1', 10))) + 1;
     const fragment = template.content.cloneNode(true);
     fragment.querySelectorAll('[name]').forEach((field) => {
         field.name = field.name.replaceAll('__INDEX__', String(index));
@@ -106,6 +107,21 @@ document.querySelectorAll('[data-grade-select]').forEach((gradeSelect) => {
 
     gradeSelect.addEventListener('change', filterSections);
     filterSections();
+});
+
+document.querySelectorAll('[data-report-type-select]').forEach((reportSelect) => {
+    reportSelect.addEventListener('change', () => {
+        const form = reportSelect.form;
+        if (!form) return;
+
+        if (reportSelect.value !== 'student_information') {
+            form.querySelectorAll('[name="student_fields_selection"], [name="student_fields[]"]').forEach((field) => {
+                field.disabled = true;
+            });
+        }
+
+        form.submit();
+    });
 });
 
 const normaliseBookSearch = (value) => String(value ?? '').trim().toLocaleLowerCase();
@@ -202,9 +218,14 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     const packages = JSON.parse(packageData.textContent || '[]');
     const books = JSON.parse(bookData.textContent || '[]');
     const booksById = new Map(books.map((book) => [String(book.id), book]));
-    const booksByBarcode = new Map([...booksById.values()].map((book) => [String(book.barcode).toLocaleLowerCase(), book]));
+    const booksByCode = new Map();
+    books.forEach((book) => {
+        [book.barcode, book.isbn].filter(Boolean).forEach((code) => booksByCode.set(String(code).toLocaleLowerCase(), book));
+    });
     const booksByTitle = new Map(books.map((book) => [String(book.title).toLocaleLowerCase(), book]));
     const sameId = (left, right) => String(left) === String(right);
+    const findBook = (value) => booksByCode.get(String(value ?? '').trim().toLocaleLowerCase())
+        ?? booksByTitle.get(String(value ?? '').trim().toLocaleLowerCase());
     const cents = (value) => Math.round(Number(value || 0) * 100);
     const money = (value) => (value / 100).toFixed(2);
     const selectedPackage = () => packages.find((bookPackage) => sameId(bookPackage.id, packageSelect.value));
@@ -224,8 +245,7 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
         lines.querySelectorAll('[data-line]').forEach((line) => {
             const barcodeInput = line.querySelector('[data-distribution-barcode]');
             const quantityInput = line.querySelector('input[name$="[quantity]"]');
-            const book = booksByBarcode.get(barcodeInput?.value.trim().toLocaleLowerCase())
-                ?? booksByTitle.get(barcodeInput?.value.trim().toLocaleLowerCase());
+            const book = findBook(barcodeInput?.value);
             const quantity = Math.max(0, Number.parseInt(quantityInput?.value || '0', 10) || 0);
             if (!book || quantity === 0 || !Object.hasOwn(book, 'selling_price')) return;
 
@@ -243,12 +263,51 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
         const barcodeInput = line.querySelector('[data-distribution-barcode]');
         const summary = line.querySelector('[data-book-summary]');
         if (!barcodeInput || !summary) return;
-        const search = barcodeInput.value.trim().toLocaleLowerCase();
-        const book = booksByBarcode.get(search) ?? booksByTitle.get(search);
+        const book = findBook(barcodeInput.value);
         summary.textContent = book
             ? `${book.title} — ${book.available_quantity} available${Object.hasOwn(book, 'selling_price') ? `, sale ${Number(book.selling_price).toFixed(2)}` : ''}`
             : (barcodeInput.value.trim() ? 'Barcode not found' : 'Awaiting barcode scan');
         refreshSaleTotal();
+    };
+    const nextDistributionLineIndex = () => Math.max(-1, ...[...lines.querySelectorAll('[data-distribution-barcode]')]
+        .map((input) => Number.parseInt(input.name.match(/^items\[(\d+)]/)?.[1] ?? '-1', 10))) + 1;
+    const appendDistributionLine = () => {
+        const row = lineTemplate.content.cloneNode(true);
+        row.querySelectorAll('[name]').forEach((field) => {
+            field.name = field.name.replaceAll('__INDEX__', String(nextDistributionLineIndex()));
+        });
+        lines.append(row);
+        const line = [...lines.querySelectorAll('[data-line]')].at(-1);
+        refreshBookSummary(line);
+
+        return line;
+    };
+    const advanceDistributionScan = (line) => {
+        const barcodeInput = line.querySelector('[data-distribution-barcode]');
+        const book = findBook(barcodeInput?.value);
+        if (!barcodeInput || !book) {
+            refreshBookSummary(line);
+            return;
+        }
+
+        const existingLine = [...lines.querySelectorAll('[data-line]')].find((candidate) => candidate !== line
+            && sameId(findBook(candidate.querySelector('[data-distribution-barcode]')?.value)?.id, book.id));
+        if (existingLine) {
+            const quantityInput = existingLine.querySelector('input[name$="[quantity]"]');
+            quantityInput.value = String((Number.parseInt(quantityInput.value, 10) || 0) + 1);
+            barcodeInput.value = '';
+            refreshBookSummary(line);
+            refreshSaleTotal();
+            barcodeInput.focus();
+            return;
+        }
+
+        const currentLines = [...lines.querySelectorAll('[data-line]')];
+        const nextLine = currentLines[currentLines.indexOf(line) + 1];
+        const nextBarcodeInput = nextLine?.querySelector('[data-distribution-barcode]');
+        const target = nextBarcodeInput && !nextBarcodeInput.value.trim() ? nextLine : appendDistributionLine();
+        refreshSaleTotal();
+        requestAnimationFrame(() => target.querySelector('[data-distribution-barcode]')?.focus());
     };
     const renderLines = (items = []) => {
         const fragment = document.createDocumentFragment();
@@ -345,6 +404,11 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     };
 
     registrationSelect.addEventListener('change', refreshPackages);
+    form.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' || !event.target.matches('[data-distribution-barcode]')) return;
+        event.preventDefault();
+        advanceDistributionScan(event.target.closest('[data-line]'));
+    });
     form.addEventListener('input', (event) => {
         if (event.target.matches('[data-distribution-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
         if (event.target.matches('input[name$="[quantity]"]')) refreshSaleTotal();
@@ -388,18 +452,65 @@ document.querySelectorAll('[data-package-form]').forEach((form) => {
     if (!bookData) return;
 
     const books = JSON.parse(bookData.textContent || '[]');
-    const booksByBarcode = new Map(books.map((book) => [String(book.barcode).toLocaleLowerCase(), book]));
+    const booksByCode = new Map();
+    books.forEach((book) => {
+        [book.barcode, book.isbn].filter(Boolean).forEach((code) => booksByCode.set(String(code).toLocaleLowerCase(), book));
+    });
     const booksByTitle = new Map(books.map((book) => [String(book.title).toLocaleLowerCase(), book]));
+    const findBook = (value) => booksByCode.get(String(value ?? '').trim().toLocaleLowerCase())
+        ?? booksByTitle.get(String(value ?? '').trim().toLocaleLowerCase());
     const refreshBookSummary = (line) => {
         const barcodeInput = line.querySelector('[data-package-barcode]');
         const summary = line.querySelector('[data-package-book-summary]');
         if (!barcodeInput || !summary) return;
 
-        const search = barcodeInput.value.trim().toLocaleLowerCase();
-        const book = booksByBarcode.get(search) ?? booksByTitle.get(search);
+        const book = findBook(barcodeInput.value);
         summary.textContent = book
             ? `${book.title} — sale ${Number(book.selling_price).toFixed(2)}`
             : (barcodeInput.value.trim() ? 'Barcode not found' : 'Awaiting barcode scan');
+    };
+
+    const nextPackageLineIndex = () => Math.max(-1, ...[...form.querySelectorAll('[data-package-barcode]')]
+        .map((input) => Number.parseInt(input.name.match(/^items\[(\d+)]/)?.[1] ?? '-1', 10))) + 1;
+    const appendPackageLine = () => {
+        const container = form.querySelector('#package-lines');
+        const template = document.querySelector('#package-line-template');
+        if (!container || !template) return null;
+
+        const row = template.content.cloneNode(true);
+        row.querySelectorAll('[name]').forEach((field) => {
+            field.name = field.name.replaceAll('__INDEX__', String(nextPackageLineIndex()));
+        });
+        container.append(row);
+        const line = [...container.querySelectorAll('[data-line]')].at(-1);
+        refreshBookSummary(line);
+
+        return line;
+    };
+    const advancePackageScan = (line) => {
+        const barcodeInput = line.querySelector('[data-package-barcode]');
+        const book = findBook(barcodeInput?.value);
+        if (!barcodeInput || !book) {
+            refreshBookSummary(line);
+            return;
+        }
+
+        const existingLine = [...form.querySelectorAll('[data-line]')].find((candidate) => candidate !== line
+            && String(findBook(candidate.querySelector('[data-package-barcode]')?.value)?.id) === String(book.id));
+        if (existingLine) {
+            const quantityInput = existingLine.querySelector('input[name$="[quantity]"]');
+            quantityInput.value = String((Number.parseInt(quantityInput.value, 10) || 0) + 1);
+            barcodeInput.value = '';
+            refreshBookSummary(line);
+            barcodeInput.focus();
+            return;
+        }
+
+        const packageLines = [...form.querySelectorAll('[data-line]')];
+        const nextLine = packageLines[packageLines.indexOf(line) + 1];
+        const nextBarcodeInput = nextLine?.querySelector('[data-package-barcode]');
+        const target = nextBarcodeInput && !nextBarcodeInput.value.trim() ? nextLine : appendPackageLine();
+        requestAnimationFrame(() => target?.querySelector('[data-package-barcode]')?.focus());
     };
 
     form.addEventListener('input', (event) => {
@@ -407,6 +518,11 @@ document.querySelectorAll('[data-package-form]').forEach((form) => {
     });
     form.addEventListener('change', (event) => {
         if (event.target.matches('[data-package-barcode]')) refreshBookSummary(event.target.closest('[data-line]'));
+    });
+    form.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' || !event.target.matches('[data-package-barcode]')) return;
+        event.preventDefault();
+        advancePackageScan(event.target.closest('[data-line]'));
     });
     document.addEventListener('click', (event) => {
         const button = event.target.closest('[data-add-row]');

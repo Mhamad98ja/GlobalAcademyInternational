@@ -8,8 +8,11 @@ use App\Http\Requests\StoreDistributionRequest;
 use App\Models\Book;
 use App\Models\BookDistribution;
 use App\Models\ClassBookList;
+use App\Models\AcademicYear;
+use App\Models\Grade;
 use App\Models\StudentRegistration;
 use App\Services\BookDistributionService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -17,13 +20,47 @@ use Illuminate\View\View;
 
 class DistributionController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $canViewFinancials = auth()->user()->canViewFinancials();
+        $canViewFinancials = $request->user()->canViewFinancials();
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
+            'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
+            'section_id' => ['nullable', 'integer', 'exists:sections,id'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+        ]);
 
         return view('distributions.index', [
-            'distributions' => BookDistribution::with('student', 'invoice')->latest('distributed_on')->paginate(15),
+            'distributions' => BookDistribution::query()
+                ->with('student', 'invoice')
+                ->when($filters['search'] ?? null, function (Builder $query, string $search) use ($canViewFinancials): void {
+                    $query->where(function (Builder $distributions) use ($search, $canViewFinancials): void {
+                        $distributions->whereInsensitiveLike('public_id', $search)
+                            ->orWhereHas('student', fn (Builder $student) => $student
+                                ->whereInsensitiveLike('first_name', $search)
+                                ->orWhereInsensitiveLike('last_name', $search)
+                                ->orWhereInsensitiveLike('student_number', $search));
+
+                        if ($canViewFinancials) {
+                            $distributions->orWhereHas('invoice', fn (Builder $invoice) => $invoice->whereInsensitiveLike('invoice_number', $search));
+                        }
+                    });
+                })
+                ->when($filters['academic_year_id'] ?? null, fn (Builder $query, int $id) => $query->where('academic_year_id', $id))
+                ->when($filters['grade_id'] ?? null, fn (Builder $query, int $id) => $query->where('grade_id', $id))
+                ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->where('section_id', $id))
+                ->when($filters['date_from'] ?? null, fn (Builder $query, string $date) => $query->whereDate('distributed_on', '>=', $date))
+                ->when($filters['date_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('distributed_on', '<=', $date))
+                ->latest('distributed_on')
+                ->latest('id')
+                ->paginate(15)
+                ->withQueryString(),
             'canViewFinancials' => $canViewFinancials,
+            'filters' => $filters,
+            'years' => AcademicYear::orderByDesc('starts_on')->get(),
+            'grades' => Grade::with('sections')->orderBy('sort_order')->get(),
         ]);
     }
 
@@ -68,6 +105,7 @@ class DistributionController extends Controller
                 $data = [
                     'id' => $book->id,
                     'barcode' => $book->barcode,
+                    'isbn' => $book->isbn,
                     'title' => $book->title,
                     'available_quantity' => $book->available_quantity,
                 ];
@@ -142,6 +180,7 @@ class DistributionController extends Controller
             $search = trim($item['barcode']);
             $searchTerm = mb_strtolower($search);
             $book = Book::active()->stockedInBranch()->whereRaw('LOWER(barcode) = ?', [$searchTerm])->first();
+            $book ??= Book::active()->stockedInBranch()->whereRaw('LOWER(isbn) = ?', [$searchTerm])->first();
             $book ??= Book::active()->stockedInBranch()->whereRaw('LOWER(title) = ?', [$searchTerm])->first();
             if ($book === null) {
                 throw ValidationException::withMessages(['items' => "No active book matches barcode or title {$search}."]);

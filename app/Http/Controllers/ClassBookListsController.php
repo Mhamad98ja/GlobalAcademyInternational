@@ -8,6 +8,7 @@ use App\Models\AcademicYear;
 use App\Models\Book;
 use App\Models\ClassBookList;
 use App\Models\Grade;
+use App\Models\SystemSetting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,22 @@ class ClassBookListsController extends Controller
     public function create(): View
     {
         return $this->form(new ClassBookList());
+    }
+
+    public function print(): View
+    {
+        $lists = ClassBookList::query()
+            ->with('academicYear', 'grade', 'section', 'items.book')
+            ->orderByDesc('academic_year_id')
+            ->orderBy('grade_id')
+            ->orderBy('section_id')
+            ->orderBy('name')
+            ->get();
+        $school = SystemSetting::query()
+            ->whereIn('key', ['school_name', 'school_address', 'school_phone'])
+            ->pluck('value', 'key');
+
+        return view('class-lists.print', compact('lists', 'school'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -73,8 +90,9 @@ class ClassBookListsController extends Controller
             'years' => AcademicYear::orderByDesc('starts_on')->get(),
             'grades' => Grade::with('sections')->orderBy('sort_order')->get(),
             'bookData' => $books->map(fn (Book $book) => [
-                'barcode' => $book->barcode,
-                'title' => $book->title,
+            'barcode' => $book->barcode,
+            'isbn' => $book->isbn,
+            'title' => $book->title,
                 'selling_price' => (string) $book->selling_price,
             ])->values(),
         ]);
@@ -153,6 +171,7 @@ class ClassBookListsController extends Controller
             $search = trim($item['barcode']);
             $searchTerm = mb_strtolower($search);
             $book = Book::active()->whereRaw('LOWER(barcode) = ?', [$searchTerm])->first();
+            $book ??= Book::active()->whereRaw('LOWER(isbn) = ?', [$searchTerm])->first();
             $book ??= Book::active()->whereRaw('LOWER(title) = ?', [$searchTerm])->first();
 
             if ($book === null) {

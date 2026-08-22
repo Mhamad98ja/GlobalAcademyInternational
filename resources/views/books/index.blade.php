@@ -8,6 +8,7 @@
     </div>
     <div class="flex flex-wrap gap-2">
         @if ($canManageBooks)<a class="btn btn-secondary" href="{{ route('books.create') }}">Add book</a>@endif
+        @if ($canManagePackages && $tab === 'packages')<a class="btn btn-secondary" target="_blank" rel="noopener" href="{{ route('class-lists.print') }}">Print grade lists</a>@endif
         @if ($canManagePackages)<a class="btn btn-primary" href="{{ route('class-lists.create') }}">New package</a>@endif
     </div>
 </div>

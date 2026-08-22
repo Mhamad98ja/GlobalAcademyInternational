@@ -343,7 +343,9 @@ class ReportsController extends Controller
         $filters['distribution_ids'] = array_values(array_unique(array_map('intval', $filters['distribution_ids'] ?? [])));
         $filters['payment_ids'] = array_values(array_unique(array_map('intval', $filters['payment_ids'] ?? [])));
 
-        if ($request->has('student_fields_selection') && $filters['student_fields'] === []) {
+        if ($request->string('report')->toString() === 'student_information'
+            && $request->has('student_fields_selection')
+            && $filters['student_fields'] === []) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'student_fields' => 'Select at least one student information field.',
             ]);

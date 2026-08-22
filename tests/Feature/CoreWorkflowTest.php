@@ -123,6 +123,31 @@ class CoreWorkflowTest extends TestCase
         $this->assertDatabaseHas('books', ['id' => $book->id, 'stock_on_hand' => 1]);
     }
 
+    public function test_distribution_can_find_a_book_by_its_isbn_and_filter_distribution_history(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $book = Book::create(['sku' => 'B-ISBN', 'isbn' => '978-1-23456-789-0', 'barcode' => 'BARCODE-ISBN', 'title' => 'ISBN distribution book', 'selling_price' => '10.00']);
+        app(InventoryService::class)->change($book, 2, 'opening_stock', null, $registration->academicYear, $user, 'Initial stock');
+
+        $this->actingAs($user)->post(route('distributions.store'), [
+            'student_registration_id' => $registration->id,
+            'items' => [['barcode' => '978-1-23456-789-0', 'quantity' => 1]],
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->actingAs($user)->get(route('distributions.index', [
+            'search' => 'Lina',
+            'academic_year_id' => $registration->academic_year_id,
+            'grade_id' => $registration->grade_id,
+            'section_id' => $registration->section_id,
+            'date_from' => today()->format('Y-m-d'),
+            'date_to' => today()->format('Y-m-d'),
+        ]))
+            ->assertOk()
+            ->assertSee('Distributed from')
+            ->assertSee('Lina Haddad');
+    }
+
     public function test_invoice_print_copies_separate_financial_information_and_fit_a4_layout(): void
     {
         $user = $this->administrator();
@@ -351,7 +376,13 @@ class CoreWorkflowTest extends TestCase
         $this->actingAs($user)->get(route('books.index', ['tab' => 'packages']))
             ->assertOk()
             ->assertSee('Combined package')
-            ->assertSee('New package');
+            ->assertSee('New package')
+            ->assertSee('Print grade lists');
+        $this->actingAs($user)->get(route('class-lists.print'))
+            ->assertOk()
+            ->assertSee('Book packages by grade')
+            ->assertSee('Grade 4 book list')
+            ->assertSee('Combined catalogue title');
         $this->actingAs($user)->get(route('class-lists.index'))
             ->assertRedirect(route('books.index', ['tab' => 'packages']));
     }
@@ -360,11 +391,11 @@ class CoreWorkflowTest extends TestCase
     {
         $user = $this->administrator();
         $registration = $this->registration($user);
-        $book = Book::create(['sku' => 'B-PACKAGE-SCAN', 'barcode' => 'PACKAGE-Scan-001', 'title' => 'Package scanned book', 'selling_price' => '14.00']);
+        $book = Book::create(['sku' => 'B-PACKAGE-SCAN', 'isbn' => '978-PACKAGE-001', 'barcode' => 'PACKAGE-Scan-001', 'title' => 'Package scanned book', 'selling_price' => '14.00']);
 
         $this->actingAs($user)->get(route('class-lists.create'))
             ->assertOk()
-            ->assertSee('Scan barcode')
+            ->assertSee('Scan ISBN')
             ->assertSee('data-package-barcode', false)
             ->assertDontSee('items[0][book_id]', false);
 
@@ -397,7 +428,7 @@ class CoreWorkflowTest extends TestCase
             'name' => $package->name,
             'is_active' => '1',
             'items' => [[
-                'barcode' => 'PACKAGE-SCAN-001',
+                'barcode' => '978-package-001',
                 'quantity' => 2,
                 'price_type' => 'paid',
                 'unit_price' => '0.00',
@@ -521,6 +552,8 @@ class CoreWorkflowTest extends TestCase
             ->assertOk()->assertSee('PAY-REPORT-001')->assertDontSee('PAY-REPORT-002');
         $this->actingAs($user)->get(route('reports.index', ['report' => 'stock', 'stock_level' => 'out_of_stock']))
             ->assertOk()->assertSee('Out of stock report title')->assertDontSee('In stock report title');
+        $this->actingAs($user)->get(route('reports.index', ['report' => 'stock', 'student_fields_selection' => 1]))
+            ->assertOk()->assertSee('Stock on hand');
         $this->actingAs($user)->get(route('reports.print', ['report' => 'stock', 'book_ids' => [$outOfStockBook->id]]))
             ->assertOk()->assertSee('Out of stock report title')->assertDontSee('In stock report title');
     }

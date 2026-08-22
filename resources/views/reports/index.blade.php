@@ -22,7 +22,7 @@
         <form method="GET" class="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-4">
             <div>
                 <label class="form-label" for="report">Report type</label>
-                <select id="report" name="report" onchange="this.form.submit()">
+                <select id="report" name="report" data-report-type-select>
                     <option value="student_information" @selected($report === 'student_information')>Student general information</option>
                     <option value="class_sections" @selected($report === 'class_sections')>Students by class and section</option>
                     <option value="students" @selected($report === 'students')>Student registrations</option>

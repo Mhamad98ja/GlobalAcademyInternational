@@ -72,20 +72,20 @@
             <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 class="panel-title">Package books</h2>
-                    <p class="mt-1 text-xs text-slate-500">Scan a barcode or search by book name to add it. Paid books always use their current catalogue sale price. Use Discounted only when this package needs a lower unit price; Free issues the book at zero.</p>
+                    <p class="mt-1 text-xs text-slate-500">Scan an ISBN or barcode and press Enter to add it, then continue scanning. Scanning a book already listed increases its quantity. Paid books always use their current catalogue sale price. Use Discounted only when this package needs a lower unit price; Free issues the book at zero.</p>
                 </div>
                 <button type="button" class="btn btn-secondary btn-small" data-add-row="#package-lines" data-template="#package-line-template">Add book</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table min-w-[760px]">
                     <thead>
-                        <tr><th>Barcode or book name *</th><th>Book</th><th>Qty</th><th>Price type</th><th>Discounted unit price</th><th>Mandatory</th><th></th></tr>
+                        <tr><th>ISBN, barcode or book name *</th><th>Book</th><th>Qty</th><th>Price type</th><th>Discounted unit price</th><th>Mandatory</th><th></th></tr>
                     </thead>
                     <tbody id="package-lines">
                         @foreach ($packageItems as $index => $item)
                             <tr data-line>
                                 <td>
-                                    <input name="items[{{ $index }}][barcode]" data-package-barcode required autocomplete="off" placeholder="Scan barcode or type book name" list="package-book-options" value="{{ data_get($item, 'barcode') }}" @if ($loop->first) autofocus @endif>
+                                    <input name="items[{{ $index }}][barcode]" data-package-barcode required autocomplete="off" placeholder="Scan ISBN, barcode or type book name" list="package-book-options" value="{{ data_get($item, 'barcode') }}" @if ($loop->first) autofocus @endif>
                                 </td>
                                 <td class="font-medium text-sm" data-package-book-summary>Awaiting barcode scan</td>
                                 <td><input type="number" min="1" value="{{ data_get($item, 'quantity', 1) }}" name="items[{{ $index }}][quantity]" required></td>
@@ -115,7 +115,7 @@
 <template id="package-line-template">
     <tr data-line>
         <td>
-            <input name="items[__INDEX__][barcode]" data-package-barcode required autocomplete="off" placeholder="Scan barcode or type book name" list="package-book-options">
+            <input name="items[__INDEX__][barcode]" data-package-barcode required autocomplete="off" placeholder="Scan ISBN, barcode or type book name" list="package-book-options">
         </td>
         <td class="font-medium text-sm" data-package-book-summary>Awaiting barcode scan</td>
         <td><input type="number" min="1" value="1" name="items[__INDEX__][quantity]" required></td>
@@ -132,5 +132,5 @@
     </tr>
 </template>
 <script type="application/json" id="package-book-data">{!! json_encode($bookData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}</script>
-<datalist id="package-book-options">@foreach ($bookData as $book)<option value="{{ $book['barcode'] }}">{{ $book['title'] }}</option><option value="{{ $book['title'] }}">{{ $book['barcode'] }}</option>@endforeach</datalist>
+<datalist id="package-book-options">@foreach ($bookData as $book)<option value="{{ $book['barcode'] }}">{{ $book['title'] }}</option>@if ($book['isbn'])<option value="{{ $book['isbn'] }}">{{ $book['title'] }}</option>@endif<option value="{{ $book['title'] }}">{{ $book['barcode'] }}</option>@endforeach</datalist>
 @endsection
