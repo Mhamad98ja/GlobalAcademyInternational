@@ -18,7 +18,6 @@
     ['books.index','Books & packages','books.view','books'],
     ['suppliers.index','Suppliers','suppliers.view','suppliers'],
     ['distributions.index','Distribution','distributions.create','distribution'],
-    ['payments.index','Payments','payments.view','payments'],
     ['inventory.ledger','Inventory ledger','inventory.view','inventory'],
     ['transfers.index','Book transfers','inventory.transfer','inventory'],
     ['deferred.index','Deferred approvals','deferred.view','deferred'],
@@ -36,7 +35,7 @@
     @endif
 @endforeach
 @if($signedInUser->canViewFinancials())
-    <a href="{{ route('operations.index') }}" class="sidebar-link {{ request()->routeIs('operations.*') ? 'active' : '' }}" aria-label="Operations center" title="Operations center"><span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon name="operations" /></span><span class="sidebar-link-label">Operations center</span></a>
+    <a href="{{ route('finance.index') }}" class="sidebar-link {{ request()->routeIs('finance.*') || request()->routeIs('operations.*') ? 'active' : '' }}" aria-label="Financial center" title="Financial center"><span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon name="operations" /></span><span class="sidebar-link-label">Financial center</span></a>
 @endif
 @if(auth()->user()->isControllerAdministrator())
     <a href="{{ route('admin.imports') }}" class="sidebar-link {{ request()->routeIs('admin.imports*') ? 'active' : '' }}" aria-label="Import data" title="Import data"><span class="sidebar-link-icon" aria-hidden="true"><x-nav-icon name="administration" /></span><span class="sidebar-link-label">Import data</span></a>

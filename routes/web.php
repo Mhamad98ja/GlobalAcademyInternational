@@ -45,6 +45,7 @@ Route::post('/logout',[AuthController::class,'destroy'])->middleware('auth')->na
 Route::middleware(['auth', 'branch'])->group(function (): void {
  Route::post('/branches/current',[BranchesController::class,'select'])->name('branches.select');
  Route::get('/dashboard',DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
+ Route::get('/finance',[OperationsController::class,'index'])->name('finance.index');
  Route::get('/operations',[OperationsController::class,'index'])->middleware('permission:dashboard.view')->name('operations.index');
  Route::middleware('permission:class-lists.manage')->group(function():void{Route::get('/class-book-lists/{classBookList}/edit',[ClassBookListsController::class,'edit'])->name('class-lists.edit');Route::put('/class-book-lists/{classBookList}',[ClassBookListsController::class,'update'])->name('class-lists.update');});
  Route::middleware('permission:reports.view')->group(function():void{Route::get('/reports/print',[ReportsController::class,'print'])->name('reports.print');});

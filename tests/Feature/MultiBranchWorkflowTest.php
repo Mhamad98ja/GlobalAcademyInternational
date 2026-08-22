@@ -103,6 +103,13 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Internal Branch Transfer Invoice')
             ->assertSee('52.50');
+        $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
+            ->get(route('finance.index', ['tab' => 'branches']))
+            ->assertOk()
+            ->assertSee('Financial Center')
+            ->assertSee('Internal branch transfer')
+            ->assertSee($invoice->invoice_number)
+            ->assertSee('52.50');
 
         $movement = StockMovement::withoutGlobalScopes()->where('type', 'branch_transfer_out')->firstOrFail();
         $this->assertSame(['from' => 'Main Branch', 'to' => 'North Branch'], $movement->transferEndpoints());
@@ -204,6 +211,13 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertSee('All branches')
             ->assertSee($northToEast->transfer_number)
             ->assertSee('30.00')
+            ->assertSee('East Branch');
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('finance.index', ['tab' => 'branches', 'scope' => 'all']))
+            ->assertOk()
+            ->assertSee('All branches')
+            ->assertSee($northToEast->financialInvoice->invoice_number)
+            ->assertSee('North Branch')
             ->assertSee('East Branch');
 
         $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])

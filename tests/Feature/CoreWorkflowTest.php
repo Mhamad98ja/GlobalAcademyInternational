@@ -723,7 +723,7 @@ class CoreWorkflowTest extends TestCase
         $this->assertDatabaseHas('academic_years', ['name' => '2027-2028', 'status' => 'open']);
     }
 
-    public function test_operations_center_combines_purchases_invoices_and_returns_without_changing_their_workflows(): void
+    public function test_financial_center_combines_separate_student_and_supplier_documents_without_changing_their_workflows(): void
     {
         $user = $this->administrator();
         $registration = $this->registration($user);
@@ -744,15 +744,15 @@ class CoreWorkflowTest extends TestCase
         ]);
         BookReturn::create(['student_id' => $registration->student_id, 'invoice_id' => $invoice->id, 'returned_on' => '2026-09-03', 'refund_total' => '5.00', 'status' => 'accepted', 'accepted_by' => $user->id]);
 
-        $this->actingAs($user)->get(route('operations.index'))
+        $this->actingAs($user)->get(route('finance.index'))
             ->assertOk()
-            ->assertSee('Operations Center')
+            ->assertSee('Financial Center')
             ->assertSee('PUR-OPS-001')
             ->assertSee('INV-OPS-001')
-            ->assertSee('Book return')
-            ->assertSee('Supplier return')
+            ->assertSee('Student refund / return')
+            ->assertSee('Supplier credit')
             ->assertSee('CN-OPS-001');
-        $this->actingAs($user)->get(route('operations.index', ['type' => 'purchase', 'search' => 'PUR-OPS-001']))
+        $this->actingAs($user)->get(route('finance.index', ['tab' => 'suppliers', 'search' => 'PUR-OPS-001']))
             ->assertOk()
             ->assertSee('PUR-OPS-001')
             ->assertDontSee('INV-OPS-001');
