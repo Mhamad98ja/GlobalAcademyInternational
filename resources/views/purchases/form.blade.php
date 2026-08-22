@@ -43,12 +43,11 @@
         </div>
 
         <div>
-            <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="mb-3">
                 <div>
                     <h2 class="panel-title">Purchase items</h2>
                     <p class="mt-1 text-xs text-slate-500">Scan a barcode or ISBN and press Enter to add the book, then continue scanning. Sale price is shown for reference; only the supplier purchase price is saved on this purchase and updates the catalogue cost.</p>
                 </div>
-                <button type="button" class="btn btn-secondary btn-small" data-add-row="#purchase-lines" data-template="#purchase-line-template">Add line</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table min-w-[900px]">

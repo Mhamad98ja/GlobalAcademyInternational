@@ -74,9 +74,8 @@
         </div>
 
         <div data-book-fields>
-            <div class="mb-2 flex items-center justify-between">
+            <div class="mb-2">
                 <div><label class="form-label mb-0">Books *</label><p class="mt-1 text-xs text-slate-500">Scan a barcode or ISBN and press Enter. The book is added with quantity 1 and the next line opens automatically; scanning the same book again increases its quantity.</p></div>
-                <button type="button" class="btn btn-secondary text-xs" data-add-line>Add book</button>
             </div>
             <div class="space-y-2" data-transfer-lines>
                 <div class="form-grid transfer-line">
@@ -218,10 +217,6 @@ function advanceTransferScan(line) {
 
 kind.addEventListener('change', swap);
 document.querySelectorAll('[data-package-choice]').forEach((choice) => choice.addEventListener('change', () => refreshPackageInputs()));
-document.querySelector('[data-add-line]').addEventListener('click', () => {
-    const line = appendTransferLine(false);
-    line.querySelector('[data-book-search]')?.focus();
-});
 lines.addEventListener('click', (event) => {
     if (event.target.matches('[data-remove-line]') && lines.children.length > 1) {
         event.target.closest('.transfer-line').remove();

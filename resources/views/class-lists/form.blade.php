@@ -69,12 +69,11 @@
         </div>
 
         <div>
-            <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="mb-3">
                 <div>
                     <h2 class="panel-title">Package books</h2>
                     <p class="mt-1 text-xs text-slate-500">Scan an ISBN or barcode and press Enter to add it, then continue scanning. Scanning a book already listed increases its quantity. Paid books always use their current catalogue sale price. Use Discounted only when this package needs a lower unit price; Free issues the book at zero.</p>
                 </div>
-                <button type="button" class="btn btn-secondary btn-small" data-add-row="#package-lines" data-template="#package-line-template">Add book</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table min-w-[760px]">

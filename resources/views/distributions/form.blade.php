@@ -40,12 +40,11 @@
         </div>
 
         <div>
-            <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="mb-3">
                 <div>
                     <h2 class="panel-title">Books to issue</h2>
                     <p class="mt-1 text-xs text-slate-500">Scan an ISBN or barcode and press Enter to add the book, then continue scanning. Scan the same book again to increase its quantity.@if ($canViewFinancials) Books use their current catalogue sale price. @endif</p>
                 </div>
-                <button type="button" class="btn btn-secondary btn-small" data-add-row="#distribution-lines" data-template="#distribution-line-template">Add book</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table min-w-[650px]">
