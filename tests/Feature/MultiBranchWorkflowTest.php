@@ -66,7 +66,7 @@ class MultiBranchWorkflowTest extends TestCase
     {
         $user = $this->user('manager@example.test');
         [$main, $north] = $this->branches($user);
-        $book = Book::create(['sku' => 'TRF-BOOK', 'barcode' => '978000090', 'title' => 'Transfer Book']);
+        $book = Book::create(['sku' => 'TRF-BOOK', 'barcode' => '978000090', 'title' => 'Transfer Book', 'selling_price' => '10.00', 'tax_rate' => '5.00']);
         BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 12]);
         BranchBookStock::create(['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 2]);
 
@@ -86,6 +86,24 @@ class MultiBranchWorkflowTest extends TestCase
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'type' => 'branch_transfer_out', 'quantity_change' => -5]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'type' => 'branch_transfer_in', 'quantity_change' => 5]);
 
+        $invoice = $transfer->financialInvoice()->firstOrFail();
+        $this->assertMatchesRegularExpression('/^BTI-\d{8}-[A-Z0-9]{10}$/', $invoice->invoice_number);
+        $this->assertSame('50.00', $invoice->subtotal);
+        $this->assertSame('2.50', $invoice->tax_total);
+        $this->assertSame('52.50', $invoice->total);
+        $this->assertDatabaseHas('branch_transfer_invoice_items', [
+            'branch_transfer_invoice_id' => $invoice->id,
+            'book_id' => $book->id,
+            'quantity' => 5,
+            'unit_price' => '10.00',
+            'line_total' => '52.50',
+        ]);
+        $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
+            ->get(route('transfers.invoice', $transfer))
+            ->assertOk()
+            ->assertSee('Internal Branch Transfer Invoice')
+            ->assertSee('52.50');
+
         $movement = StockMovement::withoutGlobalScopes()->where('type', 'branch_transfer_out')->firstOrFail();
         $this->assertSame(['from' => 'Main Branch', 'to' => 'North Branch'], $movement->transferEndpoints());
     }
@@ -97,7 +115,7 @@ class MultiBranchWorkflowTest extends TestCase
         $year = AcademicYear::create(['name' => '2026-2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'open', 'created_by' => $user->id]);
         $level = SchoolLevel::create(['name' => 'Primary']);
         $grade = Grade::create(['school_level_id' => $level->id, 'name' => 'Grade 1']);
-        $book = Book::create(['sku' => 'PACKAGE-BOOK', 'barcode' => '978000098', 'title' => 'Package Book']);
+        $book = Book::create(['sku' => 'PACKAGE-BOOK', 'barcode' => '978000098', 'title' => 'Package Book', 'selling_price' => '10.00']);
         BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 8]);
         $package = new ClassBookList(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => 'Grade 1 starter package', 'is_active' => true]);
         $package->branch_id = $main->id;
@@ -124,6 +142,8 @@ class MultiBranchWorkflowTest extends TestCase
         $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 6]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'book_id' => $book->id, 'type' => 'branch_transfer_out', 'quantity_change' => -6]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'book_id' => $book->id, 'type' => 'branch_transfer_in', 'quantity_change' => 6]);
+        $this->assertDatabaseHas('branch_transfer_invoices', ['book_transfer_id' => $packageTransfer->id, 'total' => '60.00']);
+        $this->assertSame('60.00', $packageTransfer->financialInvoice()->firstOrFail()->total);
     }
 
     public function test_completed_branch_transfer_can_be_reversed_once_and_restores_branch_stock(): void
@@ -150,6 +170,7 @@ class MultiBranchWorkflowTest extends TestCase
         $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 2]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'type' => 'branch_transfer_reversal_out', 'quantity_change' => -5]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'type' => 'branch_transfer_reversal_in', 'quantity_change' => 5]);
+        $this->assertDatabaseHas('branch_transfer_invoices', ['book_transfer_id' => $transfer->id, 'status' => 'voided', 'voided_by' => $user->id]);
 
         $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
             ->get(route('transfers.show', $transfer))
@@ -160,6 +181,37 @@ class MultiBranchWorkflowTest extends TestCase
         $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
             ->post(route('transfers.reverse', $transfer))
             ->assertSessionHasErrors('transfer');
+    }
+
+    public function test_main_controller_can_view_financial_transfers_between_any_branches(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        [$main, $north] = $this->branches($controller);
+        $east = Branch::create(['code' => 'EAST', 'name' => 'East Branch', 'is_active' => true]);
+        $book = Book::create(['sku' => 'CENTRAL-BOOK', 'barcode' => '978000099', 'title' => 'Central Review Book', 'selling_price' => '15.00']);
+        BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 10]);
+        BranchBookStock::create(['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 0]);
+        BranchBookStock::create(['branch_id' => $east->id, 'book_id' => $book->id, 'quantity_on_hand' => 0]);
+
+        $service = app(BookTransferService::class);
+        $service->betweenBranches($main, $north, [['book_id' => $book->id, 'quantity' => 6]], null, $controller);
+        $northToEast = $service->betweenBranches($north, $east, [['book_id' => $book->id, 'quantity' => 2]], null, $controller);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('transfers.index', ['all_branches' => 1]))
+            ->assertOk()
+            ->assertSee('All branches')
+            ->assertSee($northToEast->transfer_number)
+            ->assertSee('30.00')
+            ->assertSee('East Branch');
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('transfers.show', $northToEast))
+            ->assertOk()
+            ->assertSee('North Branch')
+            ->assertSee('East Branch')
+            ->assertSee('Print internal invoice');
     }
 
     public function test_user_custody_assignment_and_transfer_preserve_branch_stock(): void

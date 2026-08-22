@@ -9,6 +9,7 @@ use App\Models\Book;
 use App\Models\BookTransfer;
 use App\Models\Branch;
 use App\Models\ClassBookList;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\BookTransferService;
 use App\Services\BranchContext;
@@ -20,15 +21,26 @@ use Illuminate\View\View;
 
 class BookTransfersController extends Controller
 {
-    public function index(BranchContext $context): View
+    public function index(Request $request, BranchContext $context): View
     {
         $branchId = $context->id();
-        $transfers = BookTransfer::query()
-            ->with('sourceBranch', 'destinationBranch', 'sourceUser', 'destinationUser', 'items.book')
-            ->where(fn ($query) => $query->where('source_branch_id', $branchId)->orWhere('destination_branch_id', $branchId))
-            ->latest('transferred_on')->latest('id')->paginate(20);
+        $canViewAllBranches = $this->canViewAllBranches($request->user(), $context);
+        $showAllBranches = $canViewAllBranches && $request->boolean('all_branches');
+        $query = BookTransfer::query()
+            ->with('sourceBranch', 'destinationBranch', 'sourceUser', 'destinationUser', 'items.book', 'financialInvoice');
 
-        return view('transfers.index', compact('transfers'));
+        if (! $showAllBranches) {
+            $query->where(fn ($transfers) => $transfers->where('source_branch_id', $branchId)->orWhere('destination_branch_id', $branchId));
+        }
+
+        $transfers = $query->latest('transferred_on')->latest('id')->paginate(20)->withQueryString();
+
+        return view('transfers.index', [
+            'transfers' => $transfers,
+            'canViewAllBranches' => $canViewAllBranches,
+            'showAllBranches' => $showAllBranches,
+            'canViewFinancials' => $request->user()?->canViewFinancials() ?? false,
+        ]);
     }
 
     public function create(BranchContext $context): View
@@ -102,23 +114,63 @@ class BookTransfersController extends Controller
         return redirect()->route('transfers.show', $transfer)->with('success', 'Book transfer completed and recorded in both ledgers.');
     }
 
-    public function show(BookTransfer $transfer, BranchContext $context): View
+    public function show(Request $request, BookTransfer $transfer, BranchContext $context): View
     {
-        $branchId = $context->id();
-        abort_unless($transfer->source_branch_id === $branchId || $transfer->destination_branch_id === $branchId, 404);
-        $transfer->load('sourceBranch', 'destinationBranch', 'sourceUser', 'destinationUser', 'academicYear', 'items.book', 'createdBy', 'reversedBy');
+        abort_unless($this->canAccessTransfer($request->user(), $transfer, $context), 404);
+        $transfer->load('sourceBranch', 'destinationBranch', 'sourceUser', 'destinationUser', 'academicYear', 'items.book', 'createdBy', 'reversedBy', 'financialInvoice');
 
-        return view('transfers.show', compact('transfer'));
+        return view('transfers.show', [
+            'transfer' => $transfer,
+            'canViewFinancials' => $request->user()?->canViewFinancials() ?? false,
+        ]);
     }
 
     public function reverse(Request $request, BookTransfer $transfer, BookTransferService $transfers, BranchContext $context): RedirectResponse
     {
-        $branchId = $context->id();
-        abort_unless($transfer->source_branch_id === $branchId || $transfer->destination_branch_id === $branchId, 404);
+        abort_unless($this->canAccessTransfer($request->user(), $transfer, $context), 404);
         $data = $request->validate(['reversal_notes' => ['nullable', 'string', 'max:3000']]);
 
         $transfers->reverse($transfer, $request->user(), $data['reversal_notes'] ?? null);
 
         return redirect()->route('transfers.show', $transfer)->with('success', 'Book transfer reversed and recorded in both ledgers.');
+    }
+
+    public function printInvoice(Request $request, BookTransfer $transfer, BranchContext $context): View
+    {
+        abort_unless($this->canAccessTransfer($request->user(), $transfer, $context), 404);
+        abort_unless($request->user()?->canViewFinancials(), 403);
+
+        $transfer->load(
+            'sourceBranch',
+            'destinationBranch',
+            'createdBy',
+            'financialInvoice.items.book',
+            'financialInvoice.issuedBy',
+            'financialInvoice.voidedBy',
+        );
+        $invoice = $transfer->financialInvoice;
+        abort_unless($invoice, 404);
+
+        $school = SystemSetting::query()
+            ->whereIn('key', ['school_name', 'school_address', 'school_phone'])
+            ->pluck('value', 'key');
+
+        return view('transfers.invoice', compact('transfer', 'invoice', 'school'));
+    }
+
+    private function canAccessTransfer(?User $user, BookTransfer $transfer, BranchContext $context): bool
+    {
+        if ($this->canViewAllBranches($user, $context)) {
+            return true;
+        }
+
+        $branchId = $context->id();
+
+        return $transfer->source_branch_id === $branchId || $transfer->destination_branch_id === $branchId;
+    }
+
+    private function canViewAllBranches(?User $user, BranchContext $context): bool
+    {
+        return $user?->isControllerAdministrator() === true && $context->branch()?->code === 'MAIN';
     }
 }

@@ -8,6 +8,7 @@ use App\Models\Concerns\HasPublicId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class BookTransfer extends Model
 {
@@ -32,4 +33,5 @@ class BookTransfer extends Model
     public function reversedBy(): BelongsTo { return $this->belongsTo(User::class, 'reversed_by'); }
     public function academicYear(): BelongsTo { return $this->belongsTo(AcademicYear::class); }
     public function items(): HasMany { return $this->hasMany(BookTransferItem::class); }
+    public function financialInvoice(): HasOne { return $this->hasOne(BranchTransferInvoice::class); }
 }

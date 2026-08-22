@@ -17,7 +17,11 @@ use Illuminate\Validation\ValidationException;
 
 final class BookTransferService
 {
-    public function __construct(private readonly InventoryService $inventory, private readonly AuditService $audit)
+    public function __construct(
+        private readonly InventoryService $inventory,
+        private readonly AuditService $audit,
+        private readonly BranchTransferInvoiceService $financialInvoices,
+    )
     {
     }
 
@@ -35,7 +39,13 @@ final class BookTransferService
                 $this->inventory->change($book, $line['quantity'], 'branch_transfer_in', $transfer, $year, $user, 'Transfer from '.$source->name, $notes, false, $destination);
                 $transfer->items()->create($line);
             }
-            $this->audit->log('book_transfer.branch_completed', $transfer, [], ['source' => $source->code, 'destination' => $destination->code, 'items' => $transfer->items()->count()]);
+            $invoice = $this->financialInvoices->issue($transfer, $user);
+            $this->audit->log('book_transfer.branch_completed', $transfer, [], [
+                'source' => $source->code,
+                'destination' => $destination->code,
+                'items' => $transfer->items()->count(),
+                'financial_invoice' => $invoice->invoice_number,
+            ]);
 
             return $transfer;
         });
@@ -123,6 +133,9 @@ final class BookTransferService
                 'reversed_by' => $performedBy->id,
                 'reversed_at' => now(),
             ]);
+            if ($transfer->transfer_type === 'branch_to_branch') {
+                $this->financialInvoices->voidFor($transfer, $performedBy, $notes);
+            }
             $this->audit->log('book_transfer.reversed', $transfer, ['status' => 'completed'], ['status' => 'reversed', 'items' => $items->count()], $notes);
 
             return $transfer;
