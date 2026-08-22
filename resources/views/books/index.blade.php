@@ -8,7 +8,6 @@
     </div>
     <div class="flex flex-wrap gap-2">
         @if ($canManageBooks)<a class="btn btn-secondary" href="{{ route('books.create') }}">Add book</a>@endif
-        @if ($canManagePackages && $tab === 'packages')<a class="btn btn-secondary" target="_blank" rel="noopener" href="{{ route('class-lists.print') }}">Print grade lists</a>@endif
         @if ($canManagePackages)<a class="btn btn-primary" href="{{ route('class-lists.create') }}">New package</a>@endif
     </div>
 </div>
@@ -42,7 +41,7 @@
                             <td>{{ $list->section?->name ?? 'All sections' }}</td>
                             <td>{{ $list->items->count() }}</td>
                             <td><span class="badge {{ $list->is_active ? 'badge-green' : 'badge-red' }}">{{ $list->is_active ? 'Active' : 'Inactive' }}</span></td>
-                            <td><a class="link text-xs" href="{{ route('class-lists.edit', $list) }}">Edit</a></td>
+                            <td><div class="flex gap-3"><a class="link text-xs" href="{{ route('class-lists.edit', $list) }}">Edit</a><a class="link text-xs" target="_blank" rel="noopener" href="{{ route('class-lists.print', $list) }}">Print this grade list</a></div></td>
                         </tr>
                     @empty
                         <tr><td colspan="7" class="empty">No class book packages yet.</td></tr>

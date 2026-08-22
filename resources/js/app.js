@@ -135,11 +135,12 @@ const refreshBookPicker = (searchInput) => {
     const options = [...select.options].filter((option) => option.value);
     const exactMatch = options.find((option) => (
         normaliseBookSearch(option.dataset.bookBarcode) === query
+        || normaliseBookSearch(option.dataset.bookIsbn) === query
         || normaliseBookSearch(option.dataset.bookTitle) === query
     ));
 
     options.forEach((option) => {
-        const searchable = `${option.dataset.bookBarcode ?? ''} ${option.dataset.bookTitle ?? ''}`;
+        const searchable = `${option.dataset.bookBarcode ?? ''} ${option.dataset.bookIsbn ?? ''} ${option.dataset.bookTitle ?? ''}`;
         const matches = !query || normaliseBookSearch(searchable).includes(query);
         option.hidden = !matches;
         option.disabled = !matches;

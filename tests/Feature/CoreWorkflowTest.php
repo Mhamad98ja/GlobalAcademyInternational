@@ -367,6 +367,15 @@ class CoreWorkflowTest extends TestCase
             'is_active' => true,
         ]);
         $package->items()->create(['book_id' => $book->id, 'quantity' => 1, 'is_mandatory' => true, 'price_type' => 'paid', 'unit_price' => '0.00']);
+        $otherBook = Book::create(['sku' => 'B-PRINT-OTHER', 'barcode' => '978000032', 'title' => 'Do Not Print This Book', 'selling_price' => '8.00']);
+        $otherPackage = ClassBookList::create([
+            'academic_year_id' => $registration->academic_year_id,
+            'grade_id' => $registration->grade_id,
+            'section_id' => null,
+            'name' => 'Other grade package',
+            'is_active' => true,
+        ]);
+        $otherPackage->items()->create(['book_id' => $otherBook->id, 'quantity' => 1, 'is_mandatory' => true, 'price_type' => 'paid', 'unit_price' => '0.00']);
 
         $this->actingAs($user)->get(route('books.index'))
             ->assertOk()
@@ -377,12 +386,15 @@ class CoreWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Combined package')
             ->assertSee('New package')
-            ->assertSee('Print grade lists');
-        $this->actingAs($user)->get(route('class-lists.print'))
+            ->assertSee('Print this grade list')
+            ->assertDontSee('Print grade lists');
+        $this->actingAs($user)->get(route('class-lists.print', $package))
             ->assertOk()
-            ->assertSee('Book packages by grade')
+            ->assertSee('Print grade book list')
             ->assertSee('Grade 4 book list')
-            ->assertSee('Combined catalogue title');
+            ->assertSee('Combined catalogue title')
+            ->assertDontSee('Other grade package')
+            ->assertDontSee('Do Not Print This Book');
         $this->actingAs($user)->get(route('class-lists.index'))
             ->assertRedirect(route('books.index', ['tab' => 'packages']));
     }

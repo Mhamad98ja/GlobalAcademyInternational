@@ -75,14 +75,14 @@
 
         <div data-book-fields>
             <div class="mb-2 flex items-center justify-between">
-                <div><label class="form-label mb-0">Books *</label><p class="mt-1 text-xs text-slate-500">Choose the physical stock to move.</p></div>
+                <div><label class="form-label mb-0">Books *</label><p class="mt-1 text-xs text-slate-500">Scan a barcode or ISBN and press Enter. The book is added with quantity 1 and the next line opens automatically; scanning the same book again increases its quantity.</p></div>
                 <button type="button" class="btn btn-secondary text-xs" data-add-line>Add book</button>
             </div>
             <div class="space-y-2" data-transfer-lines>
                 <div class="form-grid transfer-line">
                     <div data-book-picker>
-                        <input type="search" list="transfer-book-options" data-book-search autocomplete="off" placeholder="Search barcode or book name">
-                        <select name="items[0][book_id]" required data-book-select><option value="">Select book</option>@foreach($books as $book)<option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-title="{{ $book->title }}" @selected(old('items.0.book_id') == $book->id)>{{ $book->barcode }} - {{ $book->title }} - available: {{ $book->available_quantity }}</option>@endforeach</select>
+                        <input type="search" list="transfer-book-options" data-book-search autocomplete="off" placeholder="Scan ISBN, barcode, or search book" autofocus>
+                        <select name="items[0][book_id]" required data-book-select><option value="">Select book</option>@foreach($books as $book)<option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-isbn="{{ $book->isbn }}" data-book-title="{{ $book->title }}" @selected(old('items.0.book_id') == $book->id)>{{ $book->barcode }} - {{ $book->title }} - available: {{ $book->available_quantity }}</option>@endforeach</select>
                     </div>
                     <div class="flex gap-2"><input type="number" name="items[0][quantity]" min="1" required placeholder="Quantity" value="{{ old('items.0.quantity') }}" data-transfer-quantity><button type="button" class="btn btn-secondary" data-remove-line>Remove</button></div>
                 </div>
@@ -96,7 +96,7 @@
 
 <template id="transfer-line-template">
     <div class="form-grid transfer-line">
-        <div data-book-picker><input type="search" list="transfer-book-options" data-book-search autocomplete="off" placeholder="Search barcode or book name"><select required data-book-select><option value="">Select book</option>@foreach($books as $book)<option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-title="{{ $book->title }}">{{ $book->barcode }} - {{ $book->title }} - available: {{ $book->available_quantity }}</option>@endforeach</select></div>
+        <div data-book-picker><input type="search" list="transfer-book-options" data-book-search autocomplete="off" placeholder="Scan ISBN, barcode, or search book"><select required data-book-select><option value="">Select book</option>@foreach($books as $book)<option value="{{ $book->id }}" data-book-barcode="{{ $book->barcode }}" data-book-isbn="{{ $book->isbn }}" data-book-title="{{ $book->title }}">{{ $book->barcode }} - {{ $book->title }} - available: {{ $book->available_quantity }}</option>@endforeach</select></div>
         <div class="flex gap-2"><input type="number" min="1" required placeholder="Quantity" data-transfer-quantity><button type="button" class="btn btn-secondary" data-remove-line>Remove</button></div>
     </div>
 </template>
@@ -123,7 +123,15 @@ function swap() {
     packageFields.classList.toggle('hidden', !isPackageTransfer);
     refreshPackageInputs(isPackageTransfer);
     bookFields.classList.toggle('hidden', isPackageTransfer);
-    bookFields.querySelectorAll('input, select').forEach((field) => { field.disabled = isPackageTransfer; });
+    bookFields.querySelectorAll('input, select').forEach((field) => {
+        if (isPackageTransfer) {
+            field.disabled = true;
+            return;
+        }
+
+        field.disabled = !field.matches('[data-book-search]')
+            && field.closest('.transfer-line')?.dataset.transferPending === 'true';
+    });
 }
 
 function refreshPackageInputs(isPackageTransfer = kind.value === 'package_to_branch') {
@@ -142,13 +150,92 @@ function names() {
     });
 }
 
+function setPendingTransferLine(line, isPending) {
+    line.dataset.transferPending = String(isPending);
+    line.querySelectorAll('[data-book-select], [data-transfer-quantity]').forEach((field) => {
+        field.disabled = isPending;
+    });
+}
+
+function appendTransferLine(isPending = true) {
+    lines.append(template.content.cloneNode(true));
+    names();
+
+    const line = [...lines.querySelectorAll('.transfer-line')].at(-1);
+    setPendingTransferLine(line, isPending);
+
+    return line;
+}
+
+function matchingBookOption(line) {
+    const search = line.querySelector('[data-book-search]');
+    const select = line.querySelector('[data-book-select]');
+    if (!search || !select) return null;
+
+    const selected = select.options[select.selectedIndex];
+    if (selected?.value) return selected;
+
+    const value = search.value.trim().toLocaleLowerCase();
+    if (!value) return null;
+
+    return [...select.options].find((option) => option.value && [
+        option.dataset.bookBarcode,
+        option.dataset.bookIsbn,
+        option.dataset.bookTitle,
+    ].filter(Boolean).some((candidate) => candidate.toLocaleLowerCase() === value)) ?? null;
+}
+
+function advanceTransferScan(line) {
+    setPendingTransferLine(line, false);
+    const option = matchingBookOption(line);
+    const search = line.querySelector('[data-book-search]');
+    const select = line.querySelector('[data-book-select]');
+    const quantity = line.querySelector('[data-transfer-quantity]');
+    if (!option || !search || !select || !quantity) return;
+
+    const duplicate = [...lines.querySelectorAll('.transfer-line')].find((candidate) => candidate !== line
+        && candidate.querySelector('[data-book-select]')?.value === option.value);
+    if (duplicate) {
+        const duplicateQuantity = duplicate.querySelector('[data-transfer-quantity]');
+        duplicateQuantity.value = String((Number.parseInt(duplicateQuantity.value, 10) || 0) + 1);
+        select.value = '';
+        search.value = '';
+        setPendingTransferLine(line, true);
+        search.focus();
+        return;
+    }
+
+    select.value = option.value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    if (!quantity.value) quantity.value = '1';
+
+    const currentLines = [...lines.querySelectorAll('.transfer-line')];
+    const nextLine = currentLines[currentLines.indexOf(line) + 1];
+    const nextSearch = nextLine?.querySelector('[data-book-search]');
+    const target = nextSearch && !nextSearch.value.trim() ? nextLine : appendTransferLine();
+    requestAnimationFrame(() => target?.querySelector('[data-book-search]')?.focus());
+}
+
 kind.addEventListener('change', swap);
 document.querySelectorAll('[data-package-choice]').forEach((choice) => choice.addEventListener('change', () => refreshPackageInputs()));
-document.querySelector('[data-add-line]').addEventListener('click', () => { lines.append(template.content.cloneNode(true)); names(); });
+document.querySelector('[data-add-line]').addEventListener('click', () => {
+    const line = appendTransferLine(false);
+    line.querySelector('[data-book-search]')?.focus();
+});
 lines.addEventListener('click', (event) => {
     if (event.target.matches('[data-remove-line]') && lines.children.length > 1) {
         event.target.closest('.transfer-line').remove();
         names();
+    }
+});
+lines.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || !event.target.matches('[data-book-search]')) return;
+    event.preventDefault();
+    advanceTransferScan(event.target.closest('.transfer-line'));
+});
+lines.addEventListener('input', (event) => {
+    if (event.target.matches('[data-book-search]')) {
+        setPendingTransferLine(event.target.closest('.transfer-line'), false);
     }
 });
 swap();

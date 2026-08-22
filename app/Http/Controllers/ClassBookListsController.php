@@ -28,20 +28,14 @@ class ClassBookListsController extends Controller
         return $this->form(new ClassBookList());
     }
 
-    public function print(): View
+    public function print(ClassBookList $classBookList): View
     {
-        $lists = ClassBookList::query()
-            ->with('academicYear', 'grade', 'section', 'items.book')
-            ->orderByDesc('academic_year_id')
-            ->orderBy('grade_id')
-            ->orderBy('section_id')
-            ->orderBy('name')
-            ->get();
+        $classBookList->load('academicYear', 'grade', 'section', 'items.book');
         $school = SystemSetting::query()
             ->whereIn('key', ['school_name', 'school_address', 'school_phone'])
             ->pluck('value', 'key');
 
-        return view('class-lists.print', compact('lists', 'school'));
+        return view('class-lists.print', ['list' => $classBookList, 'school' => $school]);
     }
 
     public function store(Request $request): RedirectResponse
