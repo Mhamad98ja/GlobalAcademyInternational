@@ -60,6 +60,55 @@ class CoreWorkflowTest extends TestCase
         $this->assertDatabaseHas('books',['id'=>$book->id,'stock_on_hand'=>3]);$this->assertDatabaseHas('stock_movements',['book_id'=>$book->id,'type'=>'student_distribution','quantity_change'=>-2]);$this->assertDatabaseHas('invoices',['id'=>$distribution->invoice_id,'total'=>'24.00','balance_due'=>'24.00']);
     }
 
+    public function test_return_form_allows_only_selected_books_up_to_their_remaining_returnable_quantity(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $firstBook = Book::create(['sku' => 'RETURN-ONE', 'barcode' => '978000041', 'title' => 'First returnable book', 'selling_price' => '10.00']);
+        $secondBook = Book::create(['sku' => 'RETURN-TWO', 'barcode' => '978000042', 'title' => 'Second returnable book', 'selling_price' => '12.00']);
+        app(InventoryService::class)->change($firstBook, 2, 'opening_stock', null, $registration->academicYear, $user, 'Initial stock');
+        app(InventoryService::class)->change($secondBook, 2, 'opening_stock', null, $registration->academicYear, $user, 'Initial stock');
+        $distribution = app(BookDistributionService::class)->distribute($registration, [
+            ['book_id' => $firstBook->id, 'quantity' => 2],
+            ['book_id' => $secondBook->id, 'quantity' => 2],
+        ], [], $user);
+        $firstItem = $distribution->items()->where('book_id', $firstBook->id)->firstOrFail();
+        $secondItem = $distribution->items()->where('book_id', $secondBook->id)->firstOrFail();
+
+        app(\App\Services\BookReturnService::class)->accept($distribution->invoice, [[
+            'distribution_item_id' => $firstItem->id,
+            'quantity' => 1,
+            'condition' => 'new_resellable',
+            'reason' => 'One copy returned first',
+        ]], $user);
+
+        $this->actingAs($user)->get(route('returns.form', $distribution->invoice))
+            ->assertOk()
+            ->assertSee('Select books to return')
+            ->assertSee('data-return-choice', false)
+            ->assertSee('First returnable book')
+            ->assertSee('Second returnable book')
+            ->assertSee('max="1"', false)
+            ->assertSee('max="2"', false);
+
+        $this->actingAs($user)->post(route('returns.store', $distribution->invoice), [
+            'items' => [
+                1 => [
+                    'distribution_item_id' => $secondItem->id,
+                    'quantity' => 1,
+                    'condition' => 'used_acceptable',
+                    'reason' => 'Only this book is being returned now',
+                ],
+            ],
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('book_return_items', [
+            'book_distribution_item_id' => $secondItem->id,
+            'quantity' => 1,
+            'condition' => 'used_acceptable',
+        ]);
+    }
+
     public function test_deferred_distribution_creates_a_pending_approval_request(): void
     {
         $user = $this->administrator();
