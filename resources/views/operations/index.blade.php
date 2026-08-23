@@ -23,15 +23,16 @@
 @if ($canViewCashPosition)
 <section class="panel mb-6 overflow-hidden">
     <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 bg-cyan-50 p-5">
-        <div><div class="text-xs font-semibold uppercase tracking-[.1em] text-cyan-700">School cash</div><h2 class="mt-1 text-lg font-semibold text-cyan-950">Total cash position</h2><p class="mt-1 text-sm text-cyan-900">All recorded external money in and out across the selected branch scope.</p></div>
-        <div class="rounded-lg bg-white px-5 py-3 text-right shadow-sm"><div class="text-xs font-semibold uppercase text-slate-500">Available cash</div><div class="mt-1 text-2xl font-bold {{ $cashSummary['total'] < 0 ? 'text-rose-700' : 'text-emerald-700' }}">{{ $number($cashSummary['total']) }}</div></div>
+        <div><div class="text-xs font-semibold uppercase tracking-[.1em] text-cyan-700">School financial position</div><h2 class="mt-1 text-lg font-semibold text-cyan-950">Total cash and branch position</h2><p class="mt-1 text-sm text-cyan-900">External cash plus the branch's internal settlement balance across the selected branch scope.</p></div>
+        <div class="rounded-lg bg-white px-5 py-3 text-right shadow-sm"><div class="text-xs font-semibold uppercase text-slate-500">Net financial position</div><div class="mt-1 text-2xl font-bold {{ $cashSummary['total'] < 0 ? 'text-rose-700' : 'text-emerald-700' }}">{{ $number($cashSummary['total']) }}</div></div>
     </div>
-    <dl class="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+    <dl class="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+        <div class="p-4"><dt class="muted">External cash</dt><dd class="mt-1 text-xl font-bold {{ $cashSummary['external_cash'] < 0 ? 'text-rose-700' : 'text-emerald-700' }}">{{ $number($cashSummary['external_cash']) }}</dd></div>
+        <div class="p-4"><dt class="muted">Internal branch settlement</dt><dd class="mt-1 text-xl font-bold {{ ($cashSummary['internal_branch_settlement'] ?? 0) < 0 ? 'text-rose-700' : 'text-cyan-700' }}">{{ $number($cashSummary['internal_branch_settlement']) }}</dd></div>
         <div class="p-4"><dt class="muted">Student payments received</dt><dd class="mt-1 text-xl font-bold text-emerald-700">{{ $number($cashSummary['receipts']) }}</dd></div>
-        <div class="p-4"><dt class="muted">Supplier payments</dt><dd class="mt-1 text-xl font-bold text-rose-700">{{ $number($cashSummary['supplier_payments']) }}</dd></div>
-        <div class="p-4"><dt class="muted">Student refunds</dt><dd class="mt-1 text-xl font-bold text-rose-700">{{ $number($cashSummary['refunds']) }}</dd></div>
+        <div class="p-4"><dt class="muted">External payments and refunds</dt><dd class="mt-1 text-xl font-bold text-rose-700">{{ $number($cashSummary['supplier_payments'] + $cashSummary['refunds']) }}</dd></div>
     </dl>
-    <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">Total cash = student payments received minus supplier payments and student refunds. It includes every recorded payment method and is not changed by internal branch-transfer settlements or the date/search filters above.</div>
+    <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">Net financial position = external cash plus internal branch settlement. Internal transfers affect each individual branch, but cancel to zero in the all-branches total. The totals include every recorded payment method and are not changed by the date/search filters above.</div>
 </section>
 @endif
 

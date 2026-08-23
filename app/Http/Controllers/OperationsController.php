@@ -178,7 +178,7 @@ class OperationsController extends Controller
                 }),
             'branch_cash_movements.settled_on',
         );
-        // A true cash position is lifetime-based and deliberately ignores the
+        // Financial positions are lifetime-based and deliberately ignore the
         // page filters. Those filters only narrow the activity ledger below.
         $cashReceiptQuery = $branchScoped(Payment::query())->where('status', 'valid');
         $cashSupplierPaymentQuery = $branchScoped(SupplierPayment::query());
@@ -201,11 +201,17 @@ class OperationsController extends Controller
         $cashReceipts = $canViewCashPosition ? (float) (clone $cashReceiptQuery)->sum('amount') : null;
         $cashSupplierPayments = $canViewCashPosition ? (float) (clone $cashSupplierPaymentQuery)->sum('amount') : null;
         $cashRefunds = $canViewCashPosition ? (float) (clone $cashRefundQuery)->sum('refund_total') : null;
+        $internalBranchSettlement = $canViewCashPosition && $canViewTransfers
+            ? (float) BranchCashAccount::query()->whereIn('branch_id', $branchIds)->sum('balance')
+            : null;
+        $externalCash = $canViewCashPosition ? $cashReceipts - $cashSupplierPayments - $cashRefunds : null;
         $cashSummary = [
             'receipts' => $cashReceipts,
             'supplier_payments' => $cashSupplierPayments,
             'refunds' => $cashRefunds,
-            'total' => $canViewCashPosition ? $cashReceipts - $cashSupplierPayments - $cashRefunds : null,
+            'external_cash' => $externalCash,
+            'internal_branch_settlement' => $internalBranchSettlement,
+            'total' => $canViewCashPosition ? $externalCash + ($internalBranchSettlement ?? 0) : null,
         ];
         $acceptedTransferQuery = (clone $transferInvoiceQuery)->whereIn('status', ['issued', 'accepted']);
         $branchSummary = [

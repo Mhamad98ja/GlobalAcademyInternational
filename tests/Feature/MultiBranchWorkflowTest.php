@@ -122,6 +122,8 @@ class MultiBranchWorkflowTest extends TestCase
             ->get(route('finance.index', ['tab' => 'branches']))
             ->assertOk()
             ->assertSee('Financial Center')
+            ->assertSee('Total cash and branch position')
+            ->assertSee('Internal branch settlement')
             ->assertSee('Internal branch transfer')
             ->assertSee($invoice->invoice_number)
             ->assertSee('52.50');
