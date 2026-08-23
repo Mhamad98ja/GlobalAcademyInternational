@@ -17,6 +17,7 @@ use App\Services\ClassBookListTransferService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class BookTransfersController extends Controller
@@ -82,7 +83,7 @@ class BookTransfersController extends Controller
         if ($data['transfer_type'] === 'package_to_branch') {
             abort_unless(! empty($data['destination_branch_id']), 422, 'Choose a destination branch.');
             if (empty($data['package_ids'])) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['package_ids' => 'Choose at least one book package.']);
+                throw ValidationException::withMessages(['package_ids' => 'Choose at least one book package.']);
             }
             $packageQuantities = collect($data['package_ids'])->mapWithKeys(function ($packageId) use ($data): array {
                 $packageId = (int) $packageId;
@@ -91,12 +92,12 @@ class BookTransfersController extends Controller
                 return [$packageId => $quantity];
             })->all();
             if (in_array(0, $packageQuantities, true)) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['package_quantities' => 'Enter a quantity for every selected book package.']);
+                throw ValidationException::withMessages(['package_quantities' => 'Enter a quantity for every selected book package.']);
             }
             $destination = Branch::query()->where('is_active', true)->findOrFail($data['destination_branch_id']);
             $transfer = $packageTransfers->transferToBranch($branch, $destination, $packageQuantities, $year, $request->user(), $data['notes'] ?? null);
 
-            return redirect()->route('transfers.show', $transfer)->with('success', count($packageQuantities).' book package(s) and their selected quantities were transferred to '.$destination->name.'.');
+            return redirect()->route('transfers.show', $transfer)->with('success', count($packageQuantities).' book package(s) were dispatched to '.$destination->name.' and now await its receipt confirmation.');
         }
 
         if ($data['transfer_type'] === 'branch_to_branch') {
@@ -111,23 +112,52 @@ class BookTransfersController extends Controller
             $transfer = $transfers->betweenUsers($branch, User::findOrFail($data['source_user_id']), User::findOrFail($data['destination_user_id']), $data['items'] ?? [], $year, $request->user(), $data['notes'] ?? null);
         }
 
-        return redirect()->route('transfers.show', $transfer)->with('success', 'Book transfer completed and recorded in both ledgers.');
+        $message = $data['transfer_type'] === 'branch_to_branch'
+            ? 'Book transfer dispatched. The receiving branch must accept the exact quantities before stock and cash settlement are posted.'
+            : 'Book transfer completed and recorded in both ledgers.';
+
+        return redirect()->route('transfers.show', $transfer)->with('success', $message);
     }
 
     public function show(Request $request, BookTransfer $transfer, BranchContext $context): View
     {
         abort_unless($this->canAccessTransfer($request->user(), $transfer, $context), 404);
-        $transfer->load('sourceBranch', 'destinationBranch', 'sourceUser', 'destinationUser', 'academicYear', 'items.book', 'createdBy', 'reversedBy', 'financialInvoice');
+        $transfer->load('sourceBranch', 'destinationBranch', 'sourceUser', 'destinationUser', 'academicYear', 'items.book', 'createdBy', 'acceptedBy', 'rejectedBy', 'reversedBy', 'financialInvoice.cashMovements.branch', 'financialInvoice.cashMovements.counterpartyBranch', 'financialInvoice.cashMovements.recordedBy');
 
         return view('transfers.show', [
             'transfer' => $transfer,
             'canViewFinancials' => $request->user()?->canViewFinancials() ?? false,
+            'canReceiveTransfer' => $this->canReceiveTransfer($request->user(), $transfer, $context),
+            'canCancelPendingTransfer' => $this->canCancelPendingTransfer($request->user(), $transfer, $context),
         ]);
+    }
+
+    public function accept(Request $request, BookTransfer $transfer, BookTransferService $transfers, BranchContext $context): RedirectResponse
+    {
+        abort_unless($this->canReceiveTransfer($request->user(), $transfer, $context), 404);
+        $data = $request->validate(['receipt_notes' => ['nullable', 'string', 'max:3000']]);
+
+        $transfers->acceptBranchTransfer($transfer, $request->user(), $data['receipt_notes'] ?? null);
+
+        return redirect()->route('transfers.show', $transfer)->with('success', 'Transfer accepted. Destination stock and the matching internal branch settlement have been posted.');
+    }
+
+    public function reject(Request $request, BookTransfer $transfer, BookTransferService $transfers, BranchContext $context): RedirectResponse
+    {
+        abort_unless($this->canReceiveTransfer($request->user(), $transfer, $context), 404);
+        $data = $request->validate(['rejection_reason' => ['required', 'string', 'max:3000']]);
+
+        $transfers->rejectBranchTransfer($transfer, $request->user(), $data['rejection_reason']);
+
+        return redirect()->route('transfers.show', $transfer)->with('success', 'Transfer rejected. The dispatched stock was restored to the sending branch and no cash settlement was posted.');
     }
 
     public function reverse(Request $request, BookTransfer $transfer, BookTransferService $transfers, BranchContext $context): RedirectResponse
     {
         abort_unless($this->canAccessTransfer($request->user(), $transfer, $context), 404);
+        if ($transfer->status === 'pending_receipt') {
+            abort_unless($this->canCancelPendingTransfer($request->user(), $transfer, $context), 404);
+        }
         $data = $request->validate(['reversal_notes' => ['nullable', 'string', 'max:3000']]);
 
         $transfers->reverse($transfer, $request->user(), $data['reversal_notes'] ?? null);
@@ -146,6 +176,8 @@ class BookTransfersController extends Controller
             'createdBy',
             'financialInvoice.items.book',
             'financialInvoice.issuedBy',
+            'financialInvoice.acceptedBy',
+            'financialInvoice.rejectedBy',
             'financialInvoice.voidedBy',
         );
         $invoice = $transfer->financialInvoice;
@@ -172,5 +204,23 @@ class BookTransfersController extends Controller
     private function canViewAllBranches(?User $user, BranchContext $context): bool
     {
         return $user?->isControllerAdministrator() === true && $context->branch()?->code === 'MAIN';
+    }
+
+    private function canReceiveTransfer(?User $user, BookTransfer $transfer, BranchContext $context): bool
+    {
+        return $user !== null
+            && $user->hasPermission('inventory.transfer')
+            && $transfer->transfer_type === 'branch_to_branch'
+            && $transfer->status === 'pending_receipt'
+            && $context->id() === $transfer->destination_branch_id;
+    }
+
+    private function canCancelPendingTransfer(?User $user, BookTransfer $transfer, BranchContext $context): bool
+    {
+        return $user !== null
+            && $user->hasPermission('inventory.transfer')
+            && $transfer->transfer_type === 'branch_to_branch'
+            && $transfer->status === 'pending_receipt'
+            && $context->id() === $transfer->source_branch_id;
     }
 }

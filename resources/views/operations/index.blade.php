@@ -82,14 +82,14 @@
     @if ($canViewTransfers)
         <section class="panel overflow-hidden">
             <div class="flex items-start justify-between gap-3 border-b border-slate-100 bg-amber-50 p-5">
-                <div><div class="text-xs font-semibold uppercase tracking-[.1em] text-amber-700">Branches</div><h2 class="mt-1 text-lg font-semibold text-amber-950">Internal transfer values</h2></div>
+                <div><div class="text-xs font-semibold uppercase tracking-[.1em] text-amber-700">Branches</div><h2 class="mt-1 text-lg font-semibold text-amber-950">Internal settlements</h2></div>
                 <a class="link text-xs font-semibold" href="{{ route('finance.index', ['tab' => 'branches', 'scope' => $showAllBranches ? 'all' : 'current']) }}">Open ledger</a>
             </div>
             <dl class="grid grid-cols-2 divide-x divide-y divide-slate-100">
-                <div class="p-4"><dt class="muted">Issued documents</dt><dd class="mt-1 text-xl font-bold text-slate-900">{{ $number($branchSummary['documents']) }}</dd></div>
-                <div class="p-4"><dt class="muted">Internal value moved</dt><dd class="mt-1 text-xl font-bold text-amber-700">{{ $number($branchSummary['moved']) }}</dd></div>
-                @if (! $showAllBranches)<div class="p-4"><dt class="muted">Sent from branch</dt><dd class="mt-1 text-xl font-bold text-slate-900">{{ $number($branchSummary['sent']) }}</dd></div>@endif
-                @if (! $showAllBranches)<div class="p-4"><dt class="muted">Received by branch</dt><dd class="mt-1 text-xl font-bold text-slate-900">{{ $number($branchSummary['received']) }}</dd></div>@endif
+                <div class="p-4"><dt class="muted">Accepted documents</dt><dd class="mt-1 text-xl font-bold text-slate-900">{{ $number($branchSummary['accepted_documents']) }}</dd></div>
+                <div class="p-4"><dt class="muted">Pending receipt</dt><dd class="mt-1 text-xl font-bold text-amber-700">{{ $number($branchSummary['pending_documents']) }}</dd></div>
+                <div class="p-4"><dt class="muted">Settled amount received</dt><dd class="mt-1 text-xl font-bold text-emerald-700">{{ $number($branchSummary['cash_in']) }}</dd></div>
+                <div class="p-4"><dt class="muted">Cash-control balance</dt><dd class="mt-1 text-xl font-bold {{ $branchSummary['cash_control_balance'] < 0 ? 'text-rose-700' : 'text-emerald-700' }}">{{ $number($branchSummary['cash_control_balance']) }}</dd></div>
             </dl>
             <div class="border-t border-slate-100 px-5 py-3 text-xs"><a class="link" href="{{ route('transfers.index', $showAllBranches ? ['all_branches' => 1] : []) }}">Transfer documents</a> <span class="ml-2 text-slate-500">Not included in cash or profit totals.</span></div>
         </section>
@@ -110,7 +110,7 @@
             <tbody>
                 @forelse ($transactions as $transaction)
                     @php($badge = $transaction['category'] === 'students' ? 'badge-green' : ($transaction['category'] === 'suppliers' ? 'badge-blue' : 'badge-amber'))
-                    @php($statusClass = in_array($transaction['status'], ['cancelled', 'reversed', 'voided'], true) ? 'badge-red' : (in_array($transaction['status'], ['paid', 'valid', 'accepted', 'completed', 'cash', 'card', 'bank_transfer', 'check'], true) ? 'badge-green' : 'badge-amber'))
+                    @php($statusClass = in_array($transaction['status'], ['cancelled', 'reversed', 'voided'], true) ? 'badge-red' : (in_array($transaction['status'], ['paid', 'valid', 'accepted', 'completed', 'settled', 'cash', 'card', 'bank_transfer', 'check'], true) ? 'badge-green' : 'badge-amber'))
                     <tr>
                         <td><span class="badge {{ $badge }}">{{ str($transaction['category'])->headline() }}</span><div class="mt-1 text-xs text-slate-500">{{ $transaction['kind'] }}</div></td>
                         <td><a class="link font-medium" href="{{ $transaction['href'] }}">{{ $transaction['reference'] }}</a><div class="text-xs text-slate-500">{{ $transaction['detail'] }}</div></td>

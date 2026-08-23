@@ -7,12 +7,13 @@ namespace App\Services;
 use App\Models\AcademicYear;
 use App\Models\Book;
 use App\Models\BookTransfer;
+use App\Models\BookTransferItem;
 use App\Models\Branch;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\UserBookStock;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 final class BookTransferService
@@ -21,9 +22,9 @@ final class BookTransferService
         private readonly InventoryService $inventory,
         private readonly AuditService $audit,
         private readonly BranchTransferInvoiceService $financialInvoices,
-    )
-    {
-    }
+        private readonly BranchCashSettlementService $cashSettlements,
+        private readonly BranchTransferNotificationService $notifications,
+    ) {}
 
     public function betweenBranches(Branch $source, Branch $destination, array $items, ?AcademicYear $year, User $user, ?string $notes = null): BookTransfer
     {
@@ -32,23 +33,96 @@ final class BookTransferService
         }
 
         return DB::transaction(function () use ($source, $destination, $items, $year, $user, $notes): BookTransfer {
-            $transfer = $this->makeTransfer('branch_to_branch', $source, $destination, null, null, $year, $user, $notes);
+            $transfer = $this->makeTransfer('branch_to_branch', $source, $destination, null, null, $year, $user, $notes, 'pending_receipt');
             foreach ($this->normalise($items) as $line) {
                 $book = Book::query()->findOrFail($line['book_id']);
                 $this->inventory->change($book, -$line['quantity'], 'branch_transfer_out', $transfer, $year, $user, 'Transfer to '.$destination->name, $notes, false, $source);
-                $this->inventory->change($book, $line['quantity'], 'branch_transfer_in', $transfer, $year, $user, 'Transfer from '.$source->name, $notes, false, $destination);
                 $transfer->items()->create($line);
             }
             $invoice = $this->financialInvoices->issue($transfer, $user);
-            $this->audit->log('book_transfer.branch_completed', $transfer, [], [
+            $this->audit->log('book_transfer.branch_dispatched', $transfer, [], [
                 'source' => $source->code,
                 'destination' => $destination->code,
                 'items' => $transfer->items()->count(),
                 'financial_invoice' => $invoice->invoice_number,
             ]);
+            DB::afterCommit(fn () => $this->notifications->pendingReceipt($transfer));
 
             return $transfer;
         });
+    }
+
+    public function acceptBranchTransfer(BookTransfer $transfer, User $user, ?string $notes = null): BookTransfer
+    {
+        return DB::transaction(function () use ($transfer, $user, $notes): BookTransfer {
+            $transfer = BookTransfer::query()->lockForUpdate()->findOrFail($transfer->id);
+            if ($transfer->transfer_type !== 'branch_to_branch' || $transfer->status !== 'pending_receipt') {
+                throw ValidationException::withMessages(['transfer' => 'Only a pending branch transfer can be accepted.']);
+            }
+
+            $transfer->loadMissing('sourceBranch', 'destinationBranch', 'academicYear');
+            if ($transfer->sourceBranch === null || $transfer->destinationBranch === null) {
+                throw ValidationException::withMessages(['transfer' => 'Both branches must still exist before the transfer can be accepted.']);
+            }
+            $items = $transfer->items()->lockForUpdate()->get();
+            if ($items->isEmpty()) {
+                throw ValidationException::withMessages(['transfer' => 'A transfer without books cannot be accepted.']);
+            }
+
+            foreach ($items as $item) {
+                $book = Book::query()->findOrFail($item->book_id);
+                $this->inventory->change($book, (int) $item->quantity, 'branch_transfer_in', $transfer, $transfer->academicYear, $user, 'Accepted transfer from '.$transfer->sourceBranch->name, $notes, false, $transfer->destinationBranch);
+            }
+
+            $transfer->update([
+                'status' => 'accepted',
+                'accepted_by' => $user->id,
+                'accepted_at' => now(),
+                'receipt_notes' => $notes,
+                'completed_by' => $user->id,
+            ]);
+            $invoice = $this->financialInvoices->acceptFor($transfer, $user, $notes);
+            $this->cashSettlements->settle($invoice, $user);
+            $this->audit->log('book_transfer.branch_accepted', $transfer, ['status' => 'pending_receipt'], ['status' => 'accepted', 'items' => $items->count()], $notes);
+            DB::afterCommit(fn () => $this->notifications->accepted($transfer));
+
+            return $transfer;
+        }, 3);
+    }
+
+    public function rejectBranchTransfer(BookTransfer $transfer, User $user, string $reason): BookTransfer
+    {
+        return DB::transaction(function () use ($transfer, $user, $reason): BookTransfer {
+            $transfer = BookTransfer::query()->lockForUpdate()->findOrFail($transfer->id);
+            if ($transfer->transfer_type !== 'branch_to_branch' || $transfer->status !== 'pending_receipt') {
+                throw ValidationException::withMessages(['transfer' => 'Only a pending branch transfer can be rejected.']);
+            }
+
+            $transfer->loadMissing('sourceBranch', 'destinationBranch', 'academicYear');
+            if ($transfer->sourceBranch === null) {
+                throw ValidationException::withMessages(['transfer' => 'The sending branch no longer exists.']);
+            }
+            $items = $transfer->items()->lockForUpdate()->get();
+            if ($items->isEmpty()) {
+                throw ValidationException::withMessages(['transfer' => 'A transfer without books cannot be rejected.']);
+            }
+
+            foreach ($items as $item) {
+                $book = Book::query()->findOrFail($item->book_id);
+                $this->inventory->change($book, (int) $item->quantity, 'branch_transfer_rejected_return', $transfer, $transfer->academicYear, $user, 'Rejected transfer return', $reason, false, $transfer->sourceBranch);
+            }
+            $transfer->update([
+                'status' => 'rejected',
+                'rejected_by' => $user->id,
+                'rejected_at' => now(),
+                'rejection_reason' => $reason,
+            ]);
+            $this->financialInvoices->rejectFor($transfer, $user, $reason);
+            $this->audit->log('book_transfer.branch_rejected', $transfer, ['status' => 'pending_receipt'], ['status' => 'rejected', 'items' => $items->count()], $reason);
+            DB::afterCommit(fn () => $this->notifications->rejected($transfer));
+
+            return $transfer;
+        }, 3);
     }
 
     public function betweenUsers(Branch $branch, User $source, User $destination, array $items, ?AcademicYear $year, User $performedBy, ?string $notes = null): BookTransfer
@@ -110,8 +184,11 @@ final class BookTransferService
     {
         return DB::transaction(function () use ($transfer, $performedBy, $notes): BookTransfer {
             $transfer = BookTransfer::query()->lockForUpdate()->findOrFail($transfer->id);
-            if ($transfer->status !== 'completed') {
-                throw ValidationException::withMessages(['transfer' => 'This transfer has already been reversed.']);
+            if ($transfer->transfer_type === 'branch_to_branch' && $transfer->status === 'pending_receipt') {
+                return $this->cancelPendingBranchTransfer($transfer, $performedBy, $notes);
+            }
+            if (! in_array($transfer->status, ['completed', 'accepted'], true)) {
+                throw ValidationException::withMessages(['transfer' => 'This transfer cannot be reversed in its current status.']);
             }
 
             $items = $transfer->items()->lockForUpdate()->get();
@@ -134,15 +211,44 @@ final class BookTransferService
                 'reversed_at' => now(),
             ]);
             if ($transfer->transfer_type === 'branch_to_branch') {
+                $invoice = $transfer->financialInvoice()->first();
+                if ($invoice !== null) {
+                    $this->cashSettlements->reverse($invoice, $performedBy, $notes);
+                }
                 $this->financialInvoices->voidFor($transfer, $performedBy, $notes);
             }
-            $this->audit->log('book_transfer.reversed', $transfer, ['status' => 'completed'], ['status' => 'reversed', 'items' => $items->count()], $notes);
+            $this->audit->log('book_transfer.reversed', $transfer, ['status' => $transfer->getOriginal('status')], ['status' => 'reversed', 'items' => $items->count()], $notes);
 
             return $transfer;
         }, 3);
     }
 
-    /** @param list<\App\Models\BookTransferItem> $items */
+    private function cancelPendingBranchTransfer(BookTransfer $transfer, User $performedBy, ?string $notes): BookTransfer
+    {
+        $items = $transfer->items()->lockForUpdate()->get();
+        $transfer->loadMissing('sourceBranch', 'academicYear');
+        if ($transfer->sourceBranch === null || $items->isEmpty()) {
+            throw ValidationException::withMessages(['transfer' => 'This pending transfer cannot be cancelled.']);
+        }
+
+        foreach ($items as $item) {
+            $book = Book::query()->findOrFail($item->book_id);
+            $this->inventory->change($book, (int) $item->quantity, 'branch_transfer_dispatch_cancel', $transfer, $transfer->academicYear, $performedBy, 'Cancelled pending transfer', $notes, false, $transfer->sourceBranch);
+        }
+        $transfer->update([
+            'status' => 'cancelled',
+            'reversal_notes' => $notes,
+            'reversed_by' => $performedBy->id,
+            'reversed_at' => now(),
+        ]);
+        $this->financialInvoices->voidFor($transfer, $performedBy, $notes);
+        $this->audit->log('book_transfer.branch_cancelled', $transfer, ['status' => 'pending_receipt'], ['status' => 'cancelled', 'items' => $items->count()], $notes);
+        DB::afterCommit(fn () => $this->notifications->cancelled($transfer));
+
+        return $transfer;
+    }
+
+    /** @param list<BookTransferItem> $items */
     private function reverseBranchTransfer(BookTransfer $transfer, array $items, User $performedBy, ?string $notes): void
     {
         $source = $transfer->sourceBranch;
@@ -158,7 +264,7 @@ final class BookTransferService
         }
     }
 
-    /** @param list<\App\Models\BookTransferItem> $items */
+    /** @param list<BookTransferItem> $items */
     private function reverseBranchCustodyTransfer(BookTransfer $transfer, array $items, User $performedBy, ?string $notes): void
     {
         $branch = $transfer->sourceBranch;
@@ -180,7 +286,7 @@ final class BookTransferService
         }
     }
 
-    /** @param list<\App\Models\BookTransferItem> $items */
+    /** @param list<BookTransferItem> $items */
     private function reverseUserTransfer(BookTransfer $transfer, array $items, User $performedBy, ?string $notes): void
     {
         $branch = $transfer->sourceBranch;
@@ -207,7 +313,7 @@ final class BookTransferService
         }
     }
 
-    private function makeTransfer(string $type, Branch $source, Branch $destination, ?User $sourceUser, ?User $destinationUser, ?AcademicYear $year, User $user, ?string $notes): BookTransfer
+    private function makeTransfer(string $type, Branch $source, Branch $destination, ?User $sourceUser, ?User $destinationUser, ?AcademicYear $year, User $user, ?string $notes, string $status = 'completed'): BookTransfer
     {
         return BookTransfer::create([
             'transfer_number' => $this->nextTransferNumber(),
@@ -218,10 +324,10 @@ final class BookTransferService
             'destination_user_id' => $destinationUser?->id,
             'academic_year_id' => $year?->id,
             'transferred_on' => today(),
-            'status' => 'completed',
+            'status' => $status,
             'notes' => $notes,
             'created_by' => $user->id,
-            'completed_by' => $user->id,
+            'completed_by' => $status === 'completed' ? $user->id : null,
         ]);
     }
 
@@ -265,6 +371,7 @@ final class BookTransferService
             UserBookStock::query()->create(['branch_id' => $branch->id, 'user_id' => $user->id, 'book_id' => $book->id]);
             $stock = $query->firstOrFail();
         }
+
         return $stock;
     }
 

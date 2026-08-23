@@ -10,18 +10,16 @@ use App\Models\BookTransfer;
 use App\Models\Branch;
 use App\Models\BranchBookStock;
 use App\Models\ClassBookList;
+use App\Models\Grade;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SchoolLevel;
-use App\Models\Grade;
 use App\Models\Section;
+use App\Models\StockMovement;
 use App\Models\Student;
 use App\Models\StudentRegistration;
-use App\Models\StockMovement;
 use App\Models\User;
-use App\Models\UserBookStock;
 use App\Services\BookTransferService;
-use App\Services\InventoryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -80,17 +78,19 @@ class MultiBranchWorkflowTest extends TestCase
         $transfer = BookTransfer::query()->firstOrFail();
 
         $this->assertSame('branch_to_branch', $transfer->transfer_type);
+        $this->assertSame('pending_receipt', $transfer->status);
         $this->assertMatchesRegularExpression('/^TRF-\d{8}-[A-Z0-9]{10}$/', $transfer->transfer_number);
         $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 7]);
-        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 7]);
+        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 2]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'type' => 'branch_transfer_out', 'quantity_change' => -5]);
-        $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'type' => 'branch_transfer_in', 'quantity_change' => 5]);
+        $this->assertDatabaseMissing('stock_movements', ['branch_id' => $north->id, 'type' => 'branch_transfer_in', 'quantity_change' => 5]);
 
         $invoice = $transfer->financialInvoice()->firstOrFail();
         $this->assertMatchesRegularExpression('/^BTI-\d{8}-[A-Z0-9]{10}$/', $invoice->invoice_number);
         $this->assertSame('50.00', $invoice->subtotal);
         $this->assertSame('2.50', $invoice->tax_total);
         $this->assertSame('52.50', $invoice->total);
+        $this->assertSame('pending_acceptance', $invoice->status);
         $this->assertDatabaseHas('branch_transfer_invoice_items', [
             'branch_transfer_invoice_id' => $invoice->id,
             'book_id' => $book->id,
@@ -98,6 +98,21 @@ class MultiBranchWorkflowTest extends TestCase
             'unit_price' => '10.00',
             'line_total' => '52.50',
         ]);
+        $this->actingAs($user)->withSession(['current_branch_id' => $north->id])
+            ->post(route('transfers.accept', $transfer), ['receipt_notes' => 'Counted and received'])
+            ->assertRedirect(route('transfers.show', $transfer))
+            ->assertSessionHas('success');
+        $transfer->refresh();
+        $invoice->refresh();
+        $this->assertSame('accepted', $transfer->status);
+        $this->assertSame($user->id, $transfer->accepted_by);
+        $this->assertSame('accepted', $invoice->status);
+        $this->assertSame('settled', $invoice->settlement_status);
+        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 7]);
+        $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'type' => 'branch_transfer_in', 'quantity_change' => 5]);
+        $this->assertDatabaseHas('branch_cash_accounts', ['branch_id' => $main->id, 'balance' => '52.50']);
+        $this->assertDatabaseHas('branch_cash_accounts', ['branch_id' => $north->id, 'balance' => '-52.50']);
+        $this->assertDatabaseCount('branch_cash_movements', 2);
         $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
             ->get(route('transfers.invoice', $transfer))
             ->assertOk()
@@ -110,6 +125,10 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertSee('Internal branch transfer')
             ->assertSee($invoice->invoice_number)
             ->assertSee('52.50');
+        $this->actingAs($user)->get(route('notifications.index'))
+            ->assertOk()
+            ->assertSee('Incoming transfer awaiting confirmation')
+            ->assertSee('Transfer accepted and settled');
 
         $movement = StockMovement::withoutGlobalScopes()->where('type', 'branch_transfer_out')->firstOrFail();
         $this->assertSame(['from' => 'Main Branch', 'to' => 'North Branch'], $movement->transferEndpoints());
@@ -146,22 +165,28 @@ class MultiBranchWorkflowTest extends TestCase
         $this->assertSame($year->id, $copiedPackage->academic_year_id);
         $this->assertDatabaseHas('class_book_list_items', ['class_book_list_id' => $copiedPackage->id, 'book_id' => $book->id, 'quantity' => 2]);
         $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 2]);
-        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 6]);
+        $this->assertDatabaseMissing('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 6]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'book_id' => $book->id, 'type' => 'branch_transfer_out', 'quantity_change' => -6]);
-        $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'book_id' => $book->id, 'type' => 'branch_transfer_in', 'quantity_change' => 6]);
         $this->assertDatabaseHas('branch_transfer_invoices', ['book_transfer_id' => $packageTransfer->id, 'total' => '60.00']);
         $this->assertSame('60.00', $packageTransfer->financialInvoice()->firstOrFail()->total);
+        $this->actingAs($user)->withSession(['current_branch_id' => $north->id])
+            ->post(route('transfers.accept', $packageTransfer))
+            ->assertRedirect();
+        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 6]);
+        $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'book_id' => $book->id, 'type' => 'branch_transfer_in', 'quantity_change' => 6]);
     }
 
     public function test_completed_branch_transfer_can_be_reversed_once_and_restores_branch_stock(): void
     {
         $user = $this->user('manager@example.test');
         [$main, $north] = $this->branches($user);
-        $book = Book::create(['sku' => 'REVERSE-BOOK', 'barcode' => '978000096', 'title' => 'Reversible Transfer Book']);
+        $book = Book::create(['sku' => 'REVERSE-BOOK', 'barcode' => '978000096', 'title' => 'Reversible Transfer Book', 'selling_price' => '20.00']);
         BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 12]);
         BranchBookStock::create(['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 2]);
 
-        $transfer = app(BookTransferService::class)->betweenBranches($main, $north, [['book_id' => $book->id, 'quantity' => 5]], null, $user);
+        $service = app(BookTransferService::class);
+        $transfer = $service->betweenBranches($main, $north, [['book_id' => $book->id, 'quantity' => 5]], null, $user);
+        $service->acceptBranchTransfer($transfer, $user, 'Received');
 
         $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
             ->post(route('transfers.reverse', $transfer), ['reversal_notes' => 'Entered by mistake'])
@@ -178,6 +203,8 @@ class MultiBranchWorkflowTest extends TestCase
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $north->id, 'type' => 'branch_transfer_reversal_out', 'quantity_change' => -5]);
         $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'type' => 'branch_transfer_reversal_in', 'quantity_change' => 5]);
         $this->assertDatabaseHas('branch_transfer_invoices', ['book_transfer_id' => $transfer->id, 'status' => 'voided', 'voided_by' => $user->id]);
+        $this->assertDatabaseHas('branch_cash_accounts', ['branch_id' => $main->id, 'balance' => '0.00']);
+        $this->assertDatabaseHas('branch_cash_accounts', ['branch_id' => $north->id, 'balance' => '0.00']);
 
         $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
             ->get(route('transfers.show', $transfer))
@@ -188,6 +215,32 @@ class MultiBranchWorkflowTest extends TestCase
         $this->actingAs($user)->withSession(['current_branch_id' => $main->id])
             ->post(route('transfers.reverse', $transfer))
             ->assertSessionHasErrors('transfer');
+    }
+
+    public function test_receiving_branch_can_reject_a_pending_transfer_without_a_cash_settlement(): void
+    {
+        $sender = $this->user('sender@example.test');
+        $receiver = $this->user('receiver@example.test');
+        [$main, $north] = $this->branches($sender, $receiver);
+        $book = Book::create(['sku' => 'REJECT-BOOK', 'barcode' => '9780000961', 'title' => 'Rejected Transfer Book', 'selling_price' => '20.00']);
+        BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 9]);
+        BranchBookStock::create(['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 1]);
+
+        $transfer = app(BookTransferService::class)->betweenBranches($main, $north, [['book_id' => $book->id, 'quantity' => 4]], null, $sender);
+
+        $this->actingAs($receiver)->withSession(['current_branch_id' => $north->id])
+            ->post(route('transfers.reject', $transfer), ['rejection_reason' => 'Delivery was not received.'])
+            ->assertRedirect(route('transfers.show', $transfer))
+            ->assertSessionHas('success');
+
+        $transfer->refresh();
+        $this->assertSame('rejected', $transfer->status);
+        $this->assertSame($receiver->id, $transfer->rejected_by);
+        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 9]);
+        $this->assertDatabaseHas('branch_book_stocks', ['branch_id' => $north->id, 'book_id' => $book->id, 'quantity_on_hand' => 1]);
+        $this->assertDatabaseHas('stock_movements', ['branch_id' => $main->id, 'type' => 'branch_transfer_rejected_return', 'quantity_change' => 4]);
+        $this->assertDatabaseHas('branch_transfer_invoices', ['book_transfer_id' => $transfer->id, 'status' => 'rejected', 'settlement_status' => 'not_settled']);
+        $this->assertDatabaseCount('branch_cash_movements', 0);
     }
 
     public function test_main_controller_can_view_financial_transfers_between_any_branches(): void
@@ -202,8 +255,10 @@ class MultiBranchWorkflowTest extends TestCase
         BranchBookStock::create(['branch_id' => $east->id, 'book_id' => $book->id, 'quantity_on_hand' => 0]);
 
         $service = app(BookTransferService::class);
-        $service->betweenBranches($main, $north, [['book_id' => $book->id, 'quantity' => 6]], null, $controller);
+        $mainToNorth = $service->betweenBranches($main, $north, [['book_id' => $book->id, 'quantity' => 6]], null, $controller);
+        $service->acceptBranchTransfer($mainToNorth, $controller);
         $northToEast = $service->betweenBranches($north, $east, [['book_id' => $book->id, 'quantity' => 2]], null, $controller);
+        $service->acceptBranchTransfer($northToEast, $controller);
 
         $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
             ->get(route('transfers.index', ['all_branches' => 1]))

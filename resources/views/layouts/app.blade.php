@@ -51,6 +51,8 @@
             </div>
             <div class="flex shrink-0 items-center gap-3">
                 @if ($signedInUser->hasPermission('reports.view'))<a href="{{ route('reports.index') }}" class="hidden text-sm text-slate-500 hover:text-teal-700 sm:block">Reports</a>@endif
+                @php($unreadNotificationCount = $signedInUser->unreadNotifications()->count())
+                <a href="{{ route('notifications.index') }}" class="relative grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-teal-700" aria-label="Notifications" title="Notifications"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.31 6.022 23.848 23.848 0 0 0 5.454 1.31m5.713 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" /></svg>@if($unreadNotificationCount)<span class="absolute -right-1 -top-1 min-w-4 rounded-full bg-rose-600 px-1 text-center text-[10px] font-bold leading-4 text-white">{{ min($unreadNotificationCount, 99) }}</span>@endif</a>
                 @php($branchContext = app(\App\Services\BranchContext::class))
                 @php($activeBranch = $branchContext->branch())
                 @php($availableBranches = $branchContext->accessibleBranches(auth()->user()))

@@ -16,9 +16,7 @@ use Illuminate\Validation\ValidationException;
  */
 final class BranchTransferInvoiceService
 {
-    public function __construct(private readonly AuditService $audit)
-    {
-    }
+    public function __construct(private readonly AuditService $audit) {}
 
     public function issue(BookTransfer $transfer, User $user): BranchTransferInvoice
     {
@@ -33,7 +31,7 @@ final class BranchTransferInvoiceService
 
         $transfer->loadMissing('items.book', 'sourceBranch', 'destinationBranch');
         if ($transfer->sourceBranch === null || $transfer->destinationBranch === null || $transfer->items->isEmpty()) {
-            throw ValidationException::withMessages(['transfer' => 'A completed transfer needs two branches and at least one book before it can be valued.']);
+            throw ValidationException::withMessages(['transfer' => 'A branch transfer needs two branches and at least one book before it can be valued.']);
         }
 
         $subtotal = 0;
@@ -67,7 +65,8 @@ final class BranchTransferInvoiceService
             'subtotal' => Money::decimal($subtotal),
             'tax_total' => Money::decimal($taxTotal),
             'total' => Money::decimal($subtotal + $taxTotal),
-            'status' => 'issued',
+            'status' => $transfer->status === 'pending_receipt' ? 'pending_acceptance' : 'issued',
+            'settlement_status' => $transfer->status === 'pending_receipt' ? 'pending_acceptance' : 'legacy_unsettled',
             'notes' => $transfer->notes,
             'issued_by' => $user->id,
         ]);
@@ -86,7 +85,7 @@ final class BranchTransferInvoiceService
             ]);
         }
 
-        $this->audit->log('branch_transfer_invoice.issued', $invoice, [], [
+        $this->audit->log('branch_transfer_invoice.dispatched', $invoice, [], [
             'transfer_number' => $transfer->transfer_number,
             'source_branch' => $transfer->sourceBranch->code,
             'destination_branch' => $transfer->destinationBranch->code,
@@ -94,6 +93,48 @@ final class BranchTransferInvoiceService
         ]);
 
         return $invoice;
+    }
+
+    public function acceptFor(BookTransfer $transfer, User $user, ?string $notes = null): BranchTransferInvoice
+    {
+        $invoice = $transfer->financialInvoice()->lockForUpdate()->first();
+        if ($invoice === null) {
+            throw ValidationException::withMessages(['transfer' => 'The internal transfer invoice could not be found.']);
+        }
+        if ($invoice->status !== 'pending_acceptance') {
+            throw ValidationException::withMessages(['transfer' => 'This transfer invoice is no longer awaiting confirmation.']);
+        }
+
+        $invoice->update([
+            'status' => 'accepted',
+            'accepted_by' => $user->id,
+            'accepted_at' => now(),
+            'settlement_status' => 'pending_settlement',
+            'notes' => $notes ?? $invoice->notes,
+        ]);
+        $this->audit->log('branch_transfer_invoice.accepted', $invoice, ['status' => 'pending_acceptance'], ['status' => 'accepted'], $notes);
+
+        return $invoice->fresh();
+    }
+
+    public function rejectFor(BookTransfer $transfer, User $user, string $reason): void
+    {
+        $invoice = $transfer->financialInvoice()->lockForUpdate()->first();
+        if ($invoice === null) {
+            throw ValidationException::withMessages(['transfer' => 'The internal transfer invoice could not be found.']);
+        }
+        if ($invoice->status !== 'pending_acceptance') {
+            throw ValidationException::withMessages(['transfer' => 'This transfer invoice is no longer awaiting confirmation.']);
+        }
+
+        $invoice->update([
+            'status' => 'rejected',
+            'rejected_by' => $user->id,
+            'rejected_at' => now(),
+            'rejection_reason' => $reason,
+            'settlement_status' => 'not_settled',
+        ]);
+        $this->audit->log('branch_transfer_invoice.rejected', $invoice, ['status' => 'pending_acceptance'], ['status' => 'rejected'], $reason);
     }
 
     public function voidFor(BookTransfer $transfer, User $user, ?string $reason = null): void
@@ -108,9 +149,10 @@ final class BranchTransferInvoiceService
             'voided_at' => now(),
             'voided_by' => $user->id,
             'void_reason' => $reason,
+            'settlement_status' => $invoice->settlement_status === 'reversed' ? 'reversed' : 'not_settled',
         ]);
 
-        $this->audit->log('branch_transfer_invoice.voided', $invoice, ['status' => 'issued'], ['status' => 'voided'], $reason);
+        $this->audit->log('branch_transfer_invoice.voided', $invoice, ['status' => $invoice->getOriginal('status')], ['status' => 'voided'], $reason);
     }
 
     private function nextInvoiceNumber(): string

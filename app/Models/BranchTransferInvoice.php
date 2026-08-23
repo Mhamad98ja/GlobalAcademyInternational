@@ -16,13 +16,17 @@ class BranchTransferInvoice extends Model
     protected $fillable = [
         'book_transfer_id', 'invoice_number', 'source_branch_id', 'destination_branch_id',
         'issued_on', 'subtotal', 'tax_total', 'total', 'status', 'notes', 'issued_by',
-        'voided_at', 'voided_by', 'void_reason',
+        'accepted_by', 'accepted_at', 'rejected_by', 'rejected_at', 'rejection_reason',
+        'settlement_status', 'settled_at', 'settled_by', 'voided_at', 'voided_by', 'void_reason',
     ];
 
     protected function casts(): array
     {
         return [
             'issued_on' => 'date',
+            'accepted_at' => 'datetime',
+            'rejected_at' => 'datetime',
+            'settled_at' => 'datetime',
             'voided_at' => 'datetime',
             'subtotal' => 'decimal:2',
             'tax_total' => 'decimal:2',
@@ -50,9 +54,29 @@ class BranchTransferInvoice extends Model
         return $this->hasMany(BranchTransferInvoiceItem::class);
     }
 
+    public function cashMovements(): HasMany
+    {
+        return $this->hasMany(BranchCashMovement::class);
+    }
+
     public function issuedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by');
+    }
+
+    public function acceptedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'accepted_by');
+    }
+
+    public function rejectedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
+    }
+
+    public function settledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'settled_by');
     }
 
     public function voidedBy(): BelongsTo

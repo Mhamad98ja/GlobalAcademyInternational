@@ -6,6 +6,8 @@ namespace App\Http\Controllers;
 
 use App\Models\BookReturn;
 use App\Models\Branch;
+use App\Models\BranchCashAccount;
+use App\Models\BranchCashMovement;
 use App\Models\BranchTransferInvoice;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -162,6 +164,19 @@ class OperationsController extends Controller
                 }),
             'branch_transfer_invoices.issued_on',
         );
+        $cashMovementQuery = $applyDateRange(
+            BranchCashMovement::query()
+                ->whereIn('branch_id', $branchIds)
+                ->when($search !== '', function (Builder $query) use ($search): void {
+                    $query->where(function (Builder $movements) use ($search): void {
+                        $movements->whereInsensitiveLike('movement_number', $search)
+                            ->orWhereInsensitiveLike('reference_number', $search)
+                            ->orWhereHas('branch', fn (Builder $branches) => $branches->whereInsensitiveLike('name', $search))
+                            ->orWhereHas('counterpartyBranch', fn (Builder $branches) => $branches->whereInsensitiveLike('name', $search));
+                    });
+                }),
+            'branch_cash_movements.settled_on',
+        );
 
         $studentSummary = [
             'invoiced' => $canViewInvoices ? (float) (clone $invoiceQuery)->where('status', '!=', 'cancelled')->sum('total') : null,
@@ -177,12 +192,14 @@ class OperationsController extends Controller
         $supplierSummary['outstanding'] = $canViewSuppliers
             ? max(0, $supplierSummary['purchased'] - $supplierSummary['paid'] - $supplierSummary['credits'])
             : null;
-        $issuedTransferQuery = (clone $transferInvoiceQuery)->where('status', 'issued');
+        $acceptedTransferQuery = (clone $transferInvoiceQuery)->whereIn('status', ['issued', 'accepted']);
         $branchSummary = [
-            'documents' => $canViewTransfers ? (clone $issuedTransferQuery)->count() : null,
-            'moved' => $canViewTransfers ? (float) (clone $issuedTransferQuery)->sum('total') : null,
-            'sent' => $canViewTransfers && ! $showAllBranches ? (float) (clone $issuedTransferQuery)->where('source_branch_id', $activeBranchId)->sum('total') : null,
-            'received' => $canViewTransfers && ! $showAllBranches ? (float) (clone $issuedTransferQuery)->where('destination_branch_id', $activeBranchId)->sum('total') : null,
+            'accepted_documents' => $canViewTransfers ? (clone $acceptedTransferQuery)->count() : null,
+            'pending_documents' => $canViewTransfers ? (clone $transferInvoiceQuery)->where('status', 'pending_acceptance')->count() : null,
+            'settled_value' => $canViewTransfers ? (float) (clone $cashMovementQuery)->where('amount', '>', 0)->sum('amount') : null,
+            'cash_control_balance' => $canViewTransfers ? (float) BranchCashAccount::query()->whereIn('branch_id', $branchIds)->sum('balance') : null,
+            'cash_in' => $canViewTransfers ? (float) (clone $cashMovementQuery)->where('amount', '>', 0)->sum('amount') : null,
+            'cash_out' => $canViewTransfers ? abs((float) (clone $cashMovementQuery)->where('amount', '<', 0)->sum('amount')) : null,
         ];
 
         $records = collect();
@@ -235,6 +252,11 @@ class OperationsController extends Controller
                 (clone $transferInvoiceQuery)->with('sourceBranch', 'destinationBranch', 'transfer')
                     ->latest('issued_on')->limit($limit)->get()
                     ->map(fn (BranchTransferInvoice $invoice) => $this->record('branches', 'Internal branch transfer', $invoice->invoice_number, ($invoice->sourceBranch?->name ?? 'Source branch').' → '.($invoice->destinationBranch?->name ?? 'Destination branch'), 'Internal stock value only — not revenue or supplier expense', $showAllBranches ? 'Inter-branch' : ($invoice->source_branch_id === $activeBranchId ? 'Sent' : 'Received'), $invoice->issued_on, (float) $invoice->total, 0, 0, null, $invoice->status, route('transfers.invoice', $invoice->transfer)))
+            );
+            $records = $records->merge(
+                (clone $cashMovementQuery)->with('branch', 'counterpartyBranch', 'transfer')
+                    ->latest('settled_on')->limit($limit)->get()
+                    ->map(fn (BranchCashMovement $movement) => $this->record('branches', 'Internal branch cash settlement', $movement->movement_number, ($movement->branch?->name ?? 'Branch').' to '.($movement->counterpartyBranch?->name ?? 'Counterparty branch'), 'For '.$movement->reference_number.'. Internal cash-control entry; not customer cash or revenue.', $movement->branch?->name, $movement->settled_on, abs((float) $movement->amount), (float) $movement->amount > 0 ? (float) $movement->amount : 0, (float) $movement->amount < 0 ? abs((float) $movement->amount) : 0, (float) $movement->balance_after, str($movement->type)->contains('reversal') ? 'reversed' : 'settled', route('transfers.show', $movement->transfer)))
             );
         }
 
