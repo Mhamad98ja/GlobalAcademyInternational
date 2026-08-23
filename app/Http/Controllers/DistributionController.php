@@ -67,6 +67,7 @@ class DistributionController extends Controller
     public function create(Request $request): View
     {
         $canViewFinancials = $request->user()->canViewFinancials();
+        $canRequestDeferred = $request->user()->hasPermission('deferred.create');
         $packages = ClassBookList::query()
             ->where('is_active', true)
             ->with('items.book', 'section')
@@ -118,6 +119,7 @@ class DistributionController extends Controller
             })->values(),
             'selectedRegistration' => $request->integer('registration'),
             'canViewFinancials' => $canViewFinancials,
+            'canRequestDeferred' => $canRequestDeferred,
         ]);
     }
 
@@ -130,10 +132,15 @@ class DistributionController extends Controller
             isset($data['class_book_list_id']) ? (int) $data['class_book_list_id'] : null,
         );
 
+        $payment = $request->user()->canViewFinancials() ? ($data['payment'] ?? []) : [];
+        if ($request->user()->hasPermission('deferred.create') && ! empty($data['payment']['deferred'])) {
+            $payment['deferred'] = true;
+        }
+
         $distribution = $service->distribute(
             $registration,
             $this->itemsFromBarcodes($data['items']),
-            $request->user()->canViewFinancials() ? ($data['payment'] ?? []) : [],
+            $payment,
             $request->user(),
             $data['notes'] ?? null,
             $package,

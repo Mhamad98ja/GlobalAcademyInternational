@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\AcademicYear;
 use App\Models\Book;
 use App\Models\BookReturn;
+use App\Models\Branch;
 use App\Models\ClassBookList;
 use App\Models\DeferredPaymentApproval;
 use App\Models\Grade;
@@ -127,10 +128,106 @@ class CoreWorkflowTest extends TestCase
             'created_by' => $user->id,
         ]);
         $this->assertSame('pending', DeferredPaymentApproval::query()->where('invoice_id', $distribution->invoice_id)->value('status'));
+        $this->assertDatabaseHas('invoices', [
+            'id' => $distribution->invoice_id,
+            'status' => 'pending_deferred_approval',
+            'payment_status' => 'unpaid',
+        ]);
         $this->actingAs($user)->get(route('deferred.index'))
             ->assertOk()
             ->assertSee($distribution->invoice->invoice_number)
-            ->assertSee('pending');
+            ->assertSee('Awaiting Branch Decision');
+    }
+
+    public function test_branch_admin_acceptance_tracks_deferred_invoice_payments_and_rejection_notifies_requester(): void
+    {
+        $administrator = $this->administrator();
+        $registration = $this->registration($administrator);
+        $book = Book::create([
+            'sku' => 'B-DEFERRED-DECISION',
+            'barcode' => '978000000002',
+            'title' => 'Deferred decision book',
+            'selling_price' => '100.00',
+        ]);
+        app(InventoryService::class)->change($book, 2, 'opening_stock', null, $registration->academicYear, $administrator, 'Initial stock');
+
+        $requesterRole = Role::create(['name' => 'deferred-requester', 'label' => 'Deferred Requester']);
+        $requesterRole->permissions()->attach(Permission::query()->where('name', 'deferred.create')->firstOrFail());
+        $requester = User::factory()->create(['is_active' => true]);
+        $requester->roles()->attach($requesterRole);
+        $requester->branches()->attach(Branch::query()->where('code', 'MAIN')->value('id'), ['is_default' => true, 'is_branch_administrator' => false]);
+
+        $this->actingAs($requester);
+        $distribution = app(BookDistributionService::class)->distribute(
+            $registration,
+            [['book_id' => $book->id, 'quantity' => 1]],
+            ['deferred' => true],
+            $requester,
+        );
+        $approval = DeferredPaymentApproval::query()->where('invoice_id', $distribution->invoice_id)->firstOrFail();
+        $invoice = Invoice::query()->findOrFail($distribution->invoice_id);
+        $this->assertSame('pending_deferred_approval', $invoice->status);
+        $this->assertSame('100.00', (string) $approval->amount_deferred);
+
+        $this->actingAs($administrator)->post(route('deferred.approve', $approval), [
+            'decision' => 'approved',
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $approval->refresh();
+        $invoice->refresh();
+        $this->assertSame('approved', $approval->status);
+        $this->assertSame('payment_required', $approval->follow_up_status);
+        $this->assertSame('deferred', $invoice->status);
+        $this->assertSame('deferred', $invoice->payment_status);
+        $this->assertSame('100.00', (string) $invoice->balance_due);
+        $this->assertTrue($requester->notifications()->get()->contains(
+            fn ($notification): bool => ($notification->data['status'] ?? null) === 'accepted',
+        ));
+
+        app(PaymentService::class)->record($invoice, [
+            'amount' => '40.00',
+            'payment_date' => today()->toDateString(),
+            'method' => 'cash',
+        ], $administrator);
+        $approval->refresh();
+        $invoice->refresh();
+        $this->assertSame('60.00', (string) $invoice->balance_due);
+        $this->assertSame('partially_paid', $invoice->payment_status);
+        $this->assertSame('partially_paid', $approval->follow_up_status);
+
+        app(PaymentService::class)->record($invoice, [
+            'amount' => '60.00',
+            'payment_date' => today()->toDateString(),
+            'method' => 'cash',
+        ], $administrator);
+        $approval->refresh();
+        $invoice->refresh();
+        $this->assertSame('0.00', (string) $invoice->balance_due);
+        $this->assertSame('paid', $invoice->payment_status);
+        $this->assertSame('settled', $approval->follow_up_status);
+
+        $this->actingAs($requester);
+        $rejectedDistribution = app(BookDistributionService::class)->distribute(
+            $registration,
+            [['book_id' => $book->id, 'quantity' => 1]],
+            ['deferred' => true],
+            $requester,
+        );
+        $rejectedApproval = DeferredPaymentApproval::query()->where('invoice_id', $rejectedDistribution->invoice_id)->firstOrFail();
+        $this->actingAs($administrator)->post(route('deferred.approve', $rejectedApproval), [
+            'decision' => 'rejected',
+            'decision_notes' => 'Collect payment before issuing further books.',
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $rejectedApproval->refresh();
+        $rejectedInvoice = Invoice::query()->findOrFail($rejectedDistribution->invoice_id);
+        $this->assertSame('rejected', $rejectedApproval->status);
+        $this->assertSame('payment_required', $rejectedApproval->follow_up_status);
+        $this->assertSame('issued', $rejectedInvoice->status);
+        $this->assertSame('unpaid', $rejectedInvoice->payment_status);
+        $this->assertTrue($requester->notifications()->get()->contains(
+            fn ($notification): bool => ($notification->data['status'] ?? null) === 'rejected',
+        ));
     }
 
     public function test_distribution_uses_case_insensitive_barcode_scanning_and_student_shortcuts(): void

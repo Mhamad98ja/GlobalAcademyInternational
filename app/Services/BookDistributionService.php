@@ -8,7 +8,6 @@ use App\Models\Book;
 use App\Models\BookDistribution;
 use App\Models\ClassBookList;
 use App\Models\ClassBookListItem;
-use App\Models\DeferredPaymentApproval;
 use App\Models\Invoice;
 use App\Models\StudentRegistration;
 use App\Models\User;
@@ -21,6 +20,7 @@ final class BookDistributionService
         private readonly InventoryService $inventory,
         private readonly PaymentService $payments,
         private readonly AuditService $audit,
+        private readonly DeferredPaymentApprovalService $deferredApprovals,
     ) {
     }
 
@@ -80,8 +80,8 @@ final class BookDistributionService
                 'total' => Money::decimal($total),
                 'amount_paid' => '0.00',
                 'balance_due' => Money::decimal($total),
-                'payment_status' => isset($payment['deferred']) && $payment['deferred'] ? 'deferred' : 'unpaid',
-                'status' => isset($payment['deferred']) && $payment['deferred'] ? 'deferred' : 'issued',
+                'payment_status' => 'unpaid',
+                'status' => 'issued',
                 'notes' => $notes,
                 'created_by' => $user->id,
             ]);
@@ -142,15 +142,8 @@ final class BookDistributionService
 
             if (! empty($payment['deferred'])) {
                 $invoice->refresh();
-                DeferredPaymentApproval::create([
-                    'student_id' => $registration->student_id,
-                    'student_registration_id' => $registration->id,
-                    'invoice_id' => $invoice->id,
-                    'amount_deferred' => $invoice->balance_due,
+                $this->deferredApprovals->requestForInvoice($invoice, $user, [
                     'reason' => 'Deferred payment requested during book distribution.',
-                    'status' => 'pending',
-                    'follow_up_status' => 'open',
-                    'created_by' => $user->id,
                 ]);
             }
 
