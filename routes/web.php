@@ -136,7 +136,6 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/deferred-approvals', [DeferredApprovalsController::class, 'index'])->name('deferred.index');
         Route::get('/deferred-approvals/{approval}/document', [DeferredApprovalsController::class, 'document'])->name('deferred.document');
     });
-    Route::post('/deferred-approvals', [DeferredApprovalsController::class, 'store'])->middleware('permission:deferred.create')->name('deferred.store');
     Route::post('/deferred-approvals/{approval}/decision', [DeferredApprovalsController::class, 'approve'])->middleware('permission:deferred.approve')->name('deferred.approve');
     Route::middleware('permission:academic.manage')->group(function (): void {
         Route::get('/academic', [AcademicController::class, 'index'])->name('academic.index');

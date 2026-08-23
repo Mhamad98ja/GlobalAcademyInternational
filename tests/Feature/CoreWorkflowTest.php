@@ -136,7 +136,8 @@ class CoreWorkflowTest extends TestCase
         $this->actingAs($user)->get(route('deferred.index'))
             ->assertOk()
             ->assertSee($distribution->invoice->invoice_number)
-            ->assertSee('Awaiting Branch Decision');
+            ->assertSee('Awaiting Branch Decision')
+            ->assertDontSee('New deferred-payment request');
     }
 
     public function test_branch_admin_acceptance_tracks_deferred_invoice_payments_and_rejection_notifies_requester(): void
