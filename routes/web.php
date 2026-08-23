@@ -107,6 +107,7 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/distributions', [DistributionController::class, 'index'])->name('distributions.index');
         Route::get('/distributions/create', [DistributionController::class, 'create'])->name('distributions.create');
         Route::post('/distributions', [DistributionController::class, 'store'])->name('distributions.store');
+        Route::get('/distributions/{distribution}/print', [DistributionController::class, 'print'])->name('distributions.print');
         Route::get('/distributions/{distribution}', [DistributionController::class, 'show'])->name('distributions.show');
     });
     Route::middleware('permission:invoices.view')->group(function (): void {

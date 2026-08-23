@@ -7,7 +7,7 @@
         <h1 class="page-title mt-1">Distribution to {{ $distribution->student->full_name }}</h1>
         <p class="page-subtitle">{{ $distribution->distributed_on->format('d M Y') }} · {{ $distribution->registration->grade->name }}{{ $distribution->registration->section ? ' '.$distribution->registration->section->name : '' }}</p>
     </div>
-    @if ($canViewFinancials)<a class="btn btn-primary" href="{{ route('invoices.show', $distribution->invoice) }}">View invoice</a>@endif
+    <div class="flex flex-wrap gap-2"><a class="btn btn-secondary" target="_blank" rel="noopener" href="{{ route('distributions.print', $distribution) }}">Print distribution list</a>@if ($canViewFinancials)<a class="btn btn-primary" href="{{ route('invoices.show', $distribution->invoice) }}">View invoice</a>@endif</div>
 </div>
 
 <section class="panel">

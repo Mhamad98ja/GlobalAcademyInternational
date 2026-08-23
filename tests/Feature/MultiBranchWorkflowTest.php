@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Models\AcademicYear;
 use App\Models\Book;
+use App\Models\BookDistribution;
 use App\Models\BookTransfer;
 use App\Models\Branch;
 use App\Models\BranchBookStock;
@@ -52,7 +53,7 @@ class MultiBranchWorkflowTest extends TestCase
         $role = Role::firstOrCreate(['name' => 'employee'], ['label' => 'Branch User']);
         $role->permissions()->sync(Permission::query()->whereIn('name', [
             'dashboard.view', 'students.view', 'students.manage', 'books.view', 'class-lists.view', 'distributions.create',
-            'inventory.view', 'inventory.transfer', 'people.manage', 'reports.view',
+            'people.manage', 'reports.view',
         ])->pluck('id'));
         $user = User::factory()->create(['email' => $email, 'is_active' => true]);
         $user->roles()->sync([$role->id]);
@@ -383,7 +384,8 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertSee('Beirut Only Book')
             ->assertDontSee('Main Only Book')
             ->assertSee('Scan book barcode')
-            ->assertDontSee('Select book');
+            ->assertDontSee('Select book')
+            ->assertDontSee('Books: user to user custody');
         $this->actingAs($beirutAdministrator)->withSession(['current_branch_id' => $main->id])
             ->post(route('branches.select'), ['branch_id' => $main->id])
             ->assertForbidden();
@@ -600,6 +602,17 @@ class MultiBranchWorkflowTest extends TestCase
         $year = AcademicYear::create(['name' => '2026-2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'open']);
         $level = SchoolLevel::create(['name' => 'Primary']);
         $grade = Grade::create(['school_level_id' => $level->id, 'name' => 'Grade 1']);
+        $section = Section::create(['grade_id' => $grade->id, 'name' => 'A']);
+        $student = Student::create(['student_number' => 'BRANCH-USER-001', 'first_name' => 'Normal', 'last_name' => 'User']);
+        $registration = StudentRegistration::create([
+            'student_id' => $student->id,
+            'academic_year_id' => $year->id,
+            'grade_id' => $grade->id,
+            'section_id' => $section->id,
+            'status' => 'active',
+            'registered_on' => '2026-09-01',
+            'created_by' => $branchUser->id,
+        ]);
         $gradeList = ClassBookList::create([
             'academic_year_id' => $year->id,
             'grade_id' => $grade->id,
@@ -636,12 +649,14 @@ class MultiBranchWorkflowTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertDontSee("Today's collection")
-            ->assertDontSee('Outstanding balance');
+            ->assertDontSee('Outstanding balance')
+            ->assertDontSee('Open ledger');
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
             ->get(route('books.show', $book))
             ->assertOk()
             ->assertDontSee('Selling price')
-            ->assertDontSee('Latest purchase price');
+            ->assertDontSee('Latest purchase price')
+            ->assertDontSee('Full ledger');
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
             ->get(route('books.index', ['tab' => 'packages']))
             ->assertOk()
@@ -662,9 +677,38 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertDontSee('Payment at distribution')
             ->assertDontSee('Total sale')
             ->assertDontSee('data-distribution-sale-total', false);
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
+            ->post(route('distributions.store'), [
+                'student_registration_id' => $registration->id,
+                'items' => [['barcode' => $book->barcode, 'quantity' => 1]],
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+        $distribution = BookDistribution::query()->where('student_registration_id', $registration->id)->firstOrFail();
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
+            ->get(route('distributions.show', $distribution))
+            ->assertOk()
+            ->assertSee('Print distribution list')
+            ->assertDontSee('Unit price');
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
+            ->get(route('distributions.print', $distribution))
+            ->assertOk()
+            ->assertSee('Student Book Distribution')
+            ->assertSee('Financially Protected Book')
+            ->assertDontSee('12.50')
+            ->assertDontSee('Balance due');
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('invoices.index'))->assertForbidden();
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('payments.index'))->assertForbidden();
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('inventory.ledger'))->assertForbidden();
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('transfers.index'))->assertForbidden();
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('operations.index'))->assertForbidden();
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
+            ->get(route('reports.index'))
+            ->assertOk()
+            ->assertDontSee('Stock on hand')
+            ->assertDontSee('Book distributions');
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('reports.index', ['report' => 'stock']))->assertForbidden();
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('reports.index', ['report' => 'distributions']))->assertForbidden();
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])->get(route('reports.index', ['report' => 'payments']))->assertForbidden();
     }
 }

@@ -64,9 +64,8 @@ class BookTransfersController extends Controller
         $branch = $context->branch();
         abort_unless($branch, 403);
         $data = $request->validate([
-            'transfer_type' => ['required', Rule::in(['branch_to_branch', 'package_to_branch', 'branch_to_user', 'user_to_user'])],
+            'transfer_type' => ['required', Rule::in(['branch_to_branch', 'package_to_branch', 'branch_to_user'])],
             'destination_branch_id' => ['nullable', 'integer', 'exists:branches,id'],
-            'source_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'destination_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
             'notes' => ['nullable', 'string', 'max:3000'],
@@ -104,12 +103,9 @@ class BookTransfersController extends Controller
             abort_unless(! empty($data['destination_branch_id']), 422, 'Choose a destination branch.');
             $destination = Branch::query()->where('is_active', true)->findOrFail($data['destination_branch_id']);
             $transfer = $transfers->betweenBranches($branch, $destination, $data['items'] ?? [], $year, $request->user(), $data['notes'] ?? null);
-        } elseif ($data['transfer_type'] === 'branch_to_user') {
+        } else {
             abort_unless(! empty($data['destination_user_id']), 422, 'Choose the destination user.');
             $transfer = $transfers->assignToUser($branch, User::findOrFail($data['destination_user_id']), $data['items'] ?? [], $year, $request->user(), $data['notes'] ?? null);
-        } else {
-            abort_unless(! empty($data['source_user_id']) && ! empty($data['destination_user_id']), 422, 'Choose the source and destination users.');
-            $transfer = $transfers->betweenUsers($branch, User::findOrFail($data['source_user_id']), User::findOrFail($data['destination_user_id']), $data['items'] ?? [], $year, $request->user(), $data['notes'] ?? null);
         }
 
         $message = $data['transfer_type'] === 'branch_to_branch'

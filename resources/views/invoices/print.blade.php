@@ -14,7 +14,7 @@
 @include('components.print-document-styles')
 
 <div class="no-print mb-5 flex flex-wrap justify-between gap-2">
-    <a class="btn btn-secondary" href="{{ route('invoices.show', $invoice) }}">Back to invoice</a>
+    <a class="btn btn-secondary" href="{{ $backUrl ?? route('invoices.show', $invoice) }}">{{ $backLabel ?? 'Back to invoice' }}</a>
     <button type="button" class="btn btn-primary" onclick="window.print()">Print {{ $isFinancialCopy ? 'financial' : 'parent/student' }} copy</button>
 </div>
 

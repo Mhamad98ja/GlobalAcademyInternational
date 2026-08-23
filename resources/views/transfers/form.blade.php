@@ -19,7 +19,6 @@
                     <option value="branch_to_branch" @selected(old('transfer_type', 'branch_to_branch') === 'branch_to_branch')>Books: branch to branch</option>
                     <option value="package_to_branch" @selected(old('transfer_type') === 'package_to_branch')>Packages: transfer stock to another branch</option>
                     <option value="branch_to_user" @selected(old('transfer_type') === 'branch_to_user')>Books: branch stock to user custody</option>
-                    <option value="user_to_user" @selected(old('transfer_type') === 'user_to_user')>Books: user to user custody</option>
                 </select>
             </div>
             <div>
@@ -40,10 +39,6 @@
         </div>
 
         <div class="form-grid hidden" data-user-fields>
-            <div data-source-user>
-                <label class="form-label">From user *</label>
-                <select name="source_user_id"><option value="">Select user</option>@foreach($users as $user)<option value="{{ $user->id }}" @selected(old('source_user_id') == $user->id)>{{ $user->name }}</option>@endforeach</select>
-            </div>
             <div>
                 <label class="form-label">To user *</label>
                 <select name="destination_user_id"><option value="">Select user</option>@foreach($users as $user)<option value="{{ $user->id }}" @selected(old('destination_user_id') == $user->id)>{{ $user->name }}</option>@endforeach</select>
@@ -105,7 +100,6 @@
 const kind = document.getElementById('transfer-type');
 const branchFields = document.querySelector('[data-branch-fields]');
 const userFields = document.querySelector('[data-user-fields]');
-const sourceUser = document.querySelector('[data-source-user]');
 const packageFields = document.querySelector('[data-package-fields]');
 const bookFields = document.querySelector('[data-book-fields]');
 const lines = document.querySelector('[data-transfer-lines]');
@@ -122,7 +116,6 @@ function swap() {
     const isBranchTransfer = type === 'branch_to_branch' || isPackageTransfer;
     branchFields.classList.toggle('hidden', !isBranchTransfer);
     userFields.classList.toggle('hidden', isBranchTransfer);
-    sourceUser.classList.toggle('hidden', type === 'branch_to_user');
     packageFields.classList.toggle('hidden', !isPackageTransfer);
     refreshPackageInputs(isPackageTransfer);
     bookFields.classList.toggle('hidden', isPackageTransfer);

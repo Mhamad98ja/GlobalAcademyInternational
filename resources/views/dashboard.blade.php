@@ -42,7 +42,7 @@
 </div>
 
 <section class="panel mt-6">
-    <div class="panel-header"><div><h2 class="panel-title">Recent inventory activity</h2><p class="mt-0.5 text-xs text-slate-500">Controlled movements posted in the active academic year</p></div><a class="link text-sm" href="{{ route('inventory.ledger') }}">Open ledger</a></div>
+    <div class="panel-header"><div><h2 class="panel-title">Recent inventory activity</h2><p class="mt-0.5 text-xs text-slate-500">Controlled movements posted in the active academic year</p></div>@if (auth()->user()->hasPermission('inventory.view'))<a class="link text-sm" href="{{ route('inventory.ledger') }}">Open ledger</a>@endif</div>
     <div class="table-wrap">
         <table class="data-table"><thead><tr><th>When</th><th>Book</th><th>Movement</th><th>Change</th><th>By</th></tr></thead>
             <tbody>@forelse ($recentActivity as $movement)<tr><td>{{ $movement->created_at->format('d M, H:i') }}</td><td>{{ $movement->book->title }}</td><td class="capitalize">{{ str_replace('_', ' ', $movement->type) }}</td><td class="font-semibold {{ $movement->quantity_change < 0 ? 'text-rose-700' : 'text-emerald-700' }}">{{ $movement->quantity_change > 0 ? '+' : '' }}{{ $movement->quantity_change }}</td><td>{{ $movement->user?->name ?? 'System' }}</td></tr>@empty<tr><td colspan="5" class="empty">{{ $activeAcademicYear ? 'No movements recorded for the active academic year.' : 'Set an open academic year to see its activity.' }}</td></tr>@endforelse</tbody>

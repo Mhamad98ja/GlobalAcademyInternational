@@ -20,7 +20,7 @@
         </dl>
     </section>
     <section class="panel">
-        <div class="panel-header"><h2 class="panel-title">Recent stock movements</h2><a class="link text-sm" href="{{ route('inventory.ledger', ['book_id' => $book->id]) }}">Full ledger</a></div>
+        <div class="panel-header"><h2 class="panel-title">Recent stock movements</h2>@if (auth()->user()->hasPermission('inventory.view'))<a class="link text-sm" href="{{ route('inventory.ledger', ['book_id' => $book->id]) }}">Full ledger</a>@endif</div>
         <div class="table-wrap"><table class="data-table"><thead><tr><th>When</th><th>Type</th><th>Change</th><th>After</th></tr></thead><tbody>@forelse ($book->movements as $movement)<tr><td>{{ $movement->created_at->format('d M Y H:i') }}</td><td class="capitalize">{{ str_replace('_', ' ', $movement->type) }}</td><td class="font-semibold {{ $movement->quantity_change < 0 ? 'text-rose-700' : 'text-emerald-700' }}">{{ $movement->quantity_change > 0 ? '+' : '' }}{{ $movement->quantity_change }}</td><td>{{ $movement->quantity_after }}</td></tr>@empty<tr><td colspan="4" class="empty">No movement recorded.</td></tr>@endforelse</tbody></table></div>
     </section>
 </div>

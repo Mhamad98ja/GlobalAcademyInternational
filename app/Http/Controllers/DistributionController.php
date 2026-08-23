@@ -11,6 +11,7 @@ use App\Models\ClassBookList;
 use App\Models\AcademicYear;
 use App\Models\Grade;
 use App\Models\StudentRegistration;
+use App\Models\SystemSetting;
 use App\Services\BookDistributionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -157,6 +158,25 @@ class DistributionController extends Controller
         $distribution->load('student', 'registration.grade', 'registration.section', 'items.book', 'invoice');
 
         return view('distributions.show', ['distribution' => $distribution, 'canViewFinancials' => $request->user()->canViewFinancials()]);
+    }
+
+    public function print(BookDistribution $distribution): View
+    {
+        $distribution->load('invoice.student', 'invoice.registration.academicYear', 'invoice.registration.grade', 'invoice.registration.section', 'invoice.grade', 'invoice.section', 'invoice.items.book', 'invoice.responsiblePerson', 'invoice.createdBy');
+        $invoice = $distribution->invoice;
+        abort_unless($invoice, 404);
+
+        $school = SystemSetting::query()
+            ->whereIn('key', ['school_name', 'school_address', 'school_phone'])
+            ->pluck('value', 'key');
+
+        return view('invoices.print', [
+            'invoice' => $invoice,
+            'school' => $school,
+            'copy' => 'student',
+            'backUrl' => route('distributions.show', $distribution),
+            'backLabel' => 'Back to distribution',
+        ]);
     }
 
     private function matchingPackage(StudentRegistration $registration, ?int $packageId): ?ClassBookList

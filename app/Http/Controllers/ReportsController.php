@@ -38,6 +38,7 @@ class ReportsController extends Controller
     {
         [$report, $rows, $filters] = $this->reportData($request);
         $selectionKey = $this->selectionKey($report);
+        $canViewOperationalReports = $request->user()->hasPermission('inventory.view');
 
         return view('reports.index', [
             'report' => $report,
@@ -46,6 +47,7 @@ class ReportsController extends Controller
             'years' => AcademicYear::orderByDesc('starts_on')->get(),
             'grades' => Grade::with('sections')->orderBy('sort_order')->get(),
             'canViewFinancials' => $request->user()->canViewFinancials(),
+            'canViewOperationalReports' => $canViewOperationalReports,
             'studentInformationFields' => $this->studentInformationFields($filters),
             'studentInformationFieldOptions' => self::STUDENT_INFORMATION_FIELDS,
             'selectableReportRows' => $selectionKey !== null,
@@ -76,7 +78,8 @@ class ReportsController extends Controller
     public function csv(Request $request): StreamedResponse
     {
         $canViewFinancials = $request->user()->canViewFinancials();
-        $report = $this->normaliseReport($request->string('report')->toString(), $canViewFinancials);
+        $canViewOperationalReports = $request->user()->hasPermission('inventory.view');
+        $report = $this->normaliseReport($request->string('report')->toString(), $canViewFinancials, $canViewOperationalReports);
         $filters = $this->filters($request);
         $query = $this->reportQuery($report, $filters, $canViewFinancials);
 
@@ -178,7 +181,8 @@ class ReportsController extends Controller
     private function reportData(Request $request): array
     {
         $canViewFinancials = $request->user()->canViewFinancials();
-        $report = $this->normaliseReport($request->string('report')->toString(), $canViewFinancials);
+        $canViewOperationalReports = $request->user()->hasPermission('inventory.view');
+        $report = $this->normaliseReport($request->string('report')->toString(), $canViewFinancials, $canViewOperationalReports);
         $filters = $this->filters($request);
 
         return [$report, $this->reportQuery($report, $filters, $canViewFinancials)->get(), $filters];
@@ -367,12 +371,13 @@ class ReportsController extends Controller
         };
     }
 
-    private function normaliseReport(string $report, bool $canViewFinancials): string
+    private function normaliseReport(string $report, bool $canViewFinancials, bool $canViewOperationalReports): string
     {
         $report = in_array($report, ['students', 'student_information', 'class_sections', 'stock', 'invoices', 'distributions', 'payments'], true)
             ? $report
             : 'students';
         abort_if(! $canViewFinancials && in_array($report, ['invoices', 'payments'], true), 403);
+        abort_if(! $canViewOperationalReports && in_array($report, ['stock', 'distributions'], true), 403);
 
         return $report;
     }

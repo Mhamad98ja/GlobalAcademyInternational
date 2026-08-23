@@ -26,9 +26,9 @@
                     <option value="student_information" @selected($report === 'student_information')>Student general information</option>
                     <option value="class_sections" @selected($report === 'class_sections')>Students by class and section</option>
                     <option value="students" @selected($report === 'students')>Student registrations</option>
-                    <option value="stock" @selected($report === 'stock')>Stock on hand</option>
+                    @if ($canViewOperationalReports)<option value="stock" @selected($report === 'stock')>Stock on hand</option>@endif
                     @if ($canViewFinancials)<option value="invoices" @selected($report === 'invoices')>Invoices</option>@endif
-                    <option value="distributions" @selected($report === 'distributions')>Book distributions</option>
+                    @if ($canViewOperationalReports)<option value="distributions" @selected($report === 'distributions')>Book distributions</option>@endif
                     @if ($canViewFinancials)<option value="payments" @selected($report === 'payments')>Payments</option>@endif
                 </select>
             </div>
