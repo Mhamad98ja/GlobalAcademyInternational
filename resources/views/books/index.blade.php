@@ -12,7 +12,7 @@
     </div>
 </div>
 
-@if ($canManagePackages)
+@if ($canViewPackages)
     <nav class="mb-5 flex w-fit gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm" aria-label="Books and packages">
         <a class="rounded-md px-3 py-2 text-sm font-semibold {{ $tab === 'books' ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-slate-100' }}" href="{{ route('books.index') }}">Books</a>
         <a class="rounded-md px-3 py-2 text-sm font-semibold {{ $tab === 'packages' ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-slate-100' }}" href="{{ route('books.index', ['tab' => 'packages']) }}">Book packages</a>
@@ -41,7 +41,7 @@
                             <td>{{ $list->section?->name ?? 'All sections' }}</td>
                             <td>{{ $list->items->count() }}</td>
                             <td><span class="badge {{ $list->is_active ? 'badge-green' : 'badge-red' }}">{{ $list->is_active ? 'Active' : 'Inactive' }}</span></td>
-                            <td><div class="flex gap-3"><a class="link text-xs" href="{{ route('class-lists.edit', $list) }}">Edit</a><a class="link text-xs" target="_blank" rel="noopener" href="{{ route('class-lists.print', $list) }}">Print this grade list</a></div></td>
+                            <td><div class="flex gap-3">@if ($canManagePackages)<a class="link text-xs" href="{{ route('class-lists.edit', $list) }}">Edit</a>@endif<a class="link text-xs" target="_blank" rel="noopener" href="{{ route('class-lists.print', $list) }}">Print this grade list</a></div></td>
                         </tr>
                     @empty
                         <tr><td colspan="7" class="empty">No class book packages yet.</td></tr>

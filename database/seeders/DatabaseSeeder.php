@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
             'students.manage' => 'Manage students',
             'books.view' => 'View books',
             'books.manage' => 'Manage books',
+            'class-lists.view' => 'View and print grade book lists',
             'class-lists.manage' => 'Manage book packages',
             'suppliers.view' => 'View suppliers',
             'suppliers.manage' => 'Manage suppliers',
@@ -61,7 +62,7 @@ class DatabaseSeeder extends Seeder
             'employee' => [
                 'label' => 'Branch User',
                 'description' => 'Daily student, inventory, transfer, and distribution work without financial access.',
-                'permissions' => ['dashboard.view', 'students.view', 'students.manage', 'books.view', 'distributions.create', 'inventory.view', 'inventory.transfer', 'deferred.create', 'people.manage', 'reports.view'],
+                'permissions' => ['dashboard.view', 'students.view', 'students.manage', 'books.view', 'class-lists.view', 'distributions.create', 'inventory.view', 'inventory.transfer', 'deferred.create', 'people.manage', 'reports.view'],
             ],
         ];
 

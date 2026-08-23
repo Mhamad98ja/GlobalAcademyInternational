@@ -156,9 +156,11 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/responsible-persons/{responsiblePerson}/edit', [PeopleController::class, 'editResponsible'])->name('responsible.edit');
         Route::put('/responsible-persons/{responsiblePerson}', [PeopleController::class, 'updateResponsible'])->name('responsible.update');
     });
-    Route::middleware('permission:class-lists.manage')->group(function (): void {
+    Route::middleware('permission:class-lists.view')->group(function (): void {
         Route::get('/class-book-lists', [ClassBookListsController::class, 'index'])->name('class-lists.index');
         Route::get('/class-book-lists/{classBookList}/print', [ClassBookListsController::class, 'print'])->name('class-lists.print');
+    });
+    Route::middleware('permission:class-lists.manage')->group(function (): void {
         Route::get('/class-book-lists/create', [ClassBookListsController::class, 'create'])->name('class-lists.create');
         Route::post('/class-book-lists', [ClassBookListsController::class, 'store'])->name('class-lists.store');
     });

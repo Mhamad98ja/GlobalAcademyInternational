@@ -22,10 +22,11 @@ class BooksController extends Controller
     public function index(Request $request): View
     {
         $canManagePackages = $request->user()->hasPermission('class-lists.manage');
+        $canViewPackages = $canManagePackages || $request->user()->hasPermission('class-lists.view');
         $canManageBooks = $request->user()->hasPermission('books.manage');
         $canViewFinancials = $request->user()->canViewFinancials();
         $branchId = app(BranchContext::class)->id();
-        $tab = $canManagePackages && $request->string('tab')->toString() === 'packages' ? 'packages' : 'books';
+        $tab = $canViewPackages && $request->string('tab')->toString() === 'packages' ? 'packages' : 'books';
         $search = trim($request->string('search')->toString());
         $books = null;
         $lists = null;
@@ -55,7 +56,7 @@ class BooksController extends Controller
                 ->withQueryString();
         }
 
-        return view('books.index', compact('books', 'lists', 'tab', 'search', 'canManageBooks', 'canManagePackages', 'canViewFinancials'));
+        return view('books.index', compact('books', 'lists', 'tab', 'search', 'canManageBooks', 'canManagePackages', 'canViewPackages', 'canViewFinancials'));
     }
 
     public function create(): View

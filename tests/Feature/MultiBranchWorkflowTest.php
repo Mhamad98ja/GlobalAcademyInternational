@@ -51,7 +51,7 @@ class MultiBranchWorkflowTest extends TestCase
     {
         $role = Role::firstOrCreate(['name' => 'employee'], ['label' => 'Branch User']);
         $role->permissions()->sync(Permission::query()->whereIn('name', [
-            'dashboard.view', 'students.view', 'students.manage', 'books.view', 'distributions.create',
+            'dashboard.view', 'students.view', 'students.manage', 'books.view', 'class-lists.view', 'distributions.create',
             'inventory.view', 'inventory.transfer', 'people.manage', 'reports.view',
         ])->pluck('id'));
         $user = User::factory()->create(['email' => $email, 'is_active' => true]);
@@ -597,6 +597,22 @@ class MultiBranchWorkflowTest extends TestCase
         $branchUser->branches()->attach([$main->id => ['is_default' => true, 'is_branch_administrator' => false]]);
         $book = Book::create(['sku' => 'FIN-BOOK', 'barcode' => '978000092', 'title' => 'Financially Protected Book', 'selling_price' => '12.50']);
         BranchBookStock::create(['branch_id' => $main->id, 'book_id' => $book->id, 'quantity_on_hand' => 1]);
+        $year = AcademicYear::create(['name' => '2026-2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'open']);
+        $level = SchoolLevel::create(['name' => 'Primary']);
+        $grade = Grade::create(['school_level_id' => $level->id, 'name' => 'Grade 1']);
+        $gradeList = ClassBookList::create([
+            'academic_year_id' => $year->id,
+            'grade_id' => $grade->id,
+            'name' => 'Grade 1 required books',
+            'is_active' => true,
+        ]);
+        $gradeList->items()->create([
+            'book_id' => $book->id,
+            'quantity' => 1,
+            'is_mandatory' => true,
+            'price_type' => 'paid',
+            'unit_price' => '0.00',
+        ]);
 
         $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $main->id])
             ->post(route('admin.users.store'), [
@@ -626,6 +642,20 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertOk()
             ->assertDontSee('Selling price')
             ->assertDontSee('Latest purchase price');
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
+            ->get(route('books.index', ['tab' => 'packages']))
+            ->assertOk()
+            ->assertSee('Grade 1 required books')
+            ->assertSee(route('class-lists.print', $gradeList), false)
+            ->assertDontSee(route('class-lists.edit', $gradeList), false)
+            ->assertDontSee('New package');
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
+            ->get(route('class-lists.print', $gradeList))
+            ->assertOk()
+            ->assertSee('Grade 1 book list');
+        $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
+            ->get(route('class-lists.edit', $gradeList))
+            ->assertForbidden();
         $this->actingAs($branchUser)->withSession(['current_branch_id' => $main->id])
             ->get(route('distributions.create'))
             ->assertOk()
