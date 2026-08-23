@@ -577,6 +577,13 @@ class MultiBranchWorkflowTest extends TestCase
             'is_default' => true,
             'is_branch_administrator' => true,
         ]);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('admin.users'))
+            ->assertOk()
+            ->assertSee('data-user-role-select', false)
+            ->assertSee('data-branch-administrator-selection', false)
+            ->assertSee('data-role-name="super-administrator"', false);
     }
 
     public function test_branch_super_administrator_controls_local_users_while_branch_users_cannot_view_financial_data(): void

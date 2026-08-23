@@ -110,6 +110,24 @@ document.querySelectorAll('[data-grade-select]').forEach((gradeSelect) => {
     filterSections();
 });
 
+document.querySelectorAll('[data-user-role-select]').forEach((roleSelect) => {
+    const form = roleSelect.form;
+    const branchAdministratorSelection = form?.querySelector('[data-branch-administrator-selection]');
+    if (!branchAdministratorSelection) return;
+
+    const syncBranchAdministratorSelection = () => {
+        const role = roleSelect.options[roleSelect.selectedIndex]?.dataset.roleName;
+        const isBranchAdministrator = role === 'super-administrator';
+        branchAdministratorSelection.hidden = !isBranchAdministrator;
+        branchAdministratorSelection.querySelectorAll('input').forEach((input) => {
+            input.disabled = !isBranchAdministrator;
+        });
+    };
+
+    roleSelect.addEventListener('change', syncBranchAdministratorSelection);
+    syncBranchAdministratorSelection();
+});
+
 document.querySelectorAll('[data-report-type-select]').forEach((reportSelect) => {
     reportSelect.addEventListener('change', () => {
         const form = reportSelect.form;

@@ -32,16 +32,16 @@
         @if ($canManageBranchAssignments)
             <div>
                 <label class="form-label">Role *</label>
-                <select name="role_id" required>
+                <select name="role_id" required data-user-role-select>
                     @foreach ($roles as $role)
-                        <option value="{{ $role->id }}" @selected(old('role_id', $managedUser->roles->first()?->id) == $role->id)>{{ $role->label }}</option>
+                        <option value="{{ $role->id }}" data-role-name="{{ $role->name }}" @selected(old('role_id', $managedUser->roles->first()?->id) == $role->id)>{{ $role->label }}</option>
                     @endforeach
                 </select>
             </div>
         <div class="border-t border-slate-200 pt-4">
             <h2 class="panel-title">Branch authority</h2>
             <p class="mt-1 text-xs text-slate-500">Users can work only in assigned branches. The Controller Administrator is the only account with whole-school branch authority.</p>
-            <div class="mt-3">
+            <div class="mt-3" data-branch-administrator-selection>
                 <label class="form-label">Assigned branches</label>
                 <div class="max-h-48 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
                     @foreach ($branches as $branch)
