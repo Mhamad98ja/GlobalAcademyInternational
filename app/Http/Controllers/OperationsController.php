@@ -58,6 +58,7 @@ class OperationsController extends Controller
         $canViewSuppliers = $user->hasPermission('purchases.manage');
         $canViewReturns = $user->hasPermission('returns.manage');
         $canViewTransfers = $user->hasPermission('inventory.transfer');
+        $canViewCashPosition = $user->isControllerAdministrator() || ($canViewPayments && $canViewSuppliers && $canViewReturns);
         $limit = 150;
 
         $applyDateRange = static function (Builder $query, string $column) use ($dateFrom, $dateTo): Builder {
@@ -177,6 +178,11 @@ class OperationsController extends Controller
                 }),
             'branch_cash_movements.settled_on',
         );
+        // A true cash position is lifetime-based and deliberately ignores the
+        // page filters. Those filters only narrow the activity ledger below.
+        $cashReceiptQuery = $branchScoped(Payment::query())->where('status', 'valid');
+        $cashSupplierPaymentQuery = $branchScoped(SupplierPayment::query());
+        $cashRefundQuery = $branchScoped(BookReturn::query())->where('status', 'accepted');
 
         $studentSummary = [
             'invoiced' => $canViewInvoices ? (float) (clone $invoiceQuery)->where('status', '!=', 'cancelled')->sum('total') : null,
@@ -192,6 +198,15 @@ class OperationsController extends Controller
         $supplierSummary['outstanding'] = $canViewSuppliers
             ? max(0, $supplierSummary['purchased'] - $supplierSummary['paid'] - $supplierSummary['credits'])
             : null;
+        $cashReceipts = $canViewCashPosition ? (float) (clone $cashReceiptQuery)->sum('amount') : null;
+        $cashSupplierPayments = $canViewCashPosition ? (float) (clone $cashSupplierPaymentQuery)->sum('amount') : null;
+        $cashRefunds = $canViewCashPosition ? (float) (clone $cashRefundQuery)->sum('refund_total') : null;
+        $cashSummary = [
+            'receipts' => $cashReceipts,
+            'supplier_payments' => $cashSupplierPayments,
+            'refunds' => $cashRefunds,
+            'total' => $canViewCashPosition ? $cashReceipts - $cashSupplierPayments - $cashRefunds : null,
+        ];
         $acceptedTransferQuery = (clone $transferInvoiceQuery)->whereIn('status', ['issued', 'accepted']);
         $branchSummary = [
             'accepted_documents' => $canViewTransfers ? (clone $acceptedTransferQuery)->count() : null,
@@ -273,7 +288,7 @@ class OperationsController extends Controller
         return view('operations.index', compact(
             'transactions', 'tab', 'search', 'dateFrom', 'dateTo', 'showAllBranches', 'canViewAllBranches',
             'canViewStudents', 'canViewInvoices', 'canViewPayments', 'canViewSuppliers', 'canViewTransfers',
-            'canViewReturns', 'studentSummary', 'supplierSummary', 'branchSummary',
+            'canViewReturns', 'canViewCashPosition', 'cashSummary', 'studentSummary', 'supplierSummary', 'branchSummary',
         ));
     }
 

@@ -20,6 +20,21 @@
     <span class="font-semibold">How the totals work:</span> student payments are cash in, supplier payments and refunds are cash out, and branch transfer invoices are internal stock values only. They are visible here but never counted as revenue or supplier expense.
 </section>
 
+@if ($canViewCashPosition)
+<section class="panel mb-6 overflow-hidden">
+    <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 bg-cyan-50 p-5">
+        <div><div class="text-xs font-semibold uppercase tracking-[.1em] text-cyan-700">School cash</div><h2 class="mt-1 text-lg font-semibold text-cyan-950">Total cash position</h2><p class="mt-1 text-sm text-cyan-900">All recorded external money in and out across the selected branch scope.</p></div>
+        <div class="rounded-lg bg-white px-5 py-3 text-right shadow-sm"><div class="text-xs font-semibold uppercase text-slate-500">Available cash</div><div class="mt-1 text-2xl font-bold {{ $cashSummary['total'] < 0 ? 'text-rose-700' : 'text-emerald-700' }}">{{ $number($cashSummary['total']) }}</div></div>
+    </div>
+    <dl class="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <div class="p-4"><dt class="muted">Student payments received</dt><dd class="mt-1 text-xl font-bold text-emerald-700">{{ $number($cashSummary['receipts']) }}</dd></div>
+        <div class="p-4"><dt class="muted">Supplier payments</dt><dd class="mt-1 text-xl font-bold text-rose-700">{{ $number($cashSummary['supplier_payments']) }}</dd></div>
+        <div class="p-4"><dt class="muted">Student refunds</dt><dd class="mt-1 text-xl font-bold text-rose-700">{{ $number($cashSummary['refunds']) }}</dd></div>
+    </dl>
+    <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">Total cash = student payments received minus supplier payments and student refunds. It includes every recorded payment method and is not changed by internal branch-transfer settlements or the date/search filters above.</div>
+</section>
+@endif
+
 <section class="panel mb-6">
     <div class="panel-header">
         <form method="GET" action="{{ route('finance.index') }}" class="grid w-full gap-2 md:grid-cols-[12rem_10rem_10rem_10rem_minmax(0,1fr)_auto_auto]">

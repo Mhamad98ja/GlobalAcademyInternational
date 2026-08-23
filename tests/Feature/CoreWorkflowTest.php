@@ -19,6 +19,7 @@ use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentRegistration;
 use App\Models\Supplier;
+use App\Models\SupplierPayment;
 use App\Models\SupplierPurchase;
 use App\Models\SupplierReturn;
 use App\Models\SystemSetting;
@@ -791,11 +792,23 @@ class CoreWorkflowTest extends TestCase
             'academic_year_id' => $registration->academic_year_id, 'grade_id' => $registration->grade_id, 'section_id' => $registration->section_id,
             'invoice_date' => '2026-09-02', 'subtotal' => '30.00', 'total' => '30.00', 'balance_due' => '30.00', 'created_by' => $user->id,
         ]);
+        Payment::create([
+            'payment_number' => 'PAY-CASH-TOTAL-001', 'invoice_id' => $invoice->id, 'student_id' => $registration->student_id,
+            'payment_date' => '2026-09-02', 'amount' => '50.00', 'method' => 'cash', 'status' => 'valid',
+            'idempotency_key' => (string) Str::uuid(), 'received_by' => $user->id,
+        ]);
+        SupplierPayment::create([
+            'supplier_purchase_id' => $purchase->id, 'amount' => '20.00', 'paid_on' => '2026-09-03',
+            'method' => 'cash', 'received_by' => $user->id,
+        ]);
         BookReturn::create(['student_id' => $registration->student_id, 'invoice_id' => $invoice->id, 'returned_on' => '2026-09-03', 'refund_total' => '5.00', 'status' => 'accepted', 'accepted_by' => $user->id]);
 
         $this->actingAs($user)->get(route('finance.index'))
             ->assertOk()
             ->assertSee('Financial Center')
+            ->assertSee('Total cash position')
+            ->assertSee('Available cash')
+            ->assertSee('25.00')
             ->assertSee('PUR-OPS-001')
             ->assertSee('INV-OPS-001')
             ->assertSee('Student refund / return')
