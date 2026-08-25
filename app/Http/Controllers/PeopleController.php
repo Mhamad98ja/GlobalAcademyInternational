@@ -7,9 +7,11 @@ namespace App\Http\Controllers;
 use App\Models\ResponsiblePerson;
 use App\Models\Student;
 use App\Models\Teacher;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class PeopleController extends Controller
@@ -55,8 +57,41 @@ class PeopleController extends Controller
                 ->paginate(15)
                 ->withQueryString(),
             'teachers' => Teacher::where('is_active', true)->orderBy('first_name')->get(),
-            'students' => Student::orderBy('first_name')->orderBy('last_name')->get(),
+            'selectedStudents' => $this->studentsForPicker((array) old('student_ids', [])),
         ]);
+    }
+
+    public function searchStudents(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['required', 'string', 'min:2', 'max:100'],
+        ]);
+
+        $terms = preg_split('/\s+/', trim($data['q']), -1, PREG_SPLIT_NO_EMPTY);
+        $students = Student::query()
+            ->select(['id', 'student_number', 'first_name', 'middle_name', 'last_name'])
+            ->where(function ($query) use ($terms): void {
+                foreach ($terms as $term) {
+                    $query->where(function ($studentQuery) use ($term): void {
+                        $studentQuery
+                            ->whereInsensitiveLike('student_number', $term)
+                            ->orWhereInsensitiveLike('first_name', $term)
+                            ->orWhereInsensitiveLike('middle_name', $term)
+                            ->orWhereInsensitiveLike('last_name', $term);
+                    });
+                }
+            })
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit(15)
+            ->get()
+            ->map(fn (Student $student): array => [
+                'id' => $student->id,
+                'student_number' => $student->student_number,
+                'full_name' => $student->full_name,
+            ]);
+
+        return response()->json(['data' => $students]);
     }
 
     public function storeResponsible(Request $request): RedirectResponse
@@ -83,7 +118,7 @@ class PeopleController extends Controller
                 ->when($responsiblePerson->teacher_id, fn ($query) => $query->orWhereKey($responsiblePerson->teacher_id))
                 ->orderBy('first_name')
                 ->get(),
-            'students' => Student::orderBy('first_name')->orderBy('last_name')->get(),
+            'selectedStudents' => $this->studentsForPicker((array) old('student_ids', $responsiblePerson->students->modelKeys())),
         ]);
     }
 
@@ -103,7 +138,7 @@ class PeopleController extends Controller
 
     private function validatedResponsible(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'teacher_id' => ['nullable', 'exists:teachers,id'],
             'full_name' => ['required', 'string', 'max:255'],
             'type' => ['required', 'in:teacher,father,mother,guardian,administrator,other'],
@@ -115,6 +150,15 @@ class PeopleController extends Controller
             'student_ids' => ['nullable', 'array'],
             'student_ids.*' => ['integer', 'distinct', 'exists:students,id'],
         ]);
+
+        $studentIds = collect($data['student_ids'] ?? [])->map(fn ($id) => (int) $id)->all();
+        if ($studentIds !== [] && Student::query()->whereKey($studentIds)->count() !== count($studentIds)) {
+            throw ValidationException::withMessages([
+                'student_ids' => 'One or more selected students are not available in this branch.',
+            ]);
+        }
+
+        return $data;
     }
 
     private function syncStudents(ResponsiblePerson $person, array $studentIds): void
@@ -123,5 +167,14 @@ class PeopleController extends Controller
         $person->students()->sync(collect($studentIds)->mapWithKeys(fn ($studentId) => [
             $studentId => ['relationship' => $relationship, 'is_primary' => false],
         ])->all());
+    }
+
+    private function studentsForPicker(array $studentIds)
+    {
+        return Student::query()
+            ->whereKey(collect($studentIds)->filter()->map(fn ($id) => (int) $id)->unique()->all())
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get();
     }
 }

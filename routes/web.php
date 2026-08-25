@@ -147,6 +147,7 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/teachers', [PeopleController::class, 'teachers'])->name('teachers.index');
         Route::post('/teachers', [PeopleController::class, 'storeTeacher'])->name('teachers.store');
         Route::get('/responsible-persons', [PeopleController::class, 'responsible'])->name('responsible.index');
+        Route::get('/responsible-persons/students/search', [PeopleController::class, 'searchStudents'])->name('responsible.students.search');
         Route::post('/responsible-persons', [PeopleController::class, 'storeResponsible'])->name('responsible.store');
         Route::get('/responsible-persons/{responsiblePerson}/edit', [PeopleController::class, 'editResponsible'])->name('responsible.edit');
         Route::put('/responsible-persons/{responsiblePerson}', [PeopleController::class, 'updateResponsible'])->name('responsible.update');

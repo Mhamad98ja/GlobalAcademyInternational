@@ -188,6 +188,115 @@ document.addEventListener('change', (event) => {
 
 document.querySelectorAll('[data-book-search]').forEach(refreshBookPicker);
 
+document.querySelectorAll('[data-student-multi-select]').forEach((picker) => {
+    const searchInput = picker.querySelector('[data-student-picker-search]');
+    const results = picker.querySelector('[data-student-picker-results]');
+    const selected = picker.querySelector('[data-student-picker-selected]');
+    const searchUrl = picker.dataset.searchUrl;
+    let requestController;
+    let searchTimer;
+
+    if (!searchInput || !results || !selected || !searchUrl) return;
+
+    const selectedIds = () => new Set([...selected.querySelectorAll('[data-student-id]')]
+        .map((student) => student.dataset.studentId));
+    const hideResults = () => {
+        results.replaceChildren();
+        results.hidden = true;
+    };
+    const showMessage = (message) => {
+        const hint = document.createElement('p');
+        hint.className = 'px-3 py-2 text-sm text-slate-500';
+        hint.textContent = message;
+        results.replaceChildren(hint);
+        results.hidden = false;
+    };
+    const addStudent = (student) => {
+        if (selectedIds().has(String(student.id))) return;
+
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-sm text-sky-900';
+        chip.dataset.studentPickerChip = '';
+        chip.dataset.studentId = String(student.id);
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'student_ids[]';
+        input.value = String(student.id);
+
+        const label = document.createElement('span');
+        label.textContent = `${student.student_number} - ${student.full_name}`;
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'font-semibold text-sky-700 hover:text-sky-950';
+        remove.dataset.studentPickerRemove = '';
+        remove.setAttribute('aria-label', `Remove ${student.full_name}`);
+        remove.textContent = 'x';
+
+        chip.append(input, label, remove);
+        selected.append(chip);
+    };
+    const showMatches = (students) => {
+        const chosen = selectedIds();
+        const available = students.filter((student) => !chosen.has(String(student.id)));
+        if (available.length === 0) {
+            showMessage(students.length ? 'All matching students are already selected.' : 'No students found.');
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        available.forEach((student) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'block w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-sky-50';
+            button.textContent = `${student.student_number} - ${student.full_name}`;
+            button.addEventListener('click', () => {
+                addStudent(student);
+                searchInput.value = '';
+                hideResults();
+                searchInput.focus();
+            });
+            fragment.append(button);
+        });
+        results.replaceChildren(fragment);
+        results.hidden = false;
+    };
+
+    searchInput.addEventListener('input', () => {
+        window.clearTimeout(searchTimer);
+        const query = searchInput.value.trim();
+        requestController?.abort();
+        if (query.length < 2) {
+            hideResults();
+            return;
+        }
+
+        showMessage('Searching students...');
+        searchTimer = window.setTimeout(async () => {
+            requestController = new AbortController();
+            const url = new URL(searchUrl, window.location.origin);
+            url.searchParams.set('q', query);
+            try {
+                const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: requestController.signal });
+                if (!response.ok) throw new Error('Student search failed.');
+                const payload = await response.json();
+                if (searchInput.value.trim() === query) showMatches(payload.data ?? []);
+            } catch (error) {
+                if (error.name !== 'AbortError') showMessage('Student search is unavailable. Please try again.');
+            }
+        }, 250);
+    });
+
+    selected.addEventListener('click', (event) => {
+        const remove = event.target.closest('[data-student-picker-remove]');
+        if (remove) remove.closest('[data-student-picker-chip]')?.remove();
+    });
+    searchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') hideResults();
+    });
+});
+
 document.querySelectorAll('[data-supplier-purchase-form]').forEach((form) => {
     const lines = form.querySelector('#purchase-lines');
     const lineTemplate = document.querySelector('#purchase-line-template');

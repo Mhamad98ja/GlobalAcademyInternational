@@ -12,6 +12,7 @@ use App\Models\Grade;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Role;
+use App\Models\ResponsiblePerson;
 use App\Models\SchoolLevel;
 use App\Models\Section;
 use App\Models\Student;
@@ -50,6 +51,46 @@ class CoreWorkflowTest extends TestCase
         $year=AcademicYear::create(['name'=>'2026–2027','starts_on'=>'2026-09-01','ends_on'=>'2027-06-30','status'=>'open','created_by'=>$user->id]);
         $level=SchoolLevel::create(['name'=>'Primary']);$grade=Grade::create(['school_level_id'=>$level->id,'name'=>'Grade 4']);$section=Section::create(['grade_id'=>$grade->id,'name'=>'A']);$student=Student::create(['student_number'=>'STU-001','first_name'=>'Lina','last_name'=>'Haddad']);
         return StudentRegistration::create(['student_id'=>$student->id,'academic_year_id'=>$year->id,'grade_id'=>$grade->id,'section_id'=>$section->id,'status'=>'active','registered_on'=>'2026-09-01','created_by'=>$user->id]);
+    }
+
+    public function test_responsible_person_can_search_and_link_multiple_students(): void
+    {
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $otherStudent = Student::create(['student_number' => 'STU-002', 'first_name' => 'Omar', 'last_name' => 'Saleh']);
+        Student::create(['student_number' => 'STU-003', 'first_name' => 'Unlisted', 'last_name' => 'Student']);
+
+        $this->actingAs($user)->get(route('responsible.index'))
+            ->assertOk()
+            ->assertSee('Search by student number or name')
+            ->assertDontSee('Unlisted Student');
+        $this->actingAs($user)->getJson(route('responsible.students.search', ['q' => 'Lina Haddad']))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.student_number', 'STU-001');
+
+        $this->actingAs($user)->post(route('responsible.store'), [
+            'full_name' => 'Nadia Haddad',
+            'type' => 'guardian',
+            'student_ids' => [$registration->student_id, $otherStudent->id],
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $person = ResponsiblePerson::query()->where('full_name', 'Nadia Haddad')->firstOrFail();
+        $this->assertDatabaseHas('responsible_person_student', [
+            'responsible_person_id' => $person->id,
+            'student_id' => $registration->student_id,
+            'relationship' => 'Guardian',
+        ]);
+        $this->assertDatabaseHas('responsible_person_student', [
+            'responsible_person_id' => $person->id,
+            'student_id' => $otherStudent->id,
+            'relationship' => 'Guardian',
+        ]);
+        $this->actingAs($user)->get(route('responsible.edit', $person))
+            ->assertOk()
+            ->assertSee('Lina Haddad')
+            ->assertSee('Omar Saleh')
+            ->assertDontSee('Unlisted Student');
     }
 
     public function test_distribution_decreases_stock_and_creates_an_invoice(): void
