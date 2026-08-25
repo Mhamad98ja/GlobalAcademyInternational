@@ -111,6 +111,10 @@ class PeopleController extends Controller
     public function editResponsible(ResponsiblePerson $responsiblePerson): View
     {
         $responsiblePerson->load('students');
+        $selectedStudentIds = old('student_ids');
+        if (! is_array($selectedStudentIds)) {
+            $selectedStudentIds = $responsiblePerson->students->pluck('id')->all();
+        }
 
         return view('people.responsible-form', [
             'person' => $responsiblePerson,
@@ -118,7 +122,7 @@ class PeopleController extends Controller
                 ->when($responsiblePerson->teacher_id, fn ($query) => $query->orWhereKey($responsiblePerson->teacher_id))
                 ->orderBy('first_name')
                 ->get(),
-            'selectedStudents' => $this->studentsForPicker((array) old('student_ids', $responsiblePerson->students->modelKeys())),
+            'selectedStudents' => $this->studentsForPicker($selectedStudentIds),
         ]);
     }
 

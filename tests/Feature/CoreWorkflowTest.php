@@ -91,6 +91,9 @@ class CoreWorkflowTest extends TestCase
             ->assertSee('Lina Haddad')
             ->assertSee('Omar Saleh')
             ->assertDontSee('Unlisted Student');
+        $this->actingAs($user)->get(route('responsible.index'))
+            ->assertOk()
+            ->assertSee('Edit person &amp; students', false);
     }
 
     public function test_distribution_decreases_stock_and_creates_an_invoice(): void

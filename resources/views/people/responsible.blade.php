@@ -33,7 +33,7 @@
         <div class="panel-header"><form class="flex w-full gap-2"><input name="search" value="{{ request('search') }}" placeholder="Name or phone"><button class="btn btn-secondary">Search</button></form></div>
         <div class="table-wrap">
             <table class="data-table min-w-[760px]">
-                <thead><tr><th>Name</th><th>Type</th><th>Phone</th><th>Linked students</th><th>Linked teacher</th><th></th></tr></thead>
+                <thead><tr><th>Name</th><th>Type</th><th>Phone</th><th>Linked students</th><th>Linked teacher</th><th>Action</th></tr></thead>
                 <tbody>
                     @forelse ($people as $person)
                         <tr>
@@ -42,7 +42,7 @@
                             <td>{{ $person->phone ?: '-' }}</td>
                             <td>{{ $person->students->pluck('full_name')->join(', ') ?: 'No students linked' }}</td>
                             <td>{{ $person->teacher?->full_name ?? '-' }}</td>
-                            <td><a class="link text-xs" href="{{ route('responsible.edit', $person) }}">Edit links</a></td>
+                            <td><a class="link text-xs" href="{{ route('responsible.edit', $person) }}" title="Edit this person's contact details and linked students">Edit person &amp; students</a></td>
                         </tr>
                     @empty
                         <tr><td colspan="6" class="empty">No responsible people found.</td></tr>
