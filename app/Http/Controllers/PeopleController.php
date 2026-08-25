@@ -112,17 +112,16 @@ class PeopleController extends Controller
     {
         $responsiblePerson->load('students');
         $selectedStudentIds = old('student_ids');
-        if (! is_array($selectedStudentIds)) {
-            $selectedStudentIds = $responsiblePerson->students->pluck('id')->all();
-        }
+        $selectedStudents = is_array($selectedStudentIds)
+            ? $this->studentsForPicker($selectedStudentIds)
+            : $responsiblePerson->students;
 
         return view('people.responsible-form', [
             'person' => $responsiblePerson,
-            'teachers' => Teacher::where('is_active', true)
-                ->when($responsiblePerson->teacher_id, fn ($query) => $query->orWhereKey($responsiblePerson->teacher_id))
+            'teachers' => Teacher::query()
                 ->orderBy('first_name')
                 ->get(),
-            'selectedStudents' => $this->studentsForPicker($selectedStudentIds),
+            'selectedStudents' => $selectedStudents,
         ]);
     }
 
