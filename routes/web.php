@@ -11,7 +11,6 @@ use App\Http\Controllers\BranchesController;
 use App\Http\Controllers\ClassBookListsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataImportController;
-use App\Http\Controllers\DeferredApprovalsController;
 use App\Http\Controllers\DistributionController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InvoicesController;
@@ -133,11 +132,6 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::post('/returns/invoices/{invoice}', [ReturnsController::class, 'store'])->name('returns.store');
         Route::get('/returns/{return}', [ReturnsController::class, 'show'])->name('returns.show');
     });
-    Route::middleware('permission:deferred.view')->group(function (): void {
-        Route::get('/deferred-approvals', [DeferredApprovalsController::class, 'index'])->name('deferred.index');
-        Route::get('/deferred-approvals/{approval}/document', [DeferredApprovalsController::class, 'document'])->name('deferred.document');
-    });
-    Route::post('/deferred-approvals/{approval}/decision', [DeferredApprovalsController::class, 'approve'])->middleware('permission:deferred.approve')->name('deferred.approve');
     Route::middleware('permission:academic.manage')->group(function (): void {
         Route::get('/academic', [AcademicController::class, 'index'])->name('academic.index');
         Route::post('/academic/years', [AcademicController::class, 'storeYear'])->name('academic.years.store');

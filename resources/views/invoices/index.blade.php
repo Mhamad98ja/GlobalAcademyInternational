@@ -15,7 +15,7 @@
             <input name="search" value="{{ request('search') }}" placeholder="Invoice number or student" aria-label="Search invoices">
             <select name="status" aria-label="Filter by payment status">
                 <option value="">All payment statuses</option>
-                @foreach (['unpaid', 'partially_paid', 'paid', 'deferred'] as $status)
+                @foreach (['unpaid', 'partially_paid', 'paid'] as $status)
                     <option value="{{ $status }}" @selected(request('status') === $status)>{{ str_replace('_', ' ', ucfirst($status)) }}</option>
                 @endforeach
             </select>
@@ -45,7 +45,7 @@
                         <td>{{ number_format($invoice->total, 2) }}</td>
                         <td class="font-medium {{ $invoice->balance_due > 0 ? 'text-amber-700' : 'text-emerald-700' }}">{{ number_format($invoice->balance_due, 2) }}</td>
                         <td>
-                            <span class="badge {{ $invoice->payment_status === 'paid' ? 'badge-green' : ($invoice->payment_status === 'deferred' ? 'badge-blue' : 'badge-amber') }}">{{ str_replace('_', ' ', $invoice->payment_status) }}</span>
+                            <span class="badge {{ $invoice->payment_status === 'paid' ? 'badge-green' : 'badge-amber' }}">{{ str_replace('_', ' ', $invoice->payment_status) }}</span>
                         </td>
                     </tr>
                 @empty

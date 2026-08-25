@@ -135,7 +135,7 @@ class BranchesController extends Controller
         foreach ([
             'students', 'student_registrations', 'class_book_lists', 'supplier_purchases',
             'supplier_returns', 'supplier_payments', 'invoices', 'payments', 'payment_reversals',
-            'deferred_payment_approvals', 'book_distributions', 'book_returns', 'stock_movements',
+            'book_distributions', 'book_returns', 'stock_movements',
             'stock_adjustments', 'credit_notes', 'refunds', 'audit_logs', 'branch_book_stocks',
             'user_book_stocks',
         ] as $table) {

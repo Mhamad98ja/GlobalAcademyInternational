@@ -121,7 +121,7 @@
                         <label class="form-label" for="invoice-status">Payment status</label>
                         <select id="invoice-status" name="invoice_payment_status">
                             <option value="">All payment statuses</option>
-                            @foreach (['unpaid', 'partially_paid', 'paid', 'deferred'] as $status)
+                            @foreach (['unpaid', 'partially_paid', 'paid'] as $status)
                                 <option value="{{ $status }}" @selected(($filters['invoice_payment_status'] ?? '') === $status)>{{ str($status)->headline() }}</option>
                             @endforeach
                         </select>

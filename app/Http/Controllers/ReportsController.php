@@ -331,7 +331,7 @@ class ReportsController extends Controller
             'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
             'registration_status' => ['nullable', 'in:active,inactive,withdrawn,completed'],
-            'invoice_payment_status' => ['nullable', 'in:unpaid,partially_paid,paid,deferred'],
+            'invoice_payment_status' => ['nullable', 'in:unpaid,partially_paid,paid'],
             'payment_status' => ['nullable', 'in:valid,reversed'],
             'payment_method' => ['nullable', 'in:cash,card,bank_transfer,check,other'],
             'stock_level' => ['nullable', 'in:in_stock,low_stock,out_of_stock'],

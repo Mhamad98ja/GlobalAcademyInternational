@@ -20,7 +20,6 @@
     ['distributions.index','Distribution','distributions.create','distribution'],
     ['inventory.ledger','Inventory ledger','inventory.view','inventory'],
     ['transfers.index','Book transfers','inventory.transfer','inventory'],
-    ['deferred.index','Deferred approvals','deferred.view','deferred'],
     ['academic.index','Academic structure','academic.manage','academic'],
     ['teachers.index','Teachers','people.manage','teachers'],
     ['responsible.index','Responsible persons','people.manage','responsible'],

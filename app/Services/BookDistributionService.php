@@ -20,7 +20,6 @@ final class BookDistributionService
         private readonly InventoryService $inventory,
         private readonly PaymentService $payments,
         private readonly AuditService $audit,
-        private readonly DeferredPaymentApprovalService $deferredApprovals,
     ) {
     }
 
@@ -138,13 +137,6 @@ final class BookDistributionService
                     'reference_number' => $payment['reference_number'] ?? null,
                     'idempotency_key' => $payment['idempotency_key'] ?? null,
                 ], $user);
-            }
-
-            if (! empty($payment['deferred'])) {
-                $invoice->refresh();
-                $this->deferredApprovals->requestForInvoice($invoice, $user, [
-                    'reason' => 'Deferred payment requested during book distribution.',
-                ]);
             }
 
             $this->audit->log('distribution.completed', $distribution, [], [

@@ -6,7 +6,6 @@
             <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
             @break
         @case('operations')
-        @case('deferred')
             <circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v4.75l3.25 2"/>
             @break
         @case('students')

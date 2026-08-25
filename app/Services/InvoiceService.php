@@ -15,7 +15,7 @@ final class InvoiceService
         $balance = max(0, Money::cents((string)$invoice->total) - $paidCents);
         $invoice->amount_paid = Money::decimal($paidCents);
         $invoice->balance_due = Money::decimal($balance);
-        $invoice->payment_status = $balance === 0 ? 'paid' : ($paidCents > 0 ? 'partially_paid' : ($invoice->status === 'deferred' ? 'deferred' : 'unpaid'));
+        $invoice->payment_status = $balance === 0 ? 'paid' : ($paidCents > 0 ? 'partially_paid' : 'unpaid');
         $invoice->save();
         return $invoice;
     }

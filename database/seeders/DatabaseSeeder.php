@@ -40,9 +40,6 @@ class DatabaseSeeder extends Seeder
             'inventory.adjust' => 'Adjust inventory',
             'inventory.transfer' => 'Transfer books between branches and users',
             'returns.manage' => 'Manage returns',
-            'deferred.view' => 'View deferred approvals',
-            'deferred.create' => 'Create deferred payments',
-            'deferred.approve' => 'Approve deferred payments',
             'academic.manage' => 'Manage academic structure',
             'people.manage' => 'Manage people',
             'reports.view' => 'View reports',
@@ -62,7 +59,7 @@ class DatabaseSeeder extends Seeder
             'employee' => [
                 'label' => 'Branch User',
                 'description' => 'Daily student, inventory, transfer, and distribution work without financial access.',
-                'permissions' => ['dashboard.view', 'students.view', 'students.manage', 'books.view', 'class-lists.view', 'distributions.create', 'deferred.create', 'people.manage', 'reports.view'],
+                'permissions' => ['dashboard.view', 'students.view', 'students.manage', 'books.view', 'class-lists.view', 'distributions.create', 'people.manage', 'reports.view'],
             ],
         ];
 

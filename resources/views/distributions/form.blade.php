@@ -96,13 +96,7 @@
                     <label class="form-label">Reference</label>
                     <input name="payment[reference_number]">
                 </div>
-                @if ($canRequestDeferred)<div class="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3"><label class="flex items-center gap-2 text-sm font-semibold text-amber-950"><input type="checkbox" name="payment[deferred]" value="1">Request deferred payment approval</label><p class="mt-1 text-xs text-amber-900">Leave payment blank to request the full invoice balance. Books are distributed now, but branch administrator approval is required before the balance becomes deferred.</p></div>@endif
             </div>
-        </div>@endif
-
-        @if (! $canViewFinancials && $canRequestDeferred)<div>
-            <h2 class="panel-title">Payment arrangement</h2>
-            <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4"><label class="flex items-center gap-2 text-sm font-semibold text-amber-950"><input type="checkbox" name="payment[deferred]" value="1">Request deferred payment approval</label><p class="mt-1 text-xs text-amber-900">The full invoice balance will be sent to the branch administrator for approval. If it is rejected, you will receive a notification that payment is required.</p></div>
         </div>@endif
 
         <div>

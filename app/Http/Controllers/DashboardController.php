@@ -7,7 +7,6 @@ namespace App\Http\Controllers;
 use App\Models\AcademicYear;
 use App\Models\Book;
 use App\Models\BookDistribution;
-use App\Models\DeferredPaymentApproval;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\StudentRegistration;
@@ -48,9 +47,6 @@ class DashboardController extends Controller
             'todayDistributions' => $academicYearId
                 ? BookDistribution::query()->where('academic_year_id', $academicYearId)->whereDate('distributed_on', today())->count()
                 : 0,
-            'overdueDeferred' => $canViewFinancials && $academicYearId
-                ? DeferredPaymentApproval::query()->whereIn('status', ['approved', 'active', 'partially_settled'])->whereDate('expected_payment_date', '<', today())->whereHas('invoice', fn ($query) => $query->where('academic_year_id', $academicYearId))->count()
-                : null,
             'recentActivity' => StockMovement::query()->with('book', 'user')->when($academicYearId, fn ($query) => $query->where('academic_year_id', $academicYearId), fn ($query) => $query->whereRaw('1 = 0'))->latest()->take(6)->get(),
         ]);
     }

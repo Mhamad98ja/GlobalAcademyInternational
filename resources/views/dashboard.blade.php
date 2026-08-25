@@ -22,7 +22,7 @@
     <div class="stat"><div class="stat-label">Books in stock</div><div class="stat-value">{{ number_format($stock) }}</div><div class="stat-note">Across active titles</div></div>
     @if ($canViewFinancials)
         <div class="stat"><div class="stat-label">Today's collection</div><div class="stat-value">{{ number_format($collected, 2) }}</div><div class="stat-note">Valid payments for the active year</div></div>
-        <div class="stat"><div class="stat-label">Outstanding balance</div><div class="stat-value">{{ number_format($outstanding, 2) }}</div><div class="stat-note">{{ $overdueDeferred }} overdue deferred approvals</div></div>
+        <div class="stat"><div class="stat-label">Outstanding balance</div><div class="stat-value">{{ number_format($outstanding, 2) }}</div><div class="stat-note">Unpaid and partially paid invoices</div></div>
     @endif
 </div>
 
@@ -37,7 +37,7 @@
     </section>
     <section class="panel">
         <div class="panel-header"><div><h2 class="panel-title">Today</h2><p class="mt-0.5 text-xs text-slate-500">Active-year operational summary</p></div></div>
-        <dl class="divide-y divide-slate-100 px-5"><div class="flex items-center justify-between py-4"><dt class="text-slate-600">Completed distributions</dt><dd class="font-semibold text-slate-900">{{ $todayDistributions }}</dd></div><div class="flex items-center justify-between py-4"><dt class="text-slate-600">New stock movements</dt><dd class="font-semibold text-slate-900">{{ $recentActivity->count() }}</dd></div>@if ($canViewFinancials)<div class="flex items-center justify-between py-4"><dt class="text-slate-600">Overdue approvals</dt><dd class="font-semibold {{ $overdueDeferred ? 'text-rose-700' : 'text-emerald-700' }}">{{ $overdueDeferred }}</dd></div>@endif</dl>
+        <dl class="divide-y divide-slate-100 px-5"><div class="flex items-center justify-between py-4"><dt class="text-slate-600">Completed distributions</dt><dd class="font-semibold text-slate-900">{{ $todayDistributions }}</dd></div><div class="flex items-center justify-between py-4"><dt class="text-slate-600">New stock movements</dt><dd class="font-semibold text-slate-900">{{ $recentActivity->count() }}</dd></div></dl>
     </section>
 </div>
 
