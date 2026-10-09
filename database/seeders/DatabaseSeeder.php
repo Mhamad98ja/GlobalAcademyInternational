@@ -43,6 +43,26 @@ class DatabaseSeeder extends Seeder
             'academic.manage' => 'Manage academic structure',
             'people.manage' => 'Manage people',
             'reports.view' => 'View reports',
+            'reports.export' => 'Export school reports',
+            'attendance.student.manage' => 'Manage student attendance',
+            'attendance.teacher.manage' => 'Manage teacher attendance',
+            'discipline.view' => 'View student incidents',
+            'discipline.create' => 'Create student incidents',
+            'discipline.edit' => 'Edit student incidents',
+            'medical.view' => 'View medical archives',
+            'medical.manage' => 'Manage medical archives',
+            'timetable.view' => 'View timetables',
+            'timetable.manage' => 'Manage timetables',
+            'substitutions.manage' => 'Manage teacher substitutions',
+            'grades.enter' => 'Enter grades for assigned courses',
+            'grades.publish' => 'Publish and lock grades',
+            'academic_year.manage' => 'Configure academic terms and assessments',
+            'collaboration.view' => 'View collaboration, notices, and calendar',
+            'collaboration.manage' => 'Publish school notices, events, and course content',
+            'performance.view' => 'View student performance evaluations',
+            'performance.manage' => 'Record student performance evaluations',
+            'messages.view' => 'View internal school messages',
+            'messages.send' => 'Send internal school messages',
             'admin.manage' => 'Manage administration',
         ];
 
@@ -59,7 +79,12 @@ class DatabaseSeeder extends Seeder
             'employee' => [
                 'label' => 'Branch User',
                 'description' => 'Daily student, inventory, transfer, and distribution work without financial access.',
-                'permissions' => ['dashboard.view', 'students.view', 'students.manage', 'books.view', 'class-lists.view', 'distributions.create', 'people.manage', 'reports.view'],
+                'permissions' => ['dashboard.view', 'students.view', 'students.manage', 'books.view', 'class-lists.view', 'distributions.create', 'people.manage', 'reports.view', 'attendance.student.manage', 'attendance.teacher.manage', 'discipline.view', 'discipline.create', 'discipline.edit', 'grades.enter', 'timetable.view', 'collaboration.view', 'performance.view', 'messages.view', 'messages.send'],
+            ],
+            'teacher' => [
+                'label' => 'Teacher',
+                'description' => 'Assigned-course grading, course content, student performance follow-up, and classroom timetable access.',
+                'permissions' => ['dashboard.view', 'students.view', 'grades.enter', 'timetable.view', 'collaboration.view', 'collaboration.manage', 'performance.view', 'performance.manage', 'messages.view', 'messages.send'],
             ],
         ];
 

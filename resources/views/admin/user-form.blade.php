@@ -29,6 +29,16 @@
             <input name="whatsapp_number" value="{{ old('whatsapp_number', $managedUser->whatsapp_number) }}" placeholder="+961XXXXXXXX">
             <p class="mt-1 text-xs text-slate-500">Use international format. This is used only for password reset codes.</p>
         </div>
+        <div>
+            <label class="form-label">Linked teacher profile</label>
+            <select name="teacher_id"><option value="">Not a teacher account</option>@foreach($teachers as $teacher)<option value="{{ $teacher->id }}" @selected(old('teacher_id', $managedUser->teacher_id) == $teacher->id)>{{ $teacher->employee_number ? $teacher->employee_number.' · ' : '' }}{{ $teacher->full_name }}</option>@endforeach</select>
+            <p class="mt-1 text-xs text-slate-500">Teachers need this link to enter marks only for their assigned courses.</p>
+        </div>
+        <div>
+            <label class="form-label">Linked student profile</label>
+            <select name="student_id"><option value="">Not a student account</option>@foreach($students as $student)<option value="{{ $student->id }}" @selected(old('student_id', $managedUser->student_id) == $student->id)>{{ $student->full_name }} · {{ $student->student_number }}</option>@endforeach</select>
+            <p class="mt-1 text-xs text-slate-500">Link this account to a student to open the private student portal after sign-in.</p>
+        </div>
         @if ($canManageBranchAssignments)
             <div>
                 <label class="form-label">Role *</label>

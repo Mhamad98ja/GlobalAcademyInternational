@@ -20,6 +20,7 @@
 <section class="panel">
     <div class="panel-header">
         <form method="GET" class="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-4">
+            @if(request('module') === 'students')<input type="hidden" name="module" value="students">@endif
             <div>
                 <label class="form-label" for="report">Report type</label>
                 <select id="report" name="report" data-report-type-select>
@@ -161,7 +162,7 @@
 
             <div class="flex items-end gap-2">
                 <button class="btn btn-secondary flex-1">Filter</button>
-                <a class="btn btn-secondary" href="{{ route('reports.index', ['report' => $report]) }}">Reset</a>
+                <a class="btn btn-secondary" href="{{ route('reports.index', ['report' => $report, 'module' => request('module')]) }}">Reset</a>
             </div>
         </form>
     </div>

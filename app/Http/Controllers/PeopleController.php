@@ -7,10 +7,12 @@ namespace App\Http\Controllers;
 use App\Models\ResponsiblePerson;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -43,6 +45,20 @@ class PeopleController extends Controller
         Teacher::create($data + ['is_active' => true]);
 
         return back()->with('success', 'Teacher added.');
+    }
+
+    public function showTeacher(Teacher $teacher, Request $request): View
+    {
+        $relations = ['assignments.academicYear', 'assignments.subject', 'assignments.grade', 'assignments.section', 'timetableEntries.subject', 'timetableEntries.grade', 'timetableEntries.section', 'attendances', 'substitutions.entry.subject'];
+        if ($request->user()->hasPermission('medical.view')) {
+            $relations[] = 'medicalRecords';
+        }
+        $teacher->load($relations);
+
+        return view('people.teacher-show', [
+            'teacher' => $teacher,
+            'canViewMedical' => $request->user()->hasPermission('medical.view'),
+        ]);
     }
 
     public function responsible(Request $request): View
@@ -139,20 +155,58 @@ class PeopleController extends Controller
         return redirect()->route('responsible.index')->with('success', 'Responsible person updated.');
     }
 
+    public function destroyResponsible(ResponsiblePerson $responsiblePerson, AuditService $audit): RedirectResponse
+    {
+        if ($responsiblePerson->students()->exists()) {
+            return back()->with('error', 'Remove or reassign the linked students before deleting this family contact.');
+        }
+
+        $responsiblePerson->delete();
+        $audit->log('responsible_person.deleted', $responsiblePerson);
+
+        return redirect()->route('students.families')->with('success', 'Unlinked family contact moved to the recycle bin.');
+    }
+
     private function validatedResponsible(Request $request): array
     {
         $data = $request->validate([
             'teacher_id' => ['nullable', 'exists:teachers,id'],
+            'parent_code' => ['nullable', 'string', 'max:50', Rule::unique('responsible_persons', 'parent_code')->ignore($request->route('responsiblePerson'))],
+            'title' => ['nullable', 'string', 'max:30'],
             'full_name' => ['required', 'string', 'max:255'],
+            'first_name' => ['nullable', 'string', 'max:100'],
+            'middle_name' => ['nullable', 'string', 'max:100'],
+            'last_name' => ['nullable', 'string', 'max:100'],
             'type' => ['required', 'in:teacher,father,mother,guardian,administrator,other'],
+            'religion' => ['nullable', 'string', 'max:100'],
+            'family_type' => ['nullable', 'string', 'max:100'],
+            'occupation' => ['nullable', 'string', 'max:150'],
+            'occupation_details' => ['nullable', 'string', 'max:255'],
             'employee_number' => ['nullable', 'string', 'max:50'],
             'phone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
+            'register_number' => ['nullable', 'string', 'max:100'],
+            'district' => ['nullable', 'string', 'max:100'],
+            'town' => ['nullable', 'string', 'max:100'],
+            'nationality' => ['nullable', 'string', 'max:100'],
+            'secondary_nationality' => ['nullable', 'string', 'max:100'],
+            'is_alumni' => ['nullable', 'boolean'],
+            'is_deceased' => ['nullable', 'boolean'],
+            'employment_status' => ['nullable', 'string', 'max:100'],
+            'employer' => ['nullable', 'string', 'max:255'],
+            'position' => ['nullable', 'string', 'max:255'],
+            'work_address' => ['nullable', 'string', 'max:2000'],
+            'family_status' => ['nullable', 'string', 'max:100'],
+            'is_second_marriage' => ['nullable', 'boolean'],
             'address' => ['nullable', 'string', 'max:2000'],
             'notes' => ['nullable', 'string', 'max:3000'],
             'student_ids' => ['nullable', 'array'],
             'student_ids.*' => ['integer', 'distinct', 'exists:students,id'],
         ]);
+
+        foreach (['is_alumni', 'is_deceased', 'is_second_marriage'] as $field) {
+            $data[$field] = $request->boolean($field);
+        }
 
         $studentIds = collect($data['student_ids'] ?? [])->map(fn ($id) => (int) $id)->all();
         if ($studentIds !== [] && Student::query()->whereKey($studentIds)->count() !== count($studentIds)) {

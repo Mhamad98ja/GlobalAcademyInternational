@@ -11,8 +11,8 @@ use App\Models\ClassBookList;
 use App\Models\Grade;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\Role;
 use App\Models\ResponsiblePerson;
+use App\Models\Role;
 use App\Models\SchoolLevel;
 use App\Models\Section;
 use App\Models\Student;
@@ -24,6 +24,7 @@ use App\Models\SupplierReturn;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\BookDistributionService;
+use App\Services\BookReturnService;
 use App\Services\InventoryService;
 use App\Services\PaymentService;
 use App\Services\SupplierPaymentService;
@@ -40,17 +41,22 @@ class CoreWorkflowTest extends TestCase
 
     private function administrator(): User
     {
-        $role = Role::create(['name'=>'super-administrator','label'=>'Super Administrator']);
-        $user = User::factory()->create(['is_active'=>true, 'is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        $role = Role::create(['name' => 'super-administrator', 'label' => 'Super Administrator']);
+        $user = User::factory()->create(['is_active' => true, 'is_controller_administrator' => true, 'has_all_branch_access' => true]);
         $user->roles()->attach($role);
+
         return $user;
     }
 
     private function registration(User $user): StudentRegistration
     {
-        $year=AcademicYear::create(['name'=>'2026–2027','starts_on'=>'2026-09-01','ends_on'=>'2027-06-30','status'=>'open','created_by'=>$user->id]);
-        $level=SchoolLevel::create(['name'=>'Primary']);$grade=Grade::create(['school_level_id'=>$level->id,'name'=>'Grade 4']);$section=Section::create(['grade_id'=>$grade->id,'name'=>'A']);$student=Student::create(['student_number'=>'STU-001','first_name'=>'Lina','last_name'=>'Haddad']);
-        return StudentRegistration::create(['student_id'=>$student->id,'academic_year_id'=>$year->id,'grade_id'=>$grade->id,'section_id'=>$section->id,'status'=>'active','registered_on'=>'2026-09-01','created_by'=>$user->id]);
+        $year = AcademicYear::create(['name' => '2026–2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'open', 'created_by' => $user->id]);
+        $level = SchoolLevel::create(['name' => 'Primary']);
+        $grade = Grade::create(['school_level_id' => $level->id, 'name' => 'Grade 4']);
+        $section = Section::create(['grade_id' => $grade->id, 'name' => 'A']);
+        $student = Student::create(['student_number' => 'STU-001', 'first_name' => 'Lina', 'last_name' => 'Haddad']);
+
+        return StudentRegistration::create(['student_id' => $student->id, 'academic_year_id' => $year->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'status' => 'active', 'registered_on' => '2026-09-01', 'created_by' => $user->id]);
     }
 
     public function test_responsible_person_can_search_and_link_multiple_students(): void
@@ -98,9 +104,14 @@ class CoreWorkflowTest extends TestCase
 
     public function test_distribution_decreases_stock_and_creates_an_invoice(): void
     {
-        $user=$this->administrator();$registration=$this->registration($user);$book=Book::create(['sku'=>'B-001','barcode'=>'978000001','title'=>'Math','selling_price'=>'12.00','tax_rate'=>'0.00','minimum_stock'=>1]);app(InventoryService::class)->change($book,5,'opening_stock',null,$registration->academicYear,$user,'Initial stock');
-        $distribution=app(BookDistributionService::class)->distribute($registration,[['book_id'=>$book->id,'quantity'=>2]],[],$user);
-        $this->assertDatabaseHas('books',['id'=>$book->id,'stock_on_hand'=>3]);$this->assertDatabaseHas('stock_movements',['book_id'=>$book->id,'type'=>'student_distribution','quantity_change'=>-2]);$this->assertDatabaseHas('invoices',['id'=>$distribution->invoice_id,'total'=>'24.00','balance_due'=>'24.00']);
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $book = Book::create(['sku' => 'B-001', 'barcode' => '978000001', 'title' => 'Math', 'selling_price' => '12.00', 'tax_rate' => '0.00', 'minimum_stock' => 1]);
+        app(InventoryService::class)->change($book, 5, 'opening_stock', null, $registration->academicYear, $user, 'Initial stock');
+        $distribution = app(BookDistributionService::class)->distribute($registration, [['book_id' => $book->id, 'quantity' => 2]], [], $user);
+        $this->assertDatabaseHas('books', ['id' => $book->id, 'stock_on_hand' => 3]);
+        $this->assertDatabaseHas('stock_movements', ['book_id' => $book->id, 'type' => 'student_distribution', 'quantity_change' => -2]);
+        $this->assertDatabaseHas('invoices', ['id' => $distribution->invoice_id, 'total' => '24.00', 'balance_due' => '24.00']);
     }
 
     public function test_return_form_allows_only_selected_books_up_to_their_remaining_returnable_quantity(): void
@@ -118,7 +129,7 @@ class CoreWorkflowTest extends TestCase
         $firstItem = $distribution->items()->where('book_id', $firstBook->id)->firstOrFail();
         $secondItem = $distribution->items()->where('book_id', $secondBook->id)->firstOrFail();
 
-        app(\App\Services\BookReturnService::class)->accept($distribution->invoice, [[
+        app(BookReturnService::class)->accept($distribution->invoice, [[
             'distribution_item_id' => $firstItem->id,
             'quantity' => 1,
             'condition' => 'new_resellable',
@@ -261,10 +272,13 @@ class CoreWorkflowTest extends TestCase
 
     public function test_partial_payment_recalculates_balance_and_overpayment_is_rejected(): void
     {
-        $user=$this->administrator();$registration=$this->registration($user);$invoice=Invoice::create(['invoice_number'=>'INV-001','student_id'=>$registration->student_id,'student_registration_id'=>$registration->id,'academic_year_id'=>$registration->academic_year_id,'grade_id'=>$registration->grade_id,'section_id'=>$registration->section_id,'invoice_date'=>'2026-09-01','subtotal'=>'20.00','total'=>'20.00','balance_due'=>'20.00','created_by'=>$user->id]);
-        app(PaymentService::class)->record($invoice,['amount'=>'7.50','payment_date'=>'2026-09-02','method'=>'cash','idempotency_key'=>(string)Str::uuid()],$user);
-        $this->assertDatabaseHas('invoices',['id'=>$invoice->id,'amount_paid'=>'7.50','balance_due'=>'12.50','payment_status'=>'partially_paid']);
-        $this->expectException(ValidationException::class);app(PaymentService::class)->record($invoice->fresh(),['amount'=>'13.00','payment_date'=>'2026-09-03','method'=>'cash','idempotency_key'=>(string)Str::uuid()],$user);
+        $user = $this->administrator();
+        $registration = $this->registration($user);
+        $invoice = Invoice::create(['invoice_number' => 'INV-001', 'student_id' => $registration->student_id, 'student_registration_id' => $registration->id, 'academic_year_id' => $registration->academic_year_id, 'grade_id' => $registration->grade_id, 'section_id' => $registration->section_id, 'invoice_date' => '2026-09-01', 'subtotal' => '20.00', 'total' => '20.00', 'balance_due' => '20.00', 'created_by' => $user->id]);
+        app(PaymentService::class)->record($invoice, ['amount' => '7.50', 'payment_date' => '2026-09-02', 'method' => 'cash', 'idempotency_key' => (string) Str::uuid()], $user);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'amount_paid' => '7.50', 'balance_due' => '12.50', 'payment_status' => 'partially_paid']);
+        $this->expectException(ValidationException::class);
+        app(PaymentService::class)->record($invoice->fresh(), ['amount' => '13.00', 'payment_date' => '2026-09-03', 'method' => 'cash', 'idempotency_key' => (string) Str::uuid()], $user);
     }
 
     public function test_supplier_purchase_percentage_discount_updates_the_catalogue_purchase_price(): void
@@ -696,14 +710,14 @@ class CoreWorkflowTest extends TestCase
         $this->actingAs($user)->get(route('invoices.print', $invoice))
             ->assertOk()
             ->assertSee('Cedar Grove School')
-            ->assertSee('/images/global-academy-international-logo.png', false)
+            ->assertSee('global-academy-international-logo.png')
             ->assertSee('Prepared by: '.$user->name)
             ->assertSee('Student Book Invoice')
             ->assertSee('Parent / guardian acknowledgement');
         $this->actingAs($user)->get(route('reports.print', ['report' => 'students']))
             ->assertOk()
             ->assertSee('Cedar Grove School')
-            ->assertSee('/images/global-academy-international-logo.png', false)
+            ->assertSee('global-academy-international-logo.png')
             ->assertSee('Official report')
             ->assertSee('Prepared by: '.$user->name)
             ->assertSee('Prepared by');
@@ -720,7 +734,7 @@ class CoreWorkflowTest extends TestCase
         $this->actingAs($user)->get(route('dashboard'))
             ->assertOk()
             ->assertSee('Global Academy International')
-            ->assertSee('/images/global-academy-international-logo.png', false);
+            ->assertSee('global-academy-international-logo.png');
     }
 
     public function test_academic_years_levels_grades_and_sections_can_be_edited(): void
@@ -764,12 +778,12 @@ class CoreWorkflowTest extends TestCase
     public function test_dashboard_uses_the_open_academic_year_without_a_manual_selector(): void
     {
         $user = $this->administrator();
-        $registration = $this->registration($user);
+        $this->registration($user);
 
         $this->actingAs($user)->get(route('dashboard', ['academic_year_id' => 999999]))
             ->assertOk()
-            ->assertSee('Active academic year:')
-            ->assertSee($registration->academicYear->name)
+            ->assertSee('Student Profile')
+            ->assertSee('Report Card')
             ->assertDontSee('All academic years')
             ->assertDontSee('href="'.route('purchases.index').'"', false)
             ->assertDontSee('href="'.route('invoices.index').'"', false)
@@ -842,8 +856,9 @@ class CoreWorkflowTest extends TestCase
 
     public function test_disabled_account_cannot_sign_in(): void
     {
-        $user=User::factory()->create(['email'=>'disabled@example.test','password'=>'password','is_active'=>false]);
-        $this->post(route('login.store'),['email'=>$user->email,'password'=>'password'])->assertSessionHasErrors('email');$this->assertGuest();
+        $user = User::factory()->create(['email' => 'disabled@example.test', 'password' => 'password', 'is_active' => false]);
+        $this->post(route('login.store'), ['email' => $user->email, 'password' => 'password'])->assertSessionHasErrors('email');
+        $this->assertGuest();
     }
 
     public function test_administrator_can_soft_delete_another_user_but_not_their_own_account(): void

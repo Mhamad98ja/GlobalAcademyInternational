@@ -16,9 +16,11 @@ use App\Models\StudentRegistration;
 use App\Models\SystemSetting;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Http\StreamedResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportsController extends Controller
 {
@@ -177,7 +179,7 @@ class ReportsController extends Controller
         }, $report.'-report.csv', ['Content-Type' => 'text/csv']);
     }
 
-    /** @return array{0: string, 1: \Illuminate\Support\Collection<int, mixed>, 2: array<string, mixed>} */
+    /** @return array{0: string, 1: Collection<int, mixed>, 2: array<string, mixed>} */
     private function reportData(Request $request): array
     {
         $canViewFinancials = $request->user()->canViewFinancials();
@@ -225,9 +227,9 @@ class ReportsController extends Controller
                             $distributions->whereHas('invoice', fn (Builder $invoice) => $invoice->whereInsensitiveLike('invoice_number', $search));
                         }
                         $studentQuery = fn (Builder $student) => $student
-                        ->whereInsensitiveLike('first_name', $search)
-                        ->orWhereInsensitiveLike('last_name', $search)
-                        ->orWhereInsensitiveLike('student_number', $search);
+                            ->whereInsensitiveLike('first_name', $search)
+                            ->orWhereInsensitiveLike('last_name', $search)
+                            ->orWhereInsensitiveLike('student_number', $search);
                         $canViewFinancials
                             ? $distributions->orWhereHas('student', $studentQuery)
                             : $distributions->whereHas('student', $studentQuery);
@@ -350,7 +352,7 @@ class ReportsController extends Controller
         if ($request->string('report')->toString() === 'student_information'
             && $request->has('student_fields_selection')
             && $filters['student_fields'] === []) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'student_fields' => 'Select at least one student information field.',
             ]);
         }
@@ -383,7 +385,7 @@ class ReportsController extends Controller
     }
 
     /** @param array<string, mixed> $filters
-     *  @return list<string>
+     * @return list<string>
      */
     private function filterSummary(array $filters): array
     {
@@ -409,7 +411,7 @@ class ReportsController extends Controller
     }
 
     /** @param array<string, mixed> $filters
-     *  @return array<string, string>
+     * @return array<string, string>
      */
     private function studentInformationFields(array $filters): array
     {

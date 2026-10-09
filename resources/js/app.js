@@ -66,6 +66,20 @@ if (appShell && sidebarToggle) {
     syncSidebarMode();
 }
 
+document.querySelectorAll('[data-sidebar-group-toggle]').forEach((toggle) => {
+    toggle.addEventListener('click', () => {
+        const selectedGroup = toggle.closest('[data-sidebar-group]');
+        if (!selectedGroup) return;
+
+        const willExpand = selectedGroup.classList.contains('is-collapsed');
+        document.querySelectorAll('[data-sidebar-group]').forEach((group) => {
+            const isSelectedGroup = group === selectedGroup;
+            group.classList.toggle('is-collapsed', !willExpand || !isSelectedGroup);
+            group.querySelector('[data-sidebar-group-toggle]')?.setAttribute('aria-expanded', String(willExpand && isSelectedGroup));
+        });
+    });
+});
+
 document.addEventListener('click', (event) => {
     const button = event.target.closest('[data-add-row]');
     if (!button) return;
@@ -810,4 +824,75 @@ document.querySelectorAll('[data-package-form]').forEach((form) => {
     if (packageLines.length && packageLines.every((line) => line.querySelector('[data-package-barcode]')?.value.trim())) {
         appendPackageLine();
     }
+});
+
+document.querySelectorAll('[data-action-category-select]').forEach((categorySelect) => {
+    const typeSelect = document.querySelector(categorySelect.dataset.actionTypeTarget);
+    if (!typeSelect) return;
+    const syncActionTypes = () => {
+        const categoryId = categorySelect.value;
+        let visibleOptions = 0;
+        [...typeSelect.options].forEach((option) => {
+            if (!option.value) return;
+            const visible = option.dataset.actionCategoryId === categoryId;
+            option.hidden = !visible;
+            option.disabled = !visible;
+            if (visible) visibleOptions += 1;
+        });
+        if (typeSelect.selectedOptions[0]?.hidden) typeSelect.value = '';
+        typeSelect.disabled = !categoryId || visibleOptions === 0;
+    };
+    categorySelect.addEventListener('change', syncActionTypes);
+    syncActionTypes();
+});
+
+document.querySelectorAll('[data-timetable]').forEach((timetable) => {
+    let draggedCard = null;
+    const token = document.querySelector('meta[name="csrf-token"]')?.content;
+    const showError = (message) => window.alert(message || 'The timetable change could not be saved.');
+    timetable.querySelectorAll('[data-schedule-card]').forEach((card) => {
+        card.addEventListener('dragstart', (event) => {
+            draggedCard = card;
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', card.dataset.assignmentId || '');
+            card.classList.add('is-dragging');
+        });
+        card.addEventListener('dragend', () => {
+            card.classList.remove('is-dragging');
+            draggedCard = null;
+        });
+    });
+    timetable.querySelectorAll('[data-schedule-slot]').forEach((slot) => {
+        slot.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            slot.classList.add('is-drag-over');
+            event.dataTransfer.dropEffect = 'move';
+        });
+        slot.addEventListener('dragleave', () => slot.classList.remove('is-drag-over'));
+        slot.addEventListener('drop', async (event) => {
+            event.preventDefault();
+            slot.classList.remove('is-drag-over');
+            if (!draggedCard) return;
+            const existingCard = slot.querySelector('[data-schedule-card]');
+            if (existingCard && existingCard !== draggedCard) {
+                showError('Remove the scheduled lesson before replacing it.');
+                return;
+            }
+            if (draggedCard.closest('[data-schedule-slot]') === slot) return;
+            const body = { teacher_assignment_id: Number(draggedCard.dataset.assignmentId), day_of_week: slot.dataset.day, period_number: Number(slot.dataset.period) };
+            const existingEntryId = draggedCard.dataset.existingEntryId;
+            const endpoint = existingEntryId ? `${timetable.dataset.entryBaseUrl}/${existingEntryId}` : timetable.dataset.storeUrl;
+            const response = await fetch(endpoint, {
+                method: existingEntryId ? 'PUT' : 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                showError(Object.values(payload.errors || {}).flat().join('\n') || payload.message);
+                return;
+            }
+            window.location.reload();
+        });
+    });
 });

@@ -8,12 +8,14 @@ use App\Http\Requests\StoreStudentRequest;
 use App\Models\AcademicYear;
 use App\Models\Grade;
 use App\Models\Student;
+use App\Models\StudentRegistration;
 use App\Models\Teacher;
 use App\Services\AuditService;
 use App\Services\StudentRegistrationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class StudentsController extends Controller
@@ -22,44 +24,74 @@ class StudentsController extends Controller
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:100'],
+            'last_name' => ['nullable', 'string', 'max:100'],
+            'first_name' => ['nullable', 'string', 'max:100'],
+            'search_in' => ['nullable', 'in:student,parent'],
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
             'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
             'registration_status' => ['nullable', 'in:active,inactive,withdrawn,completed'],
+            'gender' => ['nullable', 'in:male,female'],
             'sort' => ['nullable', 'in:asc,desc'],
         ]);
+        $academicYearId = $filters['academic_year_id'] ?? null;
         $gradeId = $filters['grade_id'] ?? null;
         $sectionId = $filters['section_id'] ?? null;
         $registrationStatus = $filters['registration_status'] ?? null;
         $sort = ($filters['sort'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $matchingRegistration = fn ($query) => $query
+            ->when($academicYearId, fn ($q) => $q->where('academic_year_id', $academicYearId))
+            ->when($gradeId, fn ($q) => $q->where('grade_id', $gradeId))
+            ->when($sectionId, fn ($q) => $q->where('section_id', $sectionId))
+            ->when($registrationStatus, fn ($q) => $q->where('status', $registrationStatus));
 
         $students = Student::query()
-            ->with(['registrations' => fn ($registrations) => $registrations->with('academicYear')->orderByDesc('registered_on')])
-            ->when($filters['search'] ?? null, fn ($query, $search) => $query->where(fn ($students) => $students
-                ->whereInsensitiveLike('student_number', $search)
-                ->orWhereInsensitiveLike('registration_number', $search)
-                ->orWhereInsensitiveLike('first_name', $search)
-                ->orWhereInsensitiveLike('last_name', $search)
-                ->orWhereInsensitiveLike('phone', $search)))
-            ->when($gradeId || $sectionId, function ($query) use ($gradeId, $sectionId): void {
-                $query->whereHas('registrations', function ($registrations) use ($gradeId, $sectionId): void {
-                    $registrations
-                        ->when($gradeId, fn ($registrationQuery) => $registrationQuery->where('grade_id', $gradeId))
-                        ->when($sectionId, fn ($registrationQuery) => $registrationQuery->where('section_id', $sectionId));
+            ->with(['registrations' => fn ($registrations) => $matchingRegistration($registrations)->with('academicYear', 'grade', 'section')->orderByDesc('registered_on')->orderByDesc('id')])
+            ->when($filters['search'] ?? null, function ($query, $search) use ($filters): void {
+                if (($filters['search_in'] ?? 'student') === 'parent') {
+                    $query->whereHas('responsiblePersons', fn ($people) => $people
+                        ->whereInsensitiveLike('full_name', $search)
+                        ->orWhereInsensitiveLike('parent_code', $search)
+                        ->orWhereInsensitiveLike('phone', $search));
+
+                    return;
+                }
+
+                $query->where(function ($students) use ($search): void {
+                    $students->whereInsensitiveLike('student_number', $search)
+                        ->orWhereInsensitiveLike('registration_number', $search)
+                        ->orWhereInsensitiveLike('phone', $search)
+                        ->orWhere(function ($names) use ($search): void {
+                            foreach (preg_split('/\s+/u', trim($search), -1, PREG_SPLIT_NO_EMPTY) as $part) {
+                                $names->where(fn ($name) => $name->whereInsensitiveLike('first_name', $part)
+                                    ->orWhereInsensitiveLike('middle_name', $part)
+                                    ->orWhereInsensitiveLike('last_name', $part));
+                            }
+                        });
                 });
             })
-            ->when($registrationStatus, fn ($query, $status) => $query->whereHas('registrations', fn ($registrations) => $registrations->where('status', $status)))
+            ->when($filters['code'] ?? null, fn ($query, string $code) => $query->where(function ($students) use ($code): void {
+                $students->whereInsensitiveLike('student_number', $code)
+                    ->orWhereInsensitiveLike('registration_number', $code);
+            }))
+            ->when($filters['last_name'] ?? null, fn ($query, string $lastName) => $query->whereInsensitiveLike('last_name', $lastName))
+            ->when($filters['first_name'] ?? null, fn ($query, string $firstName) => $query->whereInsensitiveLike('first_name', $firstName))
+            ->when($academicYearId || $gradeId || $sectionId || $registrationStatus, fn ($query) => $query->whereHas('registrations', $matchingRegistration))
+            ->when($filters['gender'] ?? null, fn ($query, $gender) => $query->where('gender', $gender))
             ->orderBy('first_name', $sort)
             ->orderBy('last_name', $sort);
 
         return view('students.index', [
             'students' => $students->paginate(15)->withQueryString(),
+            'years' => AcademicYear::orderByDesc('starts_on')->get(),
             'grades' => Grade::with('sections')->orderBy('sort_order')->get(),
         ]);
     }
 
     public function create(): View
     {
-        return view('students.form', ['student' => new Student(), 'registrations' => false]);
+        return view('students.form', ['student' => new Student, 'registrations' => false]);
     }
 
     public function store(StoreStudentRequest $request, StudentRegistrationService $registrations): RedirectResponse
@@ -86,14 +118,43 @@ class StudentsController extends Controller
 
     public function show(Student $student, Request $request): View
     {
-        $relations = ['registrations.academicYear', 'registrations.grade', 'registrations.section', 'responsiblePersons'];
+        $relations = [
+            'registrations' => fn ($query) => $query->with('academicYear', 'grade', 'section', 'teacher')->orderByDesc('registered_on')->orderByDesc('id'),
+            'responsiblePersons.students',
+        ];
         $canViewFinancials = $request->user()->canViewFinancials();
+        $canViewAttendance = $request->user()->hasPermission('attendance.student.manage');
+        $canViewDiscipline = $request->user()->hasPermission('discipline.view');
+        $canViewMedical = $request->user()->hasPermission('medical.view');
+        $canViewGrades = $request->user()->hasPermission('grades.enter');
+        $canViewExamAbsences = $request->user()->hasPermission('academic_year.manage');
+        $canViewPerformance = $request->user()->hasPermission('performance.view') || $request->user()->hasPermission('performance.manage');
         if ($canViewFinancials) {
             $relations[] = 'invoices';
         }
+        if ($canViewAttendance) {
+            $relations[] = 'attendances';
+        }
+        if ($canViewDiscipline) {
+            $relations[] = 'incidents.category';
+            $relations[] = 'incidents.type';
+        }
+        if ($canViewMedical) {
+            $relations[] = 'medicalRecords';
+        }
+        if ($canViewGrades) {
+            $relations[] = 'gradeEntries.assessment.subject';
+        }
+        if ($canViewExamAbsences) {
+            $relations[] = 'examAbsences.assessment.subject';
+        }
+        if ($canViewPerformance) {
+            $relations[] = 'performanceEvaluations.assignment.subject';
+            $relations[] = 'performanceEvaluations.teacher';
+        }
         $student->load($relations);
 
-        return view('students.show', compact('student', 'canViewFinancials'));
+        return view('students.show', compact('student', 'canViewFinancials', 'canViewAttendance', 'canViewDiscipline', 'canViewMedical', 'canViewGrades', 'canViewExamAbsences', 'canViewPerformance'));
     }
 
     public function edit(Student $student): View
@@ -114,6 +175,29 @@ class StudentsController extends Controller
         $audit->log('student.deleted', $student);
 
         return redirect()->route('students.index')->with('success', 'Student moved to recycle bin.');
+    }
+
+    public function updatePhoto(Request $request, Student $student, AuditService $audit): RedirectResponse
+    {
+        $data = $request->validate([
+            'photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:max_width=3000,max_height=3000'],
+        ]);
+        $old = $student->photo_path;
+        $path = $data['photo']->store('student-photos/'.$student->public_id, 'public');
+        $student->update(['photo_path' => $path]);
+        if ($old && $old !== $path) {
+            Storage::disk('public')->delete($old);
+        }
+        $audit->log('student.photo_updated', $student, ['photo_path' => $old], ['photo_path' => $path]);
+
+        return back()->with('success', 'Student photo saved.');
+    }
+
+    public function photo(Student $student)
+    {
+        abort_unless($student->photo_path && Storage::disk('public')->exists($student->photo_path), 404);
+
+        return Storage::disk('public')->response($student->photo_path, null, ['Cache-Control' => 'private, max-age=3600']);
     }
 
     public function leaveForm(Student $student): View
@@ -162,7 +246,7 @@ class StudentsController extends Controller
             'years' => AcademicYear::orderByDesc('starts_on')->get(),
             'grades' => Grade::with('sections')->orderBy('sort_order')->get(),
             'teachers' => Teacher::where('is_active', true)->orderBy('first_name')->get(),
-            'registration' => new \App\Models\StudentRegistration(),
+            'registration' => new StudentRegistration,
         ]);
     }
 

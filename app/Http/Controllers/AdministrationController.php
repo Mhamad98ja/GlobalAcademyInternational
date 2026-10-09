@@ -5,15 +5,17 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
-use App\Services\BranchContext;
 use App\Models\Book;
 use App\Models\Branch;
+use App\Models\Permission;
 use App\Models\ResponsiblePerson;
 use App\Models\Role;
 use App\Models\Student;
 use App\Models\Supplier;
 use App\Models\SystemSetting;
+use App\Models\Teacher;
 use App\Models\User;
+use App\Services\BranchContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,21 +25,34 @@ use Illuminate\View\View;
 
 class AdministrationController extends Controller
 {
-    public function users(BranchContext $branches): View
+    public function users(Request $request, BranchContext $branches): View
     {
         $actor = auth()->user();
         $currentBranchId = $branches->id();
         $canManageBranchAssignments = $actor->isControllerAdministrator();
+        $filters = $request->validate([
+            'status' => ['nullable', Rule::in(['active', 'disabled', 'all'])],
+            'role_id' => ['nullable', 'integer', 'exists:roles,id'],
+            'q' => ['nullable', 'string', 'max:120'],
+        ]);
+        $status = $filters['status'] ?? 'active';
+        $query = User::with('roles', 'branches')
+            ->when(! $canManageBranchAssignments, fn ($users) => $users->whereHas('branches', fn ($assignedBranches) => $assignedBranches->whereKey($currentBranchId)))
+            ->when($status !== 'all', fn ($users) => $users->where('is_active', $status === 'active'))
+            ->when($filters['role_id'] ?? null, fn ($users, $roleId) => $users->whereHas('roles', fn ($roles) => $roles->whereKey($roleId)))
+            ->when($filters['q'] ?? null, fn ($users, $search) => $users->where(function ($names) use ($search): void {
+                $names->where('name', 'like', '%'.$search.'%')->orWhere('email', 'like', '%'.$search.'%');
+            }));
 
         return view('admin.users', [
-            'users' => User::with('roles', 'branches')
-                ->when(! $canManageBranchAssignments, fn ($users) => $users->whereHas('branches', fn ($assignedBranches) => $assignedBranches->whereKey($currentBranchId)))
-                ->orderBy('name')
-                ->paginate(20),
+            'users' => $query->orderBy('name')->paginate(20)->withQueryString(),
+            'filters' => $filters + ['status' => $status],
             'roles' => Role::orderBy('label')->get(),
             'branches' => Branch::where('is_active', true)->orderBy('name')->get(),
             'canManageBranchAssignments' => $canManageBranchAssignments,
             'currentBranchId' => $currentBranchId,
+            'teachers' => Teacher::where('is_active', true)->orderBy('first_name')->get(),
+            'students' => Student::query()->with('registrations.grade', 'registrations.section')->orderBy('first_name')->orderBy('last_name')->get(),
         ]);
     }
 
@@ -51,6 +66,8 @@ class AdministrationController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', 'unique:users,whatsapp_number'],
+            'teacher_id' => ['nullable', 'integer', 'exists:teachers,id'],
+            'student_id' => [Rule::requiredIf(fn (): bool => Role::query()->whereKey($request->integer('role_id'))->where('name', 'student')->exists()), 'nullable', 'integer', 'exists:students,id', Rule::unique('users', 'student_id')],
             'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()],
             'role_id' => [$canManageBranchAssignments ? 'required' : 'nullable', 'exists:roles,id'],
             'branch_ids' => ['nullable', 'array'],
@@ -65,6 +82,8 @@ class AdministrationController extends Controller
             'name' => $data['name'],
             'email' => $data['email'],
             'whatsapp_number' => $data['whatsapp_number'] ?? null,
+            'teacher_id' => $data['teacher_id'] ?? null,
+            'student_id' => $data['student_id'] ?? null,
             'password' => $data['password'],
             'is_active' => true,
             'has_all_branch_access' => false,
@@ -94,6 +113,8 @@ class AdministrationController extends Controller
             'roles' => Role::orderBy('label')->get(),
             'branches' => Branch::where('is_active', true)->orderBy('name')->get(),
             'canManageBranchAssignments' => $actor->isControllerAdministrator(),
+            'teachers' => Teacher::where('is_active', true)->orderBy('first_name')->get(),
+            'students' => Student::query()->with('registrations.grade', 'registrations.section')->orderBy('first_name')->orderBy('last_name')->get(),
         ]);
     }
 
@@ -107,6 +128,8 @@ class AdministrationController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', Rule::unique('users', 'whatsapp_number')->ignore($user->id)],
+            'teacher_id' => ['nullable', 'integer', 'exists:teachers,id'],
+            'student_id' => [Rule::requiredIf(fn (): bool => Role::query()->whereKey($request->integer('role_id'))->where('name', 'student')->exists()), 'nullable', 'integer', 'exists:students,id', Rule::unique('users', 'student_id')->ignore($user)],
             'password' => ['nullable', 'confirmed', Password::min(12)->mixedCase()->numbers()],
             'role_id' => [$canManageBranchAssignments ? 'required' : 'nullable', 'exists:roles,id'],
             'branch_ids' => ['nullable', 'array'],
@@ -121,6 +144,8 @@ class AdministrationController extends Controller
             'name' => $data['name'],
             'email' => $data['email'],
             'whatsapp_number' => $data['whatsapp_number'] ?? null,
+            'teacher_id' => $data['teacher_id'] ?? null,
+            'student_id' => $data['student_id'] ?? null,
         ];
         if (! empty($data['password'])) {
             $attributes['password'] = $data['password'];
@@ -192,7 +217,7 @@ class AdministrationController extends Controller
 
     public function roles(): View
     {
-        return view('admin.roles', ['roles' => Role::with('permissions')->get(), 'permissions' => \App\Models\Permission::orderBy('label')->get()]);
+        return view('admin.roles', ['roles' => Role::with('permissions')->get(), 'permissions' => Permission::orderBy('label')->get()]);
     }
 
     public function audit(): View

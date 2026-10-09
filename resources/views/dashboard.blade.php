@@ -1,52 +1,59 @@
 @extends('layouts.app', ['title' => 'Dashboard'])
 
 @section('content')
-<div class="page-header">
-    <div>
-        <div class="text-xs font-semibold uppercase tracking-[.1em] text-teal-700">Overview</div>
-        <h1 class="page-title">Dashboard</h1>
-        <p class="page-subtitle">Your school book operations at a glance.</p>
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
-        @if ($activeAcademicYear)
-            <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><span class="font-semibold">Active academic year:</span> {{ $activeAcademicYear->name }}</div>
-        @else
-            <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">No academic year is Open. Set one to Open in Academic Structure.</div>
-        @endif
-        <a class="btn btn-primary" href="{{ route('distributions.create') }}">New distribution</a>
-    </div>
-</div>
-
-<div class="grid gap-4 sm:grid-cols-2 {{ $canViewFinancials ? 'xl:grid-cols-4' : 'xl:grid-cols-2' }}">
-    <div class="stat"><div class="stat-label">Active students</div><div class="stat-value">{{ number_format($activeStudents) }}</div><div class="stat-note">{{ $activeAcademicYear ? 'In '.$activeAcademicYear->name : 'Set an open academic year' }}</div></div>
-    <div class="stat"><div class="stat-label">Books in stock</div><div class="stat-value">{{ number_format($stock) }}</div><div class="stat-note">Across active titles</div></div>
-    @if ($canViewFinancials)
-        <div class="stat"><div class="stat-label">Today's collection</div><div class="stat-value">{{ number_format($collected, 2) }}</div><div class="stat-note">Valid payments for the active year</div></div>
-        <div class="stat"><div class="stat-label">Outstanding balance</div><div class="stat-value">{{ number_format($outstanding, 2) }}</div><div class="stat-note">Unpaid and partially paid invoices</div></div>
-    @endif
-</div>
-
-<div class="mt-6 grid gap-6 xl:grid-cols-[1.45fr_1fr]">
-    <section class="panel">
-        <div class="panel-header"><div><h2 class="panel-title">Low stock</h2><p class="mt-0.5 text-xs text-slate-500">Titles at or below their reorder threshold</p></div><a class="link text-sm" href="{{ route('books.index') }}">View catalogue</a></div>
-        <div class="table-wrap">
-            <table class="data-table"><thead><tr><th>Book</th><th>Shelf</th><th>On hand</th><th>Minimum</th></tr></thead>
-                <tbody>@forelse ($lowStock as $book)<tr><td><a class="link" href="{{ route('books.show', $book) }}">{{ $book->title }}</a><div class="text-xs text-slate-500">{{ $book->sku }}</div></td><td>{{ $book->shelf_location ?: '-' }}</td><td><span class="badge {{ $book->stock_on_hand === 0 ? 'badge-red' : 'badge-amber' }}">{{ $book->stock_on_hand }}</span></td><td>{{ $book->minimum_stock }}</td></tr>@empty<tr><td colspan="4" class="empty">No low-stock titles. Good work.</td></tr>@endforelse</tbody>
-            </table>
+@php
+    $dashboardUser = auth()->user();
+    $salutation = now()->hour < 12 ? 'Good morning' : (now()->hour < 18 ? 'Good afternoon' : 'Good evening');
+    $dashboardFirstName = str(preg_replace('/^(dr|mr|mrs|ms)\\.?\\s+/i', '', $dashboardUser->name))->before(' ');
+    $modules = [
+        ['workspace' => 'students', 'title' => 'Student Profile', 'description' => 'Search student records, registrations, family details, attendance, and documents.', 'action' => 'Open student records', 'icon' => 'students', 'tone' => 'blue', 'visible' => $dashboardUser->hasPermission('students.view')],
+        ['workspace' => 'academic', 'title' => 'Academic & Report Card', 'description' => 'Manage assessments, report cards, grades, subjects, and academic reports.', 'action' => 'Open academics', 'icon' => 'academic', 'tone' => 'indigo', 'visible' => $dashboardUser->hasPermission('grades.enter') || $dashboardUser->hasPermission('reports.view')],
+        ['workspace' => 'operations', 'title' => 'Administration & Operations', 'description' => 'Handle users, books, inventory, suppliers, payments, transfers, and daily operations.', 'action' => 'Open administration', 'icon' => 'operations', 'tone' => 'amber', 'visible' => $dashboardUser->hasPermission('admin.manage') || $dashboardUser->hasPermission('books.view')],
+        ['workspace' => 'teachers', 'title' => 'Online Collaboration', 'description' => 'Coordinate teachers, course work, messages, events, and student follow-up.', 'action' => 'Open collaboration', 'icon' => 'responsible', 'tone' => 'emerald', 'visible' => $dashboardUser->hasPermission('collaboration.view')],
+    ];
+    $quickLinks = [
+        ['label' => 'Find a student', 'description' => 'Search profiles and registrations', 'route' => 'students.index', 'permission' => 'students.view', 'icon' => 'students'],
+        ['label' => 'View reports', 'description' => 'Academic and operational reporting', 'route' => 'reports.index', 'permission' => 'reports.view', 'icon' => 'reports'],
+        ['label' => 'Open calendar', 'description' => 'School events and key dates', 'route' => 'collaboration.index', 'params' => ['section' => 'calendar'], 'permission' => 'collaboration.view', 'icon' => 'academic'],
+        ['label' => 'Manage users', 'description' => 'Roles, access, and configuration', 'route' => 'admin.users', 'permission' => 'admin.manage', 'icon' => 'administration'],
+    ];
+@endphp
+<section class="sbm-dashboard" aria-label="Global Academy International dashboard">
+    <header class="sbm-dashboard-intro">
+        <div>
+            <p class="sbm-dashboard-date">{{ now()->format('l, F j, Y') }}</p>
+            <h1>{{ $salutation }}, {{ $dashboardFirstName }}.</h1>
+            <p>Choose a workspace to continue managing your school day.</p>
         </div>
-    </section>
-    <section class="panel">
-        <div class="panel-header"><div><h2 class="panel-title">Today</h2><p class="mt-0.5 text-xs text-slate-500">Active-year operational summary</p></div></div>
-        <dl class="divide-y divide-slate-100 px-5"><div class="flex items-center justify-between py-4"><dt class="text-slate-600">Completed distributions</dt><dd class="font-semibold text-slate-900">{{ $todayDistributions }}</dd></div><div class="flex items-center justify-between py-4"><dt class="text-slate-600">New stock movements</dt><dd class="font-semibold text-slate-900">{{ $recentActivity->count() }}</dd></div></dl>
-    </section>
-</div>
+        <a class="btn btn-primary sbm-dashboard-primary" href="{{ route('students.index') }}"><x-nav-icon name="students" /> Find a student</a>
+    </header>
 
-<section class="panel mt-6">
-    <div class="panel-header"><div><h2 class="panel-title">Recent inventory activity</h2><p class="mt-0.5 text-xs text-slate-500">Controlled movements posted in the active academic year</p></div>@if (auth()->user()->hasPermission('inventory.view'))<a class="link text-sm" href="{{ route('inventory.ledger') }}">Open ledger</a>@endif</div>
-    <div class="table-wrap">
-        <table class="data-table"><thead><tr><th>When</th><th>Book</th><th>Movement</th><th>Change</th><th>By</th></tr></thead>
-            <tbody>@forelse ($recentActivity as $movement)<tr><td>{{ $movement->created_at->format('d M, H:i') }}</td><td>{{ $movement->book->title }}</td><td class="capitalize">{{ str_replace('_', ' ', $movement->type) }}</td><td class="font-semibold {{ $movement->quantity_change < 0 ? 'text-rose-700' : 'text-emerald-700' }}">{{ $movement->quantity_change > 0 ? '+' : '' }}{{ $movement->quantity_change }}</td><td>{{ $movement->user?->name ?? 'System' }}</td></tr>@empty<tr><td colspan="5" class="empty">{{ $activeAcademicYear ? 'No movements recorded for the active academic year.' : 'Set an open academic year to see its activity.' }}</td></tr>@endforelse</tbody>
-        </table>
+    <div class="sbm-dashboard-layout">
+        <section class="sbm-workspace-region" aria-labelledby="workspaces-title">
+            <div class="sbm-section-heading"><div><p>WORKSPACES</p><h2 id="workspaces-title">Your school at a glance</h2></div><span>{{ collect($modules)->where('visible', true)->count() }} available</span></div>
+            <div class="sbm-workspace-grid">
+                @foreach ($modules as $module)
+                    @if ($module['visible'])
+                        @php($target = match ($module['workspace']) { 'teachers' => route('collaboration.index'), 'operations' => $dashboardUser->hasPermission('admin.manage') ? route('admin.users') : route('workspaces.show', 'operations'), default => route('workspaces.show', $module['workspace']) })
+                        <a class="sbm-workspace-card sbm-workspace-{{ $module['tone'] }}" href="{{ $target }}">
+                            <span class="sbm-workspace-icon"><x-nav-icon :name="$module['icon']" /></span>
+                            <span class="sbm-workspace-content"><strong>{{ $module['title'] }}</strong><span>{{ $module['description'] }}</span><em>{{ $module['action'] }} <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5l5 5-5 5" /></svg></em></span>
+                        </a>
+                    @endif
+                @endforeach
+            </div>
+        </section>
+
+        <aside class="sbm-dashboard-side" aria-label="Quick access">
+            <section class="sbm-side-panel"><div class="sbm-section-heading"><div><p>QUICK ACCESS</p><h2>Useful shortcuts</h2></div></div><div class="sbm-quick-links">
+                @foreach($quickLinks as $link)
+                    @if($dashboardUser->hasPermission($link['permission']))
+                        <a href="{{ route($link['route'], $link['params'] ?? []) }}"><span><x-nav-icon :name="$link['icon']" /></span><span><strong>{{ $link['label'] }}</strong><small>{{ $link['description'] }}</small></span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4l6 6-6 6" /></svg></a>
+                    @endif
+                @endforeach
+            </div></section>
+            <section class="sbm-day-panel"><p>READY WHEN YOU ARE</p><h2>Keep your school moving forward.</h2><span>Global Academy International brings daily student, academic, and operational work into one focused workspace.</span></section>
+        </aside>
     </div>
 </section>
 @endsection

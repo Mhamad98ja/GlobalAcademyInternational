@@ -1,99 +1,43 @@
 @extends('layouts.app', ['title' => $student->full_name])
 
 @section('content')
-@php($hasActiveRegistration = $student->registrations->contains(fn ($registration) => $registration->status === 'active'))
-<div class="page-header">
-    <div>
-        <div class="text-sm text-slate-500"><a class="link" href="{{ route('students.index') }}">Students</a> / Profile</div>
-        <h1 class="page-title mt-1">{{ $student->full_name }}</h1>
-        <p class="page-subtitle">{{ $student->student_number }} · {{ $student->phone ?: 'No phone recorded' }}</p>
-    </div>
-    <div class="flex flex-wrap gap-2">
-        <a class="btn btn-secondary" href="{{ route('students.edit', $student) }}">Edit profile</a>
-        @if ($hasActiveRegistration)
-            <a class="btn btn-secondary" href="{{ route('students.leave.create', $student) }}">Mark as left school</a>
-        @endif
-        <a class="btn btn-primary" href="{{ route('students.register.create', $student) }}">New registration</a>
-        <form method="POST" action="{{ route('students.destroy', $student) }}" onsubmit="return confirm('Move this student profile to the recycle bin? It can be restored by an administrator.');">
-            @csrf
-            @method('DELETE')
-            <button class="btn btn-danger">Delete profile</button>
-        </form>
-    </div>
-</div>
-
-<div class="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-    <section class="panel">
-        <div class="panel-header"><h2 class="panel-title">Academic registrations</h2></div>
-        <div class="table-wrap">
-            <table class="data-table">
-                <thead><tr><th>Academic year</th><th>Class</th><th>Teacher</th><th>Status</th><th>Leaving record</th><th></th></tr></thead>
-                <tbody>
-                    @forelse ($student->registrations as $registration)
-                        <tr>
-                            <td>{{ $registration->academicYear->name }}</td>
-                            <td>{{ $registration->grade->name }}{{ $registration->section ? ' · '.$registration->section->name : '' }}</td>
-                            <td>{{ $registration->teacher?->full_name ?? '—' }}</td>
-                            <td><span class="badge {{ $registration->status === 'active' ? 'badge-green' : 'badge-amber' }}">{{ str($registration->status)->headline() }}</span></td>
-                            <td>
-                                @if ($registration->withdrawn_on)
-                                    <div>{{ $registration->withdrawn_on->format('d M Y') }}</div>
-                                    @if ($registration->withdrawal_reason)<div class="mt-1 text-xs text-slate-500">{{ $registration->withdrawal_reason }}</div>@endif
-                                @else
-                                    —
-                                @endif
-                            </td>
-                            <td class="space-x-3">
-                                <a class="link text-xs" href="{{ route('students.register.edit', [$student, $registration]) }}">Edit</a>
-                                @if ($registration->status === 'active')
-                                    <a class="link text-xs" href="{{ route('distributions.create', ['registration' => $registration->id]) }}">Distribute books</a>
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="6" class="empty">No academic-year registration yet.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+@php
+    $activeTab = request('tab', 'general');
+    $currentRegistration = $student->registrations->firstWhere('status', 'active') ?? $student->registrations->first();
+    $tabs = ['general' => 'General', 'address' => 'Address', 'parents' => 'Parents', 'siblings' => 'Siblings', 'arabic' => 'Arabic Information', 'official' => 'Official Information'];
+    $profileLinks = ['general' => 'Profile', 'remarks' => 'Remarks', 'evaluations' => 'Evaluations', 'notes' => 'Grades', 'subjects' => 'Subjects', 'history' => 'History', 'schools' => 'Schools Attended', 'files' => 'Files', 'professional' => 'Professional Follow-up', 'activities' => 'Activities', 'medical' => 'Medical Record', 'follow-up' => 'Follow-up'];
+@endphp
+<section class="dars-student-profile-page" aria-label="Student record">
+    <div class="dars-breadcrumb"><a href="{{ route('students.index') }}">Student Search</a><span>&gt;</span><strong>{{ $student->full_name }}</strong></div>
+    <div class="dars-student-profile-layout"><aside class="dars-profile-sidebar"><div class="dars-profile-identity">@if($student->photo_path)<img src="{{ route('students.photo.show', $student) }}" alt="Photo of {{ $student->full_name }}">@else<span>{{ str($student->first_name)->substr(0, 1) }}{{ str($student->last_name)->substr(0, 1) }}</span>@endif<strong>{{ $student->full_name }}</strong><small>{{ $student->student_number }}</small></div><nav aria-label="Student record sections">@foreach($profileLinks as $key => $label)<a class="{{ $activeTab === $key ? 'active' : '' }}" href="{{ route('students.show', [$student, 'tab' => $key]) }}">{{ $label }}</a>@endforeach</nav></aside>
+        <div class="dars-student-profile-main"><div class="dars-student-profile-toolbar"><a href="{{ route('students.index') }}">Back to search</a><div class="flex flex-wrap gap-2">@if(auth()->user()->hasPermission('students.manage'))<a class="dars-outline-button" href="{{ route('students.edit', $student) }}">Edit</a>@endif<button type="button" class="dars-outline-button" onclick="window.print()">Print</button></div></div><nav class="dars-student-profile-tabs" aria-label="Student information">@foreach($tabs as $key => $label)<a class="{{ $activeTab === $key ? 'active' : '' }}" href="{{ route('students.show', [$student, 'tab' => $key]) }}">{{ $label }}</a>@endforeach</nav>
+            <section class="dars-student-profile-card">
+                @if($activeTab === 'general')<h1>General Information</h1><div class="dars-profile-details">@foreach(['Code' => $student->student_number, 'Last name' => $student->last_name, 'First name' => $student->first_name, 'Gender' => $student->gender ? str($student->gender)->headline() : null, 'Date of birth' => $student->date_of_birth?->format('d/m/Y'), 'Class' => $currentRegistration?->grade?->name, 'Section' => $currentRegistration?->section?->name, 'Academic year' => $currentRegistration?->academicYear?->name, 'Enrollment date' => $student->enrollment_date?->format('d/m/Y'), 'Status' => $currentRegistration?->status ? str($currentRegistration->status)->headline() : 'Not registered', 'Withdrawal reason' => $currentRegistration?->withdrawal_reason, 'Phone' => $student->phone, 'Email' => $student->email, 'Previous school' => $student->previous_school, 'Registration number' => $student->registration_number] as $label => $value)<div><dt>{{ $label }}</dt><dd>{{ $value ?: '-' }}</dd></div>@endforeach</div>
+                @elseif($activeTab === 'address')<h1>Address</h1><div class="dars-profile-details"><div><dt>Address</dt><dd>{{ $student->address ?: '-' }}</dd></div><div><dt>Phone</dt><dd>{{ $student->phone ?: '-' }}</dd></div><div><dt>Email</dt><dd>{{ $student->email ?: '-' }}</dd></div></div>
+                @elseif($activeTab === 'parents')<h1>Parents and Guardians</h1><div class="dars-profile-stack">@forelse($student->responsiblePersons as $person)<article><strong>{{ $person->full_name }}</strong><span>{{ str($person->type)->headline() }}{{ $person->pivot->relationship ? ' - '.$person->pivot->relationship : '' }}</span><span>{{ $person->phone ?: '-' }} - {{ $person->email ?: '-' }}</span>@if(auth()->user()->hasPermission('people.manage'))<a href="{{ route('responsible.edit', $person) }}">Open parent record</a>@endif</article>@empty<p class="empty">No parent or guardian is linked.</p>@endforelse</div>
+                @elseif($activeTab === 'siblings')<h1>Siblings</h1><div class="dars-profile-stack">@php($siblings = $student->responsiblePersons->flatMap(fn ($person) => $person->students)->where('id', '!=', $student->id)->unique('id'))@forelse($siblings as $sibling)<article><a href="{{ route('students.show', $sibling) }}">{{ $sibling->full_name }}</a><span>{{ $sibling->student_number }}</span></article>@empty<p class="empty">No linked siblings.</p>@endforelse</div>
+                @elseif($activeTab === 'arabic')<h1>Arabic Information</h1><div class="dars-empty-profile">No Arabic information recorded.</div>
+                @elseif($activeTab === 'official')<h1>Official Information</h1><div class="dars-profile-details"><div><dt>ID number</dt><dd>-</dd></div><div><dt>Nationality</dt><dd>-</dd></div><div><dt>Place of birth</dt><dd>-</dd></div></div>
+                @elseif($activeTab === 'remarks')<h1>Remarks</h1><div class="dars-profile-stack">@forelse($student->incidents->sortByDesc('incident_date') as $incident)<article><strong>{{ $incident->type?->name ?? $incident->category?->name ?? 'Remark' }}</strong><span>{{ $incident->incident_date?->format('d/m/Y') }}</span><p>{{ $incident->description }}</p></article>@empty<p class="empty">No remarks recorded.</p>@endforelse</div>
+                @elseif($activeTab === 'evaluations' || $activeTab === 'notes')<h1>{{ $activeTab === 'evaluations' ? 'Evaluations' : 'Grades' }}</h1><div class="dars-profile-stack">@forelse($student->gradeEntries->sortByDesc('created_at') as $entry)<article><strong>{{ $entry->assessment?->name ?: 'Evaluation' }}</strong><span>{{ $entry->assessment?->subject?->name ?: '-' }} - {{ $entry->score }} / {{ $entry->assessment?->maximum_score }}</span></article>@empty<p class="empty">No records found.</p>@endforelse</div>
+                @elseif($activeTab === 'subjects')<h1>Subjects</h1><div class="dars-empty-profile">The subject list is available from the academic module.</div>
+                @elseif($activeTab === 'history')<h1>History</h1><div class="dars-profile-stack">@forelse($student->registrations as $registration)<article><strong>{{ $registration->academicYear->name }}</strong><span>{{ $registration->grade->name }}{{ $registration->section ? ' - '.$registration->section->name : '' }}</span><span>{{ str($registration->status)->headline() }}</span></article>@empty<p class="empty">No registration history.</p>@endforelse</div>
+                @elseif($activeTab === 'schools')<h1>Schools Attended</h1><div class="dars-profile-details"><div><dt>Previous school</dt><dd>{{ $student->previous_school ?: '-' }}</dd></div></div>
+                @elseif($activeTab === 'files')<h1>Files</h1><div class="dars-empty-profile">No student files recorded.</div>
+                @elseif($activeTab === 'medical')<h1>Medical Record</h1><div class="dars-profile-stack">@forelse($student->medicalRecords as $record)<article><strong>{{ $record->title }}</strong><span>{{ str($record->type)->headline() }} - {{ $record->recorded_on?->format('d/m/Y') }}</span><p>{{ $record->restrictions ?: '-' }}</p></article>@empty<p class="empty">No medical record found.</p>@endforelse</div>
+                @else<h1>{{ $profileLinks[$activeTab] ?? 'Student Record' }}</h1><div class="dars-empty-profile">No records found for this section.</div>@endif
+            </section>
+            @if($activeTab === 'general')
+                <section class="dars-profile-archive"><h2>Student Historical Archive</h2><div class="dars-profile-archive-grid">
+                    <article><h3>Personal details</h3><p>Core identity and registration information is maintained in the profile above.</p></article>
+                    @if($canViewAttendance)<article><h3>Attendance</h3><a href="{{ route('attendance.students', ['student_id' => $student->id]) }}">View all records</a></article>@endif
+                    @if($canViewDiscipline)<article><h3>Actions and incidents</h3><a href="{{ route('discipline.index', ['student_id' => $student->id]) }}">View all records</a></article>@endif
+                    @if($canViewMedical)<article><h3>Medical archive</h3><a href="{{ route('medical.index', ['student_id' => $student->id]) }}">View all records</a></article>@endif
+                    @if($canViewGrades)<article><h3>Grades</h3><a href="{{ route('reports.school', ['report' => 'grades', 'student_id' => $student->id, 'module' => 'students']) }}">View all records</a></article>@endif
+                    @if($canViewPerformance)<article><h3>Performance follow-up</h3>@forelse($student->performanceEvaluations->sortByDesc('observed_on')->take(5) as $evaluation)<p>{{ $evaluation->note }}</p>@empty<p>No performance follow-up records.</p>@endforelse<a href="{{ route('collaboration.index', ['section' => 'performance']) }}">View all records</a></article>@endif
+                </div></section>
+            @endif
         </div>
-    </section>
-
-    <section class="panel">
-        <div class="panel-header"><h2 class="panel-title">Responsible persons</h2></div>
-        <div class="divide-y divide-slate-100">
-            @forelse ($student->responsiblePersons as $person)
-                <div class="px-5 py-3">
-                    <div class="font-medium text-slate-800">{{ $person->full_name }} @if ($person->pivot->is_primary)<span class="badge badge-blue">Primary</span>@endif</div>
-                    <div class="text-xs text-slate-500">{{ ucfirst($person->type) }} · {{ $person->phone ?: 'No phone' }}</div>
-                </div>
-            @empty
-                <div class="empty">No responsible person linked.</div>
-            @endforelse
-        </div>
-    </section>
-</div>
-
-@if ($canViewFinancials)<section class="panel mt-6">
-    <div class="panel-header"><h2 class="panel-title">Invoices</h2></div>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead><tr><th>Invoice</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
-            <tbody>
-                @forelse ($student->invoices as $invoice)
-                    <tr>
-                        <td><a class="link" href="{{ route('invoices.show', $invoice) }}">{{ $invoice->invoice_number }}</a></td>
-                        <td>{{ $invoice->invoice_date->format('d M Y') }}</td>
-                        <td>{{ number_format($invoice->total, 2) }}</td>
-                        <td>{{ number_format($invoice->amount_paid, 2) }}</td>
-                        <td>{{ number_format($invoice->balance_due, 2) }}</td>
-                        <td><span class="badge {{ $invoice->payment_status === 'paid' ? 'badge-green' : 'badge-amber' }}">{{ str_replace('_', ' ', $invoice->payment_status) }}</span></td>
-                    </tr>
-                @empty
-                    <tr><td colspan="6" class="empty">No invoices yet.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
     </div>
 </section>
-@endif
 @endsection

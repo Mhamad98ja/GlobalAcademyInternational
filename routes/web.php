@@ -4,27 +4,44 @@ declare(strict_types=1);
 
 use App\Http\Controllers\AcademicController;
 use App\Http\Controllers\AdministrationController;
+use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BooksController;
 use App\Http\Controllers\BookTransfersController;
 use App\Http\Controllers\BranchesController;
 use App\Http\Controllers\ClassBookListsController;
+use App\Http\Controllers\CollaborationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataImportController;
+use App\Http\Controllers\DarsAdministrationController;
+use App\Http\Controllers\DarsCompatibilityController;
+use App\Http\Controllers\DisciplineController;
 use App\Http\Controllers\DistributionController;
+use App\Http\Controllers\ExamAbsencesController;
+use App\Http\Controllers\GradesController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InvoicesController;
+use App\Http\Controllers\MedicalRecordsController;
+use App\Http\Controllers\MessagesController;
 use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\OperationsController;
 use App\Http\Controllers\PaymentsController;
 use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\PurchasesController;
 use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\ReportCardController;
 use App\Http\Controllers\ReturnsController;
+use App\Http\Controllers\SchoolAcademicController;
+use App\Http\Controllers\SchoolReportsController;
+use App\Http\Controllers\StudentDossierController;
+use App\Http\Controllers\StudentPortalController;
 use App\Http\Controllers\StudentRegistrationsController;
 use App\Http\Controllers\StudentsController;
+use App\Http\Controllers\SubstitutionsController;
 use App\Http\Controllers\SupplierReturnsController;
 use App\Http\Controllers\SuppliersController;
+use App\Http\Controllers\TimetableController;
+use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -47,7 +64,16 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     Route::post('/branches/current', [BranchesController::class, 'select'])->name('branches.select');
     Route::get('/notifications', [NotificationsController::class, 'index'])->name('notifications.index');
     Route::post('/notifications/{notification}/read', [NotificationsController::class, 'read'])->name('notifications.read');
+    Route::get('/messages', [MessagesController::class, 'index'])->middleware('permission:messages.view')->name('messages.index');
+    Route::post('/messages', [MessagesController::class, 'store'])->middleware('permission:messages.send')->name('messages.store');
+    Route::post('/messages/{recipient}/read', [MessagesController::class, 'markRead'])->middleware('permission:messages.view')->name('messages.read');
+    Route::post('/messages/read-all', [MessagesController::class, 'markAllRead'])->middleware('permission:messages.view')->name('messages.read-all');
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
+    Route::get('/student-portal', [StudentPortalController::class, 'index'])->name('student-portal.index');
+    Route::get('/workspaces/{workspace}', WorkspaceController::class)
+        ->where('workspace', 'students|teachers|academic|operations')
+        ->middleware('permission:dashboard.view')
+        ->name('workspaces.show');
     Route::get('/finance', [OperationsController::class, 'index'])->name('finance.index');
     Route::get('/operations', [OperationsController::class, 'index'])->middleware('permission:dashboard.view')->name('operations.index');
     Route::middleware('permission:class-lists.manage')->group(function (): void {
@@ -56,12 +82,17 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     });
     Route::middleware('permission:reports.view')->group(function (): void {
         Route::get('/reports/print', [ReportsController::class, 'print'])->name('reports.print');
+        Route::get('/report-card/reports/{report}', [ReportCardController::class, 'show'])->name('report-card.show');
     });
     Route::middleware('permission:admin.manage')->group(function (): void {
+        Route::get('/admin/dars/{page}', [DarsAdministrationController::class, 'show'])->name('admin.dars.show');
         Route::get('/admin/users/{user}/edit', [AdministrationController::class, 'editUser'])->name('admin.users.edit');
         Route::put('/admin/users/{user}', [AdministrationController::class, 'updateUser'])->name('admin.users.update');
     });
     Route::middleware('permission:students.manage')->group(function (): void {
+        Route::get('/students/section-changes', [StudentDossierController::class, 'sectionChanges'])->name('students.section-changes');
+        Route::post('/students/section-changes', [StudentDossierController::class, 'updateSections'])->name('students.section-changes.update');
+        Route::post('/students/{student}/photo', [StudentsController::class, 'updatePhoto'])->name('students.photo.update');
         Route::get('/students/{student}/registrations/{registration}/edit', [StudentRegistrationsController::class, 'edit'])->name('students.register.edit');
         Route::put('/students/{student}/registrations/{registration}', [StudentRegistrationsController::class, 'update'])->name('students.register.update');
     });
@@ -76,9 +107,28 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/students/{student}/register', [StudentsController::class, 'registerForm'])->name('students.register.create');
         Route::post('/students/{student}/register', [StudentsController::class, 'register'])->name('students.register.store');
     });
+    Route::middleware('permission:reports.view')->group(function (): void {
+        Route::get('/students/attestations', [StudentDossierController::class, 'attestations'])->name('students.attestations');
+        Route::get('/students/attestations/print', [StudentDossierController::class, 'printAttestations'])->name('students.attestations.print');
+        Route::get('/students/reports/{report}', [StudentDossierController::class, 'report'])->where('report', 'class-list|statistical|labels|catalog|registration|dynamic')->name('students.reports.show');
+    });
     Route::middleware('permission:students.view')->group(function (): void {
+        Route::get('/students/dashboard', [StudentDossierController::class, 'dashboard'])->name('students.dashboard');
+        Route::get('/students/tools/{section}', [StudentDossierController::class, 'tools'])->where('section', 'file|references')->name('students.tools');
+        Route::get('/students/references/{reference}/create', [StudentDossierController::class, 'referenceCreate'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.create');
+        Route::get('/students/references/{reference}/{entry}/edit', [StudentDossierController::class, 'referenceEdit'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.edit');
+        Route::get('/students/references/{reference}', [StudentDossierController::class, 'reference'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.show');
+        Route::post('/students/references/codes/categories', [StudentDossierController::class, 'referenceCategoryStore'])->name('students.references.categories.store');
+        Route::post('/students/references/{reference}', [StudentDossierController::class, 'referenceStore'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.store');
+        Route::put('/students/references/{reference}/{entry}', [StudentDossierController::class, 'referenceUpdate'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.update');
+        Route::delete('/students/references/{reference}/{entry}', [StudentDossierController::class, 'referenceDestroy'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.destroy');
+        Route::get('/students/families', [StudentDossierController::class, 'families'])->name('students.families');
+        Route::get('/students/photos', [StudentDossierController::class, 'photos'])->name('students.photos');
         Route::get('/students', [StudentsController::class, 'index'])->name('students.index');
+        Route::get('/students/{student}/photo', [StudentsController::class, 'photo'])->name('students.photo.show');
         Route::get('/students/{student}', [StudentsController::class, 'show'])->name('students.show');
+    });
+    Route::middleware('permission:students.manage')->group(function (): void {
     });
     Route::get('/books', [BooksController::class, 'index'])->middleware('permission:books.view')->name('books.index');
     Route::middleware('permission:books.manage')->group(function (): void {
@@ -143,14 +193,88 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::post('/academic/sections', [AcademicController::class, 'storeSection'])->name('academic.sections.store');
         Route::put('/academic/sections/{section}', [AcademicController::class, 'updateSection'])->name('academic.sections.update');
     });
+    Route::middleware('permission:academic_year.manage')->group(function (): void {
+        Route::get('/academic/operations', [SchoolAcademicController::class, 'index'])->name('school-academic.index');
+        Route::post('/academic/subjects', [SchoolAcademicController::class, 'storeSubject'])->name('school-academic.subjects.store');
+        Route::put('/academic/subjects/{subject}', [SchoolAcademicController::class, 'updateSubject'])->name('school-academic.subjects.update');
+        Route::post('/academic/terms', [SchoolAcademicController::class, 'storeTerm'])->name('school-academic.terms.store');
+        Route::put('/academic/terms/{term}', [SchoolAcademicController::class, 'updateTerm'])->name('school-academic.terms.update');
+        Route::post('/academic/assessments', [SchoolAcademicController::class, 'storeAssessment'])->name('school-academic.assessments.store');
+        Route::put('/academic/assessments/{assessment}', [SchoolAcademicController::class, 'updateAssessment'])->name('school-academic.assessments.update');
+        Route::post('/academic/teacher-assignments', [SchoolAcademicController::class, 'storeAssignment'])->name('school-academic.assignments.store');
+        Route::put('/academic/teacher-assignments/{assignment}', [SchoolAcademicController::class, 'updateAssignment'])->name('school-academic.assignments.update');
+    });
+    Route::middleware('permission:attendance.student.manage')->group(function (): void {
+        Route::get('/attendance/students', [AttendanceController::class, 'students'])->name('attendance.students');
+        Route::post('/attendance/students', [AttendanceController::class, 'saveStudents'])->name('attendance.students.save');
+    });
+    Route::middleware('permission:attendance.teacher.manage')->group(function (): void {
+        Route::get('/attendance/teachers', [AttendanceController::class, 'teachers'])->name('attendance.teachers');
+        Route::post('/attendance/teachers', [AttendanceController::class, 'saveTeacher'])->name('attendance.teachers.save');
+    });
+    Route::middleware('permission:discipline.view')->group(function (): void {
+        Route::get('/discipline', [DisciplineController::class, 'index'])->name('discipline.index');
+        Route::middleware('permission:discipline.create')->group(function (): void {
+            Route::post('/discipline', [DisciplineController::class, 'store'])->name('discipline.store');
+            Route::post('/discipline/categories', [DisciplineController::class, 'storeCategory'])->name('discipline.categories.store');
+            Route::post('/discipline/types', [DisciplineController::class, 'storeType'])->name('discipline.types.store');
+        });
+        Route::put('/discipline/{incident}', [DisciplineController::class, 'update'])->middleware('permission:discipline.edit')->name('discipline.update');
+    });
+    Route::middleware('permission:medical.view')->group(function (): void {
+        Route::get('/medical-records', [MedicalRecordsController::class, 'index'])->name('medical.index');
+        Route::get('/medical-records/{medicalRecord}/download', [MedicalRecordsController::class, 'download'])->name('medical.download');
+        Route::middleware('permission:medical.manage')->group(function (): void {
+            Route::post('/medical-records', [MedicalRecordsController::class, 'store'])->name('medical.store');
+            Route::put('/medical-records/{medicalRecord}', [MedicalRecordsController::class, 'update'])->name('medical.update');
+        });
+    });
+    Route::middleware('permission:academic_year.manage')->group(function (): void {
+        Route::get('/exam-absences', [ExamAbsencesController::class, 'index'])->name('exam-absences.index');
+        Route::post('/exam-absences', [ExamAbsencesController::class, 'store'])->name('exam-absences.store');
+    });
+    Route::middleware('permission:grades.enter')->group(function (): void {
+        Route::get('/grades', [GradesController::class, 'index'])->name('grades.index');
+        Route::post('/grades/assessments', [GradesController::class, 'storeAssessment'])->name('grades.assessments.store');
+        Route::put('/grades/assessments/{assessment}', [GradesController::class, 'updateAssessment'])->name('grades.assessments.update');
+        Route::post('/grades', [GradesController::class, 'save'])->name('grades.save');
+        Route::post('/grades/{gradeEntry}/lock', [GradesController::class, 'lock'])->name('grades.lock');
+    });
+    Route::get('/collaboration', [CollaborationController::class, 'index'])->middleware('permission:collaboration.view')->name('collaboration.index');
+    Route::get('/collaboration/{section}', [CollaborationController::class, 'index'])
+        ->where('section', 'course-content|messages|calendar|performance|performance-dashboard|evaluation-dashboard|evaluation-grades|grade-book|evaluations-list|student-failures|modification-requests|transcript-subject-choice|evaluation-statement|homework|homework-report|homework-totals|homework-comparison|skills-student|skills-approve|remarks-approve|item-remarks|class-remarks|principal-appreciations|remarks-entry|attendance-management|standards|report-card-receipt|icons|system-error-log|bulk-message|students|teachers')
+        ->middleware('permission:collaboration.view')
+        ->name('collaboration.section');
+    Route::post('/collaboration/announcements', [CollaborationController::class, 'storeAnnouncement'])->middleware('permission:collaboration.manage')->name('collaboration.announcements.store');
+    Route::post('/collaboration/course-content', [CollaborationController::class, 'storeCourseContent'])->middleware('permission:collaboration.manage')->name('collaboration.course-content.store');
+    Route::put('/collaboration/course-content/{courseContent}', [CollaborationController::class, 'updateCourseContent'])->middleware('permission:collaboration.manage')->name('collaboration.course-content.update');
+    Route::delete('/collaboration/course-content/{courseContent}', [CollaborationController::class, 'destroyCourseContent'])->middleware('permission:collaboration.manage')->name('collaboration.course-content.destroy');
+    Route::post('/collaboration/events', [CollaborationController::class, 'storeEvent'])->middleware('permission:collaboration.manage')->name('collaboration.events.store');
+    Route::post('/collaboration/performance-evaluations', [CollaborationController::class, 'storePerformanceEvaluation'])->middleware('permission:performance.manage')->name('collaboration.performance.store');
+    Route::middleware('permission:timetable.view')->group(function (): void {
+        Route::get('/timetable', [TimetableController::class, 'index'])->name('timetable.index');
+        Route::middleware('permission:timetable.manage')->group(function (): void {
+            Route::post('/timetable/periods', [TimetableController::class, 'storePeriod'])->name('timetable.periods.store');
+            Route::post('/timetable/entries', [TimetableController::class, 'store'])->name('timetable.entries.store');
+            Route::put('/timetable/entries/{timetableEntry}', [TimetableController::class, 'update'])->name('timetable.entries.update');
+            Route::delete('/timetable/entries/{timetableEntry}', [TimetableController::class, 'destroy'])->name('timetable.entries.destroy');
+        });
+    });
+    Route::middleware('permission:substitutions.manage')->group(function (): void {
+        Route::get('/teacher-substitutions', [SubstitutionsController::class, 'index'])->name('substitutions.index');
+        Route::post('/teacher-substitutions/{teacherSubstitution}', [SubstitutionsController::class, 'assign'])->name('substitutions.assign');
+        Route::post('/teacher-substitutions/{teacherSubstitution}/recommend', [SubstitutionsController::class, 'recommend'])->name('substitutions.recommend');
+    });
     Route::middleware('permission:people.manage')->group(function (): void {
         Route::get('/teachers', [PeopleController::class, 'teachers'])->name('teachers.index');
         Route::post('/teachers', [PeopleController::class, 'storeTeacher'])->name('teachers.store');
+        Route::get('/teachers/{teacher}', [PeopleController::class, 'showTeacher'])->name('teachers.show');
         Route::get('/responsible-persons', [PeopleController::class, 'responsible'])->name('responsible.index');
         Route::get('/responsible-persons/students/search', [PeopleController::class, 'searchStudents'])->name('responsible.students.search');
         Route::post('/responsible-persons', [PeopleController::class, 'storeResponsible'])->name('responsible.store');
         Route::get('/responsible-persons/{responsiblePerson}/edit', [PeopleController::class, 'editResponsible'])->name('responsible.edit');
         Route::put('/responsible-persons/{responsiblePerson}', [PeopleController::class, 'updateResponsible'])->name('responsible.update');
+        Route::delete('/responsible-persons/{responsiblePerson}', [PeopleController::class, 'destroyResponsible'])->name('responsible.destroy');
     });
     Route::middleware('permission:class-lists.view')->group(function (): void {
         Route::get('/class-book-lists', [ClassBookListsController::class, 'index'])->name('class-lists.index');
@@ -163,6 +287,9 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     Route::middleware('permission:reports.view')->group(function (): void {
         Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
         Route::get('/reports/csv', [ReportsController::class, 'csv'])->name('reports.csv');
+        Route::get('/reports/school', [SchoolReportsController::class, 'index'])->name('reports.school');
+        Route::get('/reports/school/print', [SchoolReportsController::class, 'print'])->name('reports.school.print');
+        Route::get('/reports/school/csv', [SchoolReportsController::class, 'csv'])->middleware('permission:reports.export')->name('reports.school.csv');
     });
     Route::middleware('permission:admin.manage')->group(function (): void {
         Route::get('/admin/users', [AdministrationController::class, 'users'])->name('admin.users');
@@ -190,14 +317,184 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::post('/admin/imports/students', [DataImportController::class, 'students'])->name('admin.imports.students');
         Route::post('/admin/imports/books', [DataImportController::class, 'books'])->name('admin.imports.books');
     });
+
+    /*
+     * Dars compatibility URLs. The live Dars application uses WebForms .aspx
+     * paths. Keep those paths usable in SBM while the canonical Laravel URLs
+     * remain the implementation endpoints behind them.
+     */
+    Route::get('/home.aspx', fn () => redirect()->route('dashboard'))->name('dars.home');
+    Route::get('/Home.aspx', fn () => redirect()->route('dashboard'))->name('dars.lit-home');
+    Route::get('/DARSSchools.aspx', fn () => redirect()->route('dashboard'))->name('dars.schools');
+    Route::get('/logout.aspx', [AuthController::class, 'destroy'])->name('dars.logout');
+    Route::get('/Video_Assistant/HomeAssistant.aspx', fn () => redirect()->route('dashboard'))->name('dars.help');
+
+    Route::get('/StudentProfile/Profile/Dashboard.aspx', fn () => redirect()->route('students.dashboard'))
+        ->middleware('permission:students.view')->name('dars.student-dashboard');
+    Route::get('/StudentProfile/Profile/SearchStudentParent.aspx', [DarsCompatibilityController::class, 'studentSearch'])
+        ->middleware('permission:students.view')->name('dars.student-search');
+    Route::get('/StudentProfile/Profile/StudentProfile.aspx', [DarsCompatibilityController::class, 'studentProfile'])
+        ->middleware('permission:students.view')->name('dars.student-profile');
+    Route::get('/StudentProfile/Profile/InscParentView.aspx', [DarsCompatibilityController::class, 'responsibleProfile'])
+        ->middleware('permission:people.manage')->name('dars.parent-profile');
+    Route::get('/StudentProfile/Reports/RptInsReports.aspx', [DarsCompatibilityController::class, 'studentReport'])
+        ->middleware('permission:reports.view')->name('dars.student-reports');
+    Route::get('/StudentProfile/Reports/StudentFamilyReport.aspx', fn () => redirect()->route('students.reports.show', ['report' => 'dynamic']))
+        ->middleware('permission:reports.view')->name('dars.student-family-report');
+    Route::get('/StudentProfile/Reports/IscRptFamillesParNbEnfants.aspx', fn () => redirect()->route('students.reports.show', ['report' => 'statistical']))
+        ->middleware('permission:reports.view')->name('dars.student-family-count-report');
+    Route::get('/StudentProfile/Profile/InscStdsDashboardRemarks.aspx', fn () => redirect()->route('attendance.students'))
+        ->middleware('permission:attendance.student.manage')->name('dars.student-dashboard-remarks');
+    Route::get('/ReportCard/InscFillAbsence.aspx', fn () => redirect()->route('attendance.students'))
+        ->middleware('permission:attendance.student.manage')->name('dars.student-absence');
+
+    foreach ([
+        'InscProfRemark.aspx' => 'remarks',
+        'evalRptEleveResult.aspx' => 'evaluations',
+        'rptNoteReleveeComplet.aspx' => 'notes',
+        'StudentSubjects.aspx' => 'subjects',
+        'StudentHistory.aspx' => 'history',
+        'InscStudentOtherSchool.aspx' => 'schools',
+        'InscStudentFiles.aspx' => 'files',
+        'InscStudentProfessionalFollow.aspx' => 'professional',
+        'StudentActivity.aspx' => 'activities',
+        'FicheSuivi.aspx' => 'follow-up',
+    ] as $path => $section) {
+        Route::get('/StudentProfile/Profile/'.$path, [DarsCompatibilityController::class, 'studentSection'])
+            ->defaults('section', $section)->middleware('permission:students.view')->name('dars.student.'.str_replace('.aspx', '', $path));
+    }
+    Route::get('/Medical/Front/MedOnlineProfile.aspx', [DarsCompatibilityController::class, 'studentSection'])
+        ->defaults('section', 'medical')->middleware('permission:medical.view')->name('dars.student.medical');
+
+    foreach ([
+        '/StudentProfile/Profile/Parent.aspx' => 'responsible.index',
+        '/StudentProfile/Profile/InscFamiliesWithoutChildren.aspx' => 'students.families',
+        '/StudentProfile/References/InscChangeSection.aspx' => 'students.section-changes',
+        '/StudentProfile/References/InscImages.aspx' => 'students.photos',
+        '/StudentProfile/Profile/ParentsModifications.aspx' => 'responsible.index',
+        '/StudentProfile/Attestation/AttestationMultiReport.aspx' => 'students.attestations',
+    ] as $path => $target) {
+        Route::get($path, fn () => redirect()->route($target))->name('dars.'.str_replace(['/', '.aspx'], ['.', ''], trim($path, '/')));
+    }
+    foreach ([
+        'Codes.aspx' => 'codes',
+        'Division.aspx' => 'division',
+        'ClassesDef.aspx' => 'class-definition',
+        'Classes.aspx' => 'classes',
+        'OtherSchools.aspx' => 'other-schools',
+        'Qaza.aspx' => 'district',
+        'Town.aspx' => 'towns',
+    ] as $path => $reference) {
+        Route::get('/StudentProfile/References/'.$path, fn () => redirect()->route('students.references.show', ['reference' => $reference]))
+            ->name('dars.reference.'.str_replace('.aspx', '', $path));
+    }
+
+    Route::get('/ReportCard/ReportCardMain.aspx', [DarsCompatibilityController::class, 'reportCard'])
+        ->defaults('report', 'report-card')->middleware('permission:reports.view')->name('dars.report-card.home');
+    foreach ([
+        '/ReportCard/Reports/PreviewReportCard.aspx' => 'report-card',
+        '/ReportCard/NotBulletinRechercheEleve.aspx' => 'individual-transcript',
+        '/ReportCard/Reports/rptNotRemarques.aspx' => 'remarks-summary',
+        '/ReportCard/Reports/rptNotReleveGen.aspx' => 'general-transcript',
+        '/ReportCard/Reports/rptNotRemarque.aspx' => 'remarks-detail',
+        '/ReportCard/Reports/rptNotReleveGenProgress.aspx' => 'progress-transcript',
+        '/ReportCard/Reports/rptNotBulletinCondensee.aspx' => 'subjects-list-per-class',
+        '/ReportCard/Reports/rptNotBulletinCondenseChoix.aspx' => 'transcript-by-subject-choice',
+        '/ReportCard/Reports/RptNotListeClassement.aspx' => 'student-ranking-per-subject',
+        '/ReportCard/Reports/rptNotReleveMatiere.aspx' => 'subjects-transcript',
+        '/ReportCard/Reports/rptNotReleveMatiere_Ar.aspx' => 'official-statement',
+        '/ReportCard/Reports/RptNotNoteOfficielle.aspx' => 'official-statement-mehe',
+        '/ReportCard/Reports/RptNotAchievement.aspx' => 'student-performance',
+        '/ReportCard/Reports/rptNotMoyenneClasseMatiere.aspx' => 'subject-averages-per-class',
+        '/ReportCard/Reports/rptNotNbFailures.aspx' => 'failure-per-subject',
+        '/ReportCard/Reports/RptNotUnderachievers.aspx' => 'underachievers-by-subject',
+        '/ReportCard/Reports/Not_Rpt_MoyenneEvolution.aspx' => 'annual-progression-of-class-average',
+        '/ReportCard/Reports/Not_Rpt_ClassTop5.aspx' => 'top-5-students-per-division',
+        '/ReportCard/Reports/RptClassTop1BySubject.aspx' => 'highest-grade-per-subject',
+        '/ReportCard/Reports/ExportBaccFrancais.aspx' => 'export-bacc-francais',
+        '/ReportCard/Reports/rptMeilleureColonneAnnuelle.aspx' => 'best-annual-columns-transcript',
+        '/ReportCard/Reports/rptNotStatNotePerClasse.aspx' => 'students-transcript',
+        '/ReportCard/Reports/rptNotCalculStatistiqueColonne.aspx' => 'grade-distribution',
+        '/ReportCard/Reports/rptNotStatMoyenneClasse.aspx' => 'class-average-evolution',
+        '/ReportCard/Reports/RptNotCalculStatistique.aspx' => 'statistical-calculation',
+        '/ReportCard/Reports/rptNotStatMatiereEvolution.aspx' => 'results-comparison-table',
+    ] as $path => $report) {
+        Route::get($path, [DarsCompatibilityController::class, 'reportCard'])
+            ->defaults('report', $report)->middleware('permission:reports.view')->name('dars.report-card.'.str_replace(['/', '.aspx'], ['.', ''], trim($path, '/')));
+    }
+
+    Route::get('/Admin/Users.aspx', fn () => redirect()->route('admin.users'))->middleware('permission:admin.manage')->name('dars.admin.users');
+    Route::get('/Admin/admUserEdit.aspx', fn () => redirect()->route('admin.users'))->middleware('permission:admin.manage')->name('dars.admin.user-edit');
+    Route::get('/Admin/AdminUsrSession.aspx', fn () => redirect()->route('admin.audit'))->middleware('permission:admin.manage')->name('dars.admin.session');
+    Route::get('/Admin/ChangePassword.aspx', fn () => redirect()->route('dashboard'))->name('dars.admin.password');
+    Route::get('/Online/Admin/admUsers.aspx', fn () => redirect()->route('admin.users'))->middleware('permission:admin.manage')->name('dars.admin.online-users');
+    Route::get('/Online/Admin/admUserAcces.aspx', fn () => redirect()->route('admin.roles'))->middleware('permission:admin.manage')->name('dars.admin.online-access');
+    Route::get('/Online/Admin/NotClasseMatiere.aspx', fn () => redirect()->route('school-academic.index'))->middleware('permission:academic_year.manage')->name('dars.admin.online-class-subjects');
+    Route::get('/StudentProfile/References/SchoolYear.aspx', fn () => redirect()->route('academic.index'))->middleware('permission:academic.manage')->name('dars.admin.school-year');
+    foreach ([
+        '/Admin/UsrMenu.aspx' => 'menu',
+        '/Admin/UsrManagePages.aspx' => 'pages',
+        '/Admin/HeaderParameter.aspx' => 'report-header',
+        '/Admin/UserConfig.aspx' => 'configuration',
+        '/Admin/UsrDynamicFields.aspx' => 'dynamic-fields',
+        '/Admin/Dictionary.aspx' => 'dictionary',
+        '/StudentProfile/References/FamilyType.aspx' => 'family-type',
+        '/StudentProfile/References/ParentRemarkType.aspx' => 'family-remark-type',
+        '/Admin/Usrcollege.aspx' => 'colleges',
+        '/Admin/ImportData.aspx' => 'import',
+        '/Admin/UsrFileCategory.aspx' => 'file-category',
+        '/Admin/Ent_MailType.aspx' => 'mail-type',
+    ] as $path => $page) {
+        Route::get($path, [DarsCompatibilityController::class, 'administrationPage'])
+            ->defaults('page', $page)->middleware('permission:admin.manage')->name('dars.admin.'.str_replace(['/', '.aspx'], ['.', ''], trim($path, '/')));
+    }
+
+    Route::get('/Online/Admin/admHome.aspx', fn () => redirect()->route('collaboration.index'))->middleware('permission:collaboration.view')->name('dars.collaboration.home');
+    foreach ([
+        '/Online/Front/TeachersList.aspx' => 'teachers',
+        '/Online/Timeline/CourseContent.aspx' => 'course-content',
+        '/Online/Mail/MailBox.aspx' => 'messages',
+        '/Online/mail/Calendar.aspx' => 'calendar',
+        '/Online/Eval/evalPaRecords.aspx' => 'performance',
+        '/Online/Front/SearchStudent.aspx' => 'students',
+        '/Online/PerformanceDashboard/PerformanceDashboard.aspx' => 'performance-dashboard',
+        '/Online/Eval/evalTeacherDashboard.aspx' => 'evaluation-dashboard',
+        '/Online/Eval/evalList.aspx' => 'evaluation-grades',
+        '/Online/Eval/evalTeacher.aspx' => 'grade-book',
+        '/Online/eval/evalRptListEvaluations.aspx' => 'evaluations-list',
+        '/Online/Eval/EvalRptEleveEchoue.aspx' => 'student-failures',
+        '/Online/Eval/evalEleveEvaluationLog.aspx' => 'modification-requests',
+        '/Online/Eval/EvalRptClasseMatieresColonne.aspx' => 'transcript-subject-choice',
+        '/Online/front/evalparclasse.aspx' => 'evaluation-statement',
+        '/Online/Agenda/agendaTeacherPrincipal.aspx' => 'homework',
+        '/Online/Agenda/RptAgenda.aspx' => 'homework-report',
+        '/Online/Agenda/RptAgendaProfCount.aspx' => 'homework-totals',
+        '/Online/Agenda/RptAgendaComparaison.aspx' => 'homework-comparison',
+        '/Online/Competence/CmpEleves.aspx' => 'skills-student',
+        '/Online/Competence/CmpFillCompetencePrincipal.aspx' => 'skills-approve',
+        '/Online/Competence/CmpFillRemarquePrincipal.aspx' => 'remarks-approve',
+        '/Online/Competence/CmpFillRemarks.aspx' => 'item-remarks',
+        '/Online/Front/RptEleveClasseRemarque.aspx' => 'class-remarks',
+        '/Online/Front/RemarquePrincipalParClasse.aspx' => 'principal-appreciations',
+        '/Online/Front/RemarquePrincipalParClasseManipulation.aspx' => 'remarks-entry',
+        '/Online/Front/StudentsAttendance.aspx' => 'attendance-management',
+        '/Online/Admin/courseStandard.aspx' => 'standards',
+        '/Online/Admin/RptReportCardView.aspx' => 'report-card-receipt',
+        '/Online/Admin/AdmEntFileTypeIcon.aspx' => 'icons',
+        '/Online/Admin/admUsrErrorLog.aspx' => 'system-error-log',
+        '/Online/Mail/TemplateMessage.aspx' => 'bulk-message',
+    ] as $path => $section) {
+        Route::get($path, [DarsCompatibilityController::class, 'collaborationPage'])
+            ->defaults('section', $section)->middleware('permission:collaboration.view')->name('dars.collaboration.'.str_replace(['/', '.aspx'], ['.', ''], trim($path, '/')));
+    }
     Route::middleware('permission:inventory.transfer')->group(function (): void {
         Route::get('/transfers', [BookTransfersController::class, 'index'])->name('transfers.index');
         Route::get('/transfers/create', [BookTransfersController::class, 'create'])->name('transfers.create');
         Route::post('/transfers', [BookTransfersController::class, 'store'])->name('transfers.store');
-        Route::post('/transfers/{transfer}/accept',[BookTransfersController::class, 'accept'])->name('transfers.accept');
-        Route::post('/transfers/{transfer}/reject',[BookTransfersController::class, 'reject'])->name('transfers.reject');
-        Route::post('/transfers/{transfer}/reverse',[BookTransfersController::class, 'reverse'])->name('transfers.reverse');
-        Route::get('/transfers/{transfer}/invoice',[BookTransfersController::class, 'printInvoice'])->name('transfers.invoice');
-        Route::get('/transfers/{transfer}',[BookTransfersController::class, 'show'])->name('transfers.show');
+        Route::post('/transfers/{transfer}/accept', [BookTransfersController::class, 'accept'])->name('transfers.accept');
+        Route::post('/transfers/{transfer}/reject', [BookTransfersController::class, 'reject'])->name('transfers.reject');
+        Route::post('/transfers/{transfer}/reverse', [BookTransfersController::class, 'reverse'])->name('transfers.reverse');
+        Route::get('/transfers/{transfer}/invoice', [BookTransfersController::class, 'printInvoice'])->name('transfers.invoice');
+        Route::get('/transfers/{transfer}', [BookTransfersController::class, 'show'])->name('transfers.show');
     });
 });

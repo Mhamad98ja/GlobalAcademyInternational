@@ -1,6 +1,7 @@
 @extends('layouts.app', ['title' => 'Academic structure'])
 
 @section('content')
+@if(request('module') === 'students')<div class="mb-4 text-sm text-slate-500"><a class="link" href="{{ route('workspaces.show', ['workspace' => 'students']) }}">Student dossier</a> / <a class="link" href="{{ route('students.tools', ['section' => 'references']) }}">References</a></div>@endif
 <div class="page-header">
     <div>
         <h1 class="page-title">Academic structure</h1>
@@ -10,7 +11,7 @@
 
 <div class="grid gap-6 xl:grid-cols-3">
     <section class="panel">
-        <div class="panel-header"><h2 class="panel-title">Academic years</h2></div>
+        <div class="panel-header"><h2 id="academic-years" class="panel-title scroll-mt-20">Academic years</h2></div>
         <form method="POST" action="{{ route('academic.years.store') }}" class="space-y-3 border-b border-slate-200 p-5" data-submit-lock>
             @csrf
             <input name="name" required placeholder="e.g. 2027-2028">
@@ -46,7 +47,7 @@
     </section>
 
     <section class="panel">
-        <div class="panel-header"><h2 class="panel-title">Levels and grades</h2></div>
+        <div class="panel-header"><h2 id="levels-grades" class="panel-title scroll-mt-20">Levels and grades</h2></div>
         <form method="POST" action="{{ route('academic.levels.store') }}" class="flex gap-2 border-b border-slate-200 p-5" data-submit-lock>
             @csrf
             <input name="name" required placeholder="New level">
@@ -101,7 +102,7 @@
     </section>
 
     <section class="panel">
-        <div class="panel-header"><h2 class="panel-title">Sections</h2></div>
+        <div class="panel-header"><h2 id="sections" class="panel-title scroll-mt-20">Sections</h2></div>
         <form method="POST" action="{{ route('academic.sections.store') }}" class="space-y-3 border-b border-slate-200 p-5" data-submit-lock>
             @csrf
             <select name="grade_id" required>

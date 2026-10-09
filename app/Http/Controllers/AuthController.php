@@ -51,6 +51,10 @@ class AuthController extends Controller
         $request->session()->regenerate();
         $user->forceFill(['last_login_at' => now(), 'last_login_ip' => $request->ip()])->save();
 
+        if ($user->student_id) {
+            return redirect()->intended(route('student-portal.index'));
+        }
+
         return redirect()->intended(route('dashboard'));
     }
 

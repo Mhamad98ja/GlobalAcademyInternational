@@ -1,0 +1,1 @@
+@include('collaboration.dars-pages')

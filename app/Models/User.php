@@ -7,6 +7,9 @@ use App\Models\Concerns\HasPublicId;
 use App\Services\BranchContext;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -14,7 +17,7 @@ use Illuminate\Notifications\Notifiable;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes, HasPublicId;
+    use HasFactory, HasPublicId, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -25,6 +28,8 @@ class User extends Authenticatable
         'name',
         'email',
         'whatsapp_number',
+        'teacher_id',
+        'student_id',
         'password',
         'is_active',
         'is_controller_administrator',
@@ -58,24 +63,44 @@ class User extends Authenticatable
         ];
     }
 
-    public function roles(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class);
     }
 
-    public function branches(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function branches(): BelongsToMany
     {
         return $this->belongsToMany(Branch::class)->withPivot('is_default', 'is_branch_administrator')->withTimestamps();
     }
 
-    public function custodyStocks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function custodyStocks(): HasMany
     {
         return $this->hasMany(UserBookStock::class);
     }
 
-    public function passwordResetOtps(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function passwordResetOtps(): HasMany
     {
         return $this->hasMany(PasswordResetOtp::class);
+    }
+
+    public function sentSchoolMessages(): HasMany
+    {
+        return $this->hasMany(SchoolMessage::class, 'sender_id');
+    }
+
+    public function receivedSchoolMessages(): HasMany
+    {
+        return $this->hasMany(SchoolMessageRecipient::class, 'recipient_id');
+    }
+
+    public function teacher(): BelongsTo
+    {
+        return $this->belongsTo(Teacher::class);
+    }
+
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(Student::class);
     }
 
     public function hasPermission(string $permission): bool
