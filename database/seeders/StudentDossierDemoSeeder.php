@@ -60,7 +60,7 @@ class StudentDossierDemoSeeder extends Seeder
         ], ['required_periods_per_week' => 4, 'weekly_period_limit' => 18, 'is_active' => true, 'notes' => 'Demo class assignment']);
         $assessment = Assessment::firstOrCreate([
             'branch_id' => $branchId, 'academic_year_id' => $year->id, 'name' => 'Demo English Reading Check',
-        ], ['academic_term_id' => $term->id, 'subject_id' => $subject->id, 'grade_id' => $grade->id, 'section_id' => $sectionA->id, 'type' => 'quiz', 'maximum_score' => 20, 'assessment_date' => today()->subDays(7), 'status' => 'open']);
+        ], ['academic_term_id' => $term->id, 'teacher_assignment_id' => $assignment->id, 'subject_id' => $subject->id, 'grade_id' => $grade->id, 'section_id' => $sectionA->id, 'type' => 'quiz', 'maximum_score' => 20, 'assessment_date' => today()->subDays(7), 'status' => 'open']);
         $category = ActionCategory::firstOrCreate(['branch_id' => $branchId, 'name' => 'Demo wellbeing'], ['kind' => 'wellbeing', 'is_active' => true]);
         $actionType = ActionType::firstOrCreate(['action_category_id' => $category->id, 'name' => 'Demo follow-up'], ['branch_id' => $branchId, 'is_active' => true]);
 

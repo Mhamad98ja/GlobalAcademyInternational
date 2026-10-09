@@ -6,13 +6,13 @@
     <div>
         <div class="text-sm text-slate-500"><a class="link" href="{{ route('academic.index') }}">Academic structure</a> / Operations</div>
         <h1 class="page-title mt-1">Academic operations</h1>
-        <p class="page-subtitle">Configure subjects, flexible terms, assessments, and teacher course assignments.</p>
+        <p class="page-subtitle">Configure subjects, academic terms, assessments, and the subjects each teacher teaches for each class.</p>
     </div>
 </div>
 
 <div class="grid gap-6 2xl:grid-cols-3">
     <section class="panel">
-        <div class="panel-header"><h2 id="subjects" class="panel-title scroll-mt-20">Subjects / courses</h2></div>
+        <div class="panel-header"><h2 id="subjects" class="panel-title scroll-mt-20">Subjects</h2></div>
         <form method="POST" action="{{ route('school-academic.subjects.store') }}" class="space-y-3 border-b border-slate-200 p-5">
             @csrf
             <div class="grid gap-3 sm:grid-cols-2">
@@ -78,7 +78,7 @@
     </section>
 
     <section class="panel">
-        <div class="panel-header"><h2 id="assignments" class="panel-title scroll-mt-20">Teacher course assignments</h2></div>
+        <div class="panel-header"><h2 id="assignments" class="panel-title scroll-mt-20">Teacher subject assignments</h2></div>
         <form method="POST" action="{{ route('school-academic.assignments.store') }}" class="space-y-3 border-b border-slate-200 p-5">
             @csrf
             <select name="academic_year_id" required>
@@ -120,11 +120,11 @@
             <div class="grid gap-3 sm:grid-cols-2"><input type="number" min="0" max="50" name="required_periods_per_week" value="0" placeholder="Required periods / week"><input type="number" min="1" max="60" name="weekly_period_limit" placeholder="Teacher weekly limit"></div>
             <textarea name="notes" rows="2" placeholder="Notes (optional)"></textarea>
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" value="1" checked> Active</label>
-            <button class="btn btn-primary">Assign course</button>
+            <button class="btn btn-primary">Assign subject to teacher</button>
         </form>
         <div class="table-wrap">
             <table class="data-table">
-                <thead><tr><th>Teacher / course</th><th>Class</th><th>Weekly plan</th></tr></thead>
+                <thead><tr><th>Teacher / subject</th><th>Class</th><th>Weekly plan</th></tr></thead>
                 <tbody>
                     @forelse ($assignments as $assignment)
                         <tr>
@@ -142,7 +142,7 @@
 </div>
 
 <section class="panel mt-6">
-    <div class="panel-header"><div><h2 id="assessments" class="panel-title scroll-mt-20">Assessments</h2><p class="text-sm text-slate-500">Open an assessment when teachers may enter grades; close it to stop changes.</p></div></div>
+    <div class="panel-header"><div><h2 id="assessments" class="panel-title scroll-mt-20">Assessments</h2><p class="text-sm text-slate-500">Every assessment belongs to the subject, teacher, and class where it will be delivered.</p></div></div>
     <form method="POST" action="{{ route('school-academic.assessments.store') }}" class="grid gap-3 border-b border-slate-200 p-5 md:grid-cols-2 xl:grid-cols-4">
         @csrf
         <select name="academic_year_id" required>
@@ -157,10 +157,10 @@
                 <option value="{{ $term->id }}">{{ $term->academicYear?->name }} &middot; {{ $term->name }}</option>
             @endforeach
         </select>
-        <select name="subject_id">
-            <option value="">No subject restriction</option>
-            @foreach ($subjects->where('is_active', true) as $subject)
-                <option value="{{ $subject->id }}">{{ $subject->name }}</option>
+        <select name="teacher_assignment_id" required>
+            <option value="">Teacher subject / class assignment</option>
+            @foreach ($assignments->where('is_active', true) as $assignment)
+                <option value="{{ $assignment->id }}">{{ $assignment->teacher?->full_name }} · {{ $assignment->subject?->name }} · {{ $assignment->grade?->name }}{{ $assignment->section ? ' '.$assignment->section->name : '' }}</option>
             @endforeach
         </select>
         <input name="name" required placeholder="Midterm / Monthly Test 1">
@@ -169,20 +169,6 @@
         <input type="number" step="0.001" min="0.001" max="10" name="weight" value="1" required placeholder="Weight / coefficient">
         <input type="date" name="assessment_date">
         <select name="status"><option value="draft">Draft</option><option value="open">Open</option><option value="closed">Closed</option></select>
-        <select name="grade_id" data-grade-select data-section-target="#assessment-section">
-            <option value="">All grades</option>
-            @foreach ($grades as $grade)
-                <option value="{{ $grade->id }}">{{ $grade->name }}</option>
-            @endforeach
-        </select>
-        <select id="assessment-section" name="section_id" disabled>
-            <option value="">All sections</option>
-            @foreach ($grades as $grade)
-                @foreach ($grade->sections as $section)
-                    <option value="{{ $section->id }}" data-grade-id="{{ $grade->id }}">{{ $grade->name }} &middot; {{ $section->name }}</option>
-                @endforeach
-            @endforeach
-        </select>
         <textarea name="notes" class="md:col-span-2" rows="2" placeholder="Notes (optional)"></textarea>
         <div class="flex items-end"><button class="btn btn-primary w-full">Create assessment</button></div>
     </form>
@@ -193,7 +179,7 @@
                 @forelse ($assessments as $assessment)
                     <tr>
                         <td><div>{{ $assessment->name }}</div><div class="text-xs text-slate-500">{{ str($assessment->type)->headline() }} @if ($assessment->term) &middot; {{ $assessment->term->name }} @endif</div></td>
-                        <td>{{ $assessment->academicYear?->name }} &middot; {{ $assessment->subject?->name ?? 'All subjects' }} @if ($assessment->grade)<div class="text-xs text-slate-500">{{ $assessment->grade->name }} @if ($assessment->section) &middot; {{ $assessment->section->name }} @endif</div>@endif</td>
+                        <td>{{ $assessment->assignment?->teacher?->full_name ?? 'General' }} &middot; {{ $assessment->assignment?->subject?->name ?? $assessment->subject?->name ?? 'All subjects' }} @if ($assessment->assignment?->grade ?? $assessment->grade)<div class="text-xs text-slate-500">{{ ($assessment->assignment?->grade ?? $assessment->grade)?->name }} @if ($assessment->assignment?->section ?? $assessment->section) &middot; {{ ($assessment->assignment?->section ?? $assessment->section)?->name }} @endif</div>@endif</td>
                         <td>{{ $assessment->assessment_date?->format('d M Y') ?? 'Unscheduled' }}<div class="text-xs text-slate-500">{{ $assessment->maximum_score }} maximum · weight {{ rtrim(rtrim(number_format((float) $assessment->weight, 3), '0'), '.') }}×</div></td>
                         <td><span class="badge {{ $assessment->status === 'open' ? 'badge-green' : 'badge-amber' }}">{{ str($assessment->status)->headline() }}</span></td>
                     </tr>
@@ -271,10 +257,10 @@
                                 <option value="{{ $term->id }}" @selected($assessment->academic_term_id === $term->id)>{{ $term->name }}</option>
                             @endforeach
                         </select>
-                        <select name="subject_id">
-                            <option value="">No subject</option>
-                            @foreach ($subjects as $subject)
-                                <option value="{{ $subject->id }}" @selected($assessment->subject_id === $subject->id)>{{ $subject->name }}</option>
+                        <select name="teacher_assignment_id">
+                            <option value="">Legacy/general assessment — choose a subject assignment to link it</option>
+                            @foreach ($assignments as $assignment)
+                                <option value="{{ $assignment->id }}" @selected($assessment->teacher_assignment_id === $assignment->id)>{{ $assignment->teacher?->full_name }} · {{ $assignment->subject?->name }} · {{ $assignment->grade?->name }}{{ $assignment->section ? ' '.$assignment->section->name : '' }}</option>
                             @endforeach
                         </select>
                         <input name="name" value="{{ $assessment->name }}" required>
@@ -283,20 +269,6 @@
                         <select name="status">
                             @foreach (['draft', 'open', 'closed'] as $status)
                                 <option value="{{ $status }}" @selected($assessment->status === $status)>{{ str($status)->headline() }}</option>
-                            @endforeach
-                        </select>
-                        <select name="grade_id">
-                            <option value="">All grades</option>
-                            @foreach ($grades as $grade)
-                                <option value="{{ $grade->id }}" @selected($assessment->grade_id === $grade->id)>{{ $grade->name }}</option>
-                            @endforeach
-                        </select>
-                        <select name="section_id">
-                            <option value="">All sections</option>
-                            @foreach ($grades as $grade)
-                                @foreach ($grade->sections as $section)
-                                    <option value="{{ $section->id }}" @selected($assessment->section_id === $section->id)>{{ $grade->name }} &middot; {{ $section->name }}</option>
-                                @endforeach
                             @endforeach
                         </select>
                         <textarea name="notes" rows="2">{{ $assessment->notes }}</textarea>

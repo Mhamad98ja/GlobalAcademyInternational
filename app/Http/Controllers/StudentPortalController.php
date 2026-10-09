@@ -52,15 +52,27 @@ class StudentPortalController extends Controller
             ->get();
 
         $assessments = Assessment::query()
-            ->with('term', 'subject', 'grade', 'section', 'grades')
+            ->with('term', 'assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section', 'subject', 'grade', 'section', 'grades')
             ->where('status', 'open')
             ->when($registrations->isEmpty(), fn (Builder $query) => $query->whereRaw('1 = 0'))
             ->where(function (Builder $query) use ($registrations): void {
                 foreach ($registrations as $registration) {
                     $query->orWhere(function (Builder $scope) use ($registration): void {
                         $scope->where('academic_year_id', $registration->academic_year_id)
-                            ->where('grade_id', $registration->grade_id)
-                            ->where(fn (Builder $section) => $section->whereNull('section_id')->orWhere('section_id', $registration->section_id));
+                            ->where(function (Builder $assignmentScope) use ($registration): void {
+                                $assignmentScope
+                                    ->whereHas('assignment', function (Builder $assignments) use ($registration): void {
+                                        $assignments->where('is_active', true)
+                                            ->where('academic_year_id', $registration->academic_year_id)
+                                            ->where('grade_id', $registration->grade_id)
+                                            ->where(fn (Builder $section) => $section->whereNull('section_id')->orWhere('section_id', $registration->section_id));
+                                    })
+                                    ->orWhere(function (Builder $legacy) use ($registration): void {
+                                        $legacy->whereNull('teacher_assignment_id')
+                                            ->where('grade_id', $registration->grade_id)
+                                            ->where(fn (Builder $section) => $section->whereNull('section_id')->orWhere('section_id', $registration->section_id));
+                                    });
+                            });
                     });
                 }
             })
@@ -69,7 +81,7 @@ class StudentPortalController extends Controller
             ->get();
 
         $publishedGrades = $student->gradeEntries()
-            ->with('assessment.subject', 'assessment.term', 'assignment.teacher', 'assignment.grade', 'assignment.section')
+            ->with('assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.assignment.grade', 'assessment.assignment.section', 'assessment.subject', 'assessment.term', 'assignment.teacher', 'assignment.grade', 'assignment.section')
             ->where('status', 'published')
             ->latest('published_at')
             ->take(50)

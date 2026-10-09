@@ -135,7 +135,7 @@ class SchoolOperationsTest extends TestCase
 
         $this->actingAs($administrator)->get(route('dashboard'))->assertOk()->assertSee('Student Profile')->assertSee('Report Card')->assertSee('Administration')->assertSee('Online Collaboration');
         $this->actingAs($administrator)->get(route('workspaces.show', 'students'))->assertOk()->assertSee('Number of students and families')->assertSee('Remarks')->assertSee('Registrations by class');
-        $this->actingAs($administrator)->get(route('workspaces.show', 'teachers'))->assertOk()->assertSee('Teacher IN / OUT')->assertSee('Substitution desk')->assertSee('Course assignments');
+        $this->actingAs($administrator)->get(route('workspaces.show', 'teachers'))->assertOk()->assertSee('Teacher IN / OUT')->assertSee('Substitution desk')->assertSee('Teacher subject assignments');
         $this->actingAs($administrator)->get(route('workspaces.show', 'academic'))->assertOk()->assertSee('Users &amp; Access', false)->assertSee('Users Access')->assertSee("Class subject's teachers", false);
         $this->actingAs($administrator)->get(route('workspaces.show', 'operations'))->assertOk()->assertSee('Distribute books')->assertSee('Distribution history')->assertSee('Inventory ledger');
         $this->actingAs($administrator)->get(route('school-academic.index'))->assertOk()->assertSee('Academic operations');

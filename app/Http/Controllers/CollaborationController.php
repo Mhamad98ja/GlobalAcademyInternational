@@ -163,6 +163,9 @@ class CollaborationController extends Controller
             'due_on' => ['nullable', 'date'],
         ]);
         $assignment = $this->authorizedAssignment($request->user(), (int) $data['teacher_assignment_id']);
+        if (! $assignment->is_active) {
+            throw ValidationException::withMessages(['teacher_assignment_id' => 'Select an active subject assignment. Inactive assignments cannot receive new agenda items.']);
+        }
         $content = CourseContent::create($data + [
             'teacher_assignment_id' => $assignment->id,
             'published_at' => $request->boolean('publish_now') ? now() : null,
@@ -173,7 +176,7 @@ class CollaborationController extends Controller
         }
         $audit->log('course_content.created', $content, [], $content->only(['teacher_assignment_id', 'title', 'content_type', 'published_at']));
 
-        return back()->with('success', $content->published_at ? 'Course content published.' : 'Course content saved as a draft.');
+        return back()->with('success', $content->published_at ? 'Subject agenda item published.' : 'Subject agenda item saved as a draft.');
     }
 
     public function updateCourseContent(Request $request, CourseContent $courseContent, AuditService $audit): RedirectResponse
@@ -238,10 +241,10 @@ class CollaborationController extends Controller
             ? $this->authorizedAssignment($request->user(), (int) $data['teacher_assignment_id'])
             : null;
         if ($assignment && ($assignment->academic_year_id !== $registration->academic_year_id || $assignment->grade_id !== $registration->grade_id || ($assignment->section_id && $assignment->section_id !== $registration->section_id))) {
-            throw ValidationException::withMessages(['teacher_assignment_id' => 'The selected course assignment does not apply to this student registration.']);
+            throw ValidationException::withMessages(['teacher_assignment_id' => 'The selected teacher subject assignment does not apply to this student registration.']);
         }
         if (! $assignment && ! $this->canManageAllAssignments($request->user())) {
-            throw ValidationException::withMessages(['teacher_assignment_id' => 'Choose one of your course assignments for this evaluation.']);
+            throw ValidationException::withMessages(['teacher_assignment_id' => 'Choose one of your subject assignments for this evaluation.']);
         }
 
         $evaluation = StudentPerformanceEvaluation::create($data + [

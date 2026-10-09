@@ -26,7 +26,7 @@ class ExamAbsencesController extends Controller
             'is_excused' => ['nullable', 'boolean'],
             'status' => ['nullable', Rule::in(['recorded', 'makeup_scheduled', 'completed', 'waived'])],
         ]);
-        $absences = ExamAbsence::query()->with('student', 'assessment.subject')
+        $absences = ExamAbsence::query()->with('student', 'assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.subject')
             ->when($filters['assessment_id'] ?? null, fn ($query, $id) => $query->where('assessment_id', $id))
             ->when($filters['student_id'] ?? null, fn ($query, $id) => $query->where('student_id', $id))
             ->when($filters['academic_year_id'] ?? null, fn ($query, $id) => $query->where('academic_year_id', $id))
@@ -39,7 +39,7 @@ class ExamAbsencesController extends Controller
             'filters' => $filters,
             'students' => Student::query()->orderBy('first_name')->orderBy('last_name')->get(),
             'registrations' => StudentRegistration::query()->with('student', 'academicYear', 'grade', 'section')->where('status', 'active')->latest('registered_on')->get(),
-            'assessments' => Assessment::query()->with('academicYear', 'subject', 'grade', 'section')->orderByDesc('assessment_date')->get(),
+            'assessments' => Assessment::query()->with('academicYear', 'assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section', 'subject', 'grade', 'section')->orderByDesc('assessment_date')->get(),
         ]);
     }
 

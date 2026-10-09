@@ -29,7 +29,7 @@ class SchoolAcademicController extends Controller
             'teachers' => Teacher::query()->where('is_active', true)->orderBy('first_name')->orderBy('last_name')->get(),
             'subjects' => Subject::query()->orderBy('name')->get(),
             'terms' => AcademicTerm::query()->with('academicYear')->orderByDesc('starts_on')->orderBy('sort_order')->get(),
-            'assessments' => Assessment::query()->with('academicYear', 'term', 'subject', 'grade', 'section')->latest('assessment_date')->get(),
+            'assessments' => Assessment::query()->with('academicYear', 'term', 'assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section', 'subject', 'grade', 'section')->latest('assessment_date')->get(),
             'assignments' => TeacherAssignment::query()->with('academicYear', 'teacher', 'subject', 'grade', 'section')->latest()->get(),
         ]);
     }
@@ -81,14 +81,14 @@ class SchoolAcademicController extends Controller
     public function storeAssessment(Request $request, AuditService $audit): RedirectResponse
     {
         $assessment = Assessment::create($this->assessmentData($request) + ['created_by' => $request->user()->id]);
-        $audit->log('assessment.created', $assessment, [], $assessment->only(['academic_year_id', 'academic_term_id', 'name', 'status']));
+        $audit->log('assessment.created', $assessment, [], $assessment->only(['academic_year_id', 'academic_term_id', 'teacher_assignment_id', 'name', 'status']));
 
         return back()->with('success', 'Assessment created.');
     }
 
     public function updateAssessment(Request $request, Assessment $assessment, AuditService $audit): RedirectResponse
     {
-        $old = $assessment->only(['academic_year_id', 'academic_term_id', 'subject_id', 'grade_id', 'section_id', 'name', 'type', 'maximum_score', 'assessment_date', 'status']);
+        $old = $assessment->only(['academic_year_id', 'academic_term_id', 'teacher_assignment_id', 'subject_id', 'grade_id', 'section_id', 'name', 'type', 'maximum_score', 'assessment_date', 'status']);
         $assessment->update($this->assessmentData($request));
         $audit->log('assessment.updated', $assessment, $old, $assessment->only(array_keys($old)));
 
@@ -100,7 +100,7 @@ class SchoolAcademicController extends Controller
         $assignment = TeacherAssignment::create($this->assignmentData($request));
         $audit->log('teacher_assignment.created', $assignment, [], $assignment->only(['teacher_id', 'subject_id', 'grade_id', 'section_id']));
 
-        return back()->with('success', 'Teacher course assignment created.');
+        return back()->with('success', 'Teacher subject assignment created.');
     }
 
     public function updateAssignment(Request $request, TeacherAssignment $assignment, AuditService $audit): RedirectResponse
@@ -109,7 +109,7 @@ class SchoolAcademicController extends Controller
         $assignment->update($this->assignmentData($request, $assignment));
         $audit->log('teacher_assignment.updated', $assignment, $old, $assignment->only(array_keys($old)));
 
-        return back()->with('success', 'Teacher course assignment updated.');
+        return back()->with('success', 'Teacher subject assignment updated.');
     }
 
     /** @return array<string, mixed> */
@@ -142,6 +142,7 @@ class SchoolAcademicController extends Controller
         $data = $request->validate([
             'academic_year_id' => ['required', 'integer', 'exists:academic_years,id'],
             'academic_term_id' => ['nullable', 'integer', 'exists:academic_terms,id'],
+            'teacher_assignment_id' => ['nullable', 'integer', 'exists:teacher_assignments,id'],
             'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
             'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
@@ -153,6 +154,14 @@ class SchoolAcademicController extends Controller
             'status' => ['required', Rule::in(['draft', 'open', 'closed'])],
             'notes' => ['nullable', 'string', 'max:3000'],
         ]);
+
+        if (! empty($data['teacher_assignment_id'])) {
+            $assignment = TeacherAssignment::query()->findOrFail($data['teacher_assignment_id']);
+            $data['academic_year_id'] = $assignment->academic_year_id;
+            $data['subject_id'] = $assignment->subject_id;
+            $data['grade_id'] = $assignment->grade_id;
+            $data['section_id'] = $assignment->section_id;
+        }
         if ($data['academic_term_id'] && ! AcademicTerm::query()->whereKey($data['academic_term_id'])->where('academic_year_id', $data['academic_year_id'])->exists()) {
             throw ValidationException::withMessages(['academic_term_id' => 'The selected term does not belong to this academic year.']);
         }
@@ -176,6 +185,9 @@ class SchoolAcademicController extends Controller
             'is_active' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:3000'],
         ]);
+        if (! Subject::query()->whereKey($data['subject_id'])->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages(['subject_id' => 'Choose an active subject for this teacher assignment.']);
+        }
         $this->ensureSectionBelongsToGrade($data['section_id'] ?? null, $data['grade_id']);
         $duplicate = TeacherAssignment::query()
             ->where('academic_year_id', $data['academic_year_id'])

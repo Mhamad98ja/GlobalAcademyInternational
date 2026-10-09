@@ -186,7 +186,7 @@ class WorkspaceController extends Controller
             'Teacher affairs',
             'teacher',
             'teachers',
-            'Run the staff day: teacher profiles, IN / OUT attendance, course assignments, affected lessons, and fair substitute recommendations.',
+            'Run the staff day: teacher profiles, IN / OUT attendance, subject assignments, affected lessons, and fair substitute recommendations.',
             [
                 $this->stat($user, 'people.manage', 'Active teachers', $activeTeachers, 'Available teacher profiles'),
                 $this->stat($user, 'attendance.teacher.manage', 'Attendance today', $checkIns, 'IN / OUT records saved'),
@@ -197,8 +197,8 @@ class WorkspaceController extends Controller
                 $this->task('people.manage', 'Teacher directory', 'Open teacher profiles, assignments, workloads, and history.', 'teachers.index', 'teachers', 'Open teachers'),
                 $this->task('attendance.teacher.manage', 'Teacher IN / OUT', 'Record check-ins, check-outs, absences, and late arrivals.', 'attendance.teachers', 'teachers', 'Record attendance'),
                 $this->task('substitutions.manage', 'Substitution desk', 'Review affected lessons and assign fair substitutes.', 'substitutions.index', 'teachers', 'Manage substitutions'),
-                $this->task('academic_year.manage', 'Course assignments', $assignments ? number_format($assignments).' active assignments connect grades, timetable, and workload.' : 'Set up assignments that connect grades, timetable, and workload.', 'school-academic.index', 'academic', 'Open assignments'),
-                $this->task('collaboration.view', 'Collaboration & class life', 'Publish course content, notices, calendar events, and student performance follow-up.', 'collaboration.index', 'responsible', 'Open collaboration'),
+                $this->task('academic_year.manage', 'Teacher subject assignments', $assignments ? number_format($assignments).' active subject assignments connect teachers, classes, timetable, and workload.' : 'Set up the subjects each teacher teaches in each class.', 'school-academic.index', 'academic', 'Open assignments'),
+                $this->task('collaboration.view', 'Collaboration & class life', 'Publish subject agenda items, notices, calendar events, and student performance follow-up.', 'collaboration.index', 'responsible', 'Open collaboration'),
             ],
             [
                 $this->activity('attendance.teacher.manage', 'Teacher attendance', $checkIns ? number_format($checkIns).' teacher attendance records have been saved today.' : 'No teacher attendance has been saved today.', 'attendance.teachers', 'teachers'),
@@ -229,7 +229,7 @@ class WorkspaceController extends Controller
             [
                 $this->stat($user, 'academic_year.manage', 'Terms', $terms, 'Configured for the active year'),
                 $this->stat($user, 'academic_year.manage', 'Assessments', $assessments, 'Tests, exams, projects, and more'),
-                $this->stat($user, 'academic_year.manage', 'Course assignments', $assignments, 'Active teacher-course links'),
+                $this->stat($user, 'academic_year.manage', 'Subject assignments', $assignments, 'Active teacher-subject links'),
                 $this->stat($user, 'timetable.view', 'Scheduled lessons', $timetableEntries, 'Timetable entries in the active year'),
             ],
             [

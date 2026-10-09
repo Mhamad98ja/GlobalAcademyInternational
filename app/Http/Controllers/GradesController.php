@@ -30,10 +30,17 @@ class GradesController extends Controller
         $assignment = $assignmentId ? $assignments->firstWhere('id', $assignmentId) : null;
         $assessmentId = $request->integer('assessment_id');
         $assessments = $assignment ? Assessment::query()
-            ->where('academic_year_id', $assignment->academic_year_id)
-            ->where('subject_id', $assignment->subject_id)
-            ->where('grade_id', $assignment->grade_id)
-            ->where(fn ($query) => $query->whereNull('section_id')->when($assignment->section_id, fn ($sectionQuery) => $sectionQuery->orWhere('section_id', $assignment->section_id)))
+            ->where(function ($query) use ($assignment): void {
+                $query->where('teacher_assignment_id', $assignment->id)
+                    ->orWhere(function ($legacy) use ($assignment): void {
+                        $legacy->whereNull('teacher_assignment_id')
+                            ->where('academic_year_id', $assignment->academic_year_id)
+                            ->where('subject_id', $assignment->subject_id)
+                            ->where('grade_id', $assignment->grade_id)
+                            ->where(fn ($section) => $section->whereNull('section_id')->when($assignment->section_id, fn ($sectionQuery) => $sectionQuery->orWhere('section_id', $assignment->section_id)));
+                    });
+            })
+            ->with('assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section')
             ->orderByDesc('assessment_date')->get() : collect();
         $assessment = $assessmentId ? $assessments->firstWhere('id', $assessmentId) : $assessments->first();
         $registrations = $assignment && $assessment ? StudentRegistration::query()
@@ -61,12 +68,16 @@ class GradesController extends Controller
         ]);
         $assignment = TeacherAssignment::query()->findOrFail($data['teacher_assignment_id']);
         $this->ensureCanManageAssignment($request->user(), $assignment);
+        if (! $assignment->is_active) {
+            throw ValidationException::withMessages(['teacher_assignment_id' => 'Select an active subject assignment. Inactive assignments cannot receive new assessments.']);
+        }
         if (! empty($data['academic_term_id']) && ! \App\Models\AcademicTerm::query()->whereKey($data['academic_term_id'])->where('academic_year_id', $assignment->academic_year_id)->exists()) {
             throw ValidationException::withMessages(['academic_term_id' => 'The selected term does not belong to this academic year.']);
         }
         $assessment = Assessment::create([
             'academic_year_id' => $assignment->academic_year_id,
             'academic_term_id' => $data['academic_term_id'] ?? null,
+            'teacher_assignment_id' => $assignment->id,
             'subject_id' => $assignment->subject_id,
             'grade_id' => $assignment->grade_id,
             'section_id' => $assignment->section_id,
@@ -98,7 +109,7 @@ class GradesController extends Controller
         $assignment = TeacherAssignment::query()->findOrFail($data['teacher_assignment_id']);
         $this->ensureCanManageAssignment($request->user(), $assignment);
         $this->ensureAssessmentMatchesAssignment($assessment, $assignment);
-        $assessment->update(collect($data)->except('teacher_assignment_id')->put('weight', $data['weight'] ?? 1)->all());
+        $assessment->update(collect($data)->except('teacher_assignment_id')->put('teacher_assignment_id', $assignment->id)->put('weight', $data['weight'] ?? 1)->all());
         $audit->log('assessment.updated_by_teacher', $assessment, [], $assessment->only(['name', 'type', 'maximum_score', 'weight', 'status']));
 
         return back()->with('success', 'Assessment updated.');
@@ -216,12 +227,20 @@ class GradesController extends Controller
 
     private function ensureAssessmentMatchesAssignment(Assessment $assessment, TeacherAssignment $assignment): void
     {
+        if ($assessment->teacher_assignment_id !== null) {
+            if ((int) $assessment->teacher_assignment_id !== (int) $assignment->id) {
+                throw ValidationException::withMessages(['assessment_id' => 'This assessment belongs to a different teacher subject assignment.']);
+            }
+
+            return;
+        }
+
         $matches = $assessment->academic_year_id === $assignment->academic_year_id
             && $assessment->subject_id === $assignment->subject_id
             && $assessment->grade_id === $assignment->grade_id
             && ($assessment->section_id === null || $assignment->section_id === null || $assessment->section_id === $assignment->section_id);
         if (! $matches) {
-            throw ValidationException::withMessages(['assessment_id' => 'This assessment does not match the selected teacher course assignment.']);
+            throw ValidationException::withMessages(['assessment_id' => 'This assessment belongs to a different teacher subject assignment.']);
         }
     }
 

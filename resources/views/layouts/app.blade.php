@@ -104,7 +104,7 @@
             'home' => ['route' => 'collaboration.index', 'label' => 'Home', 'icon' => 'dashboard', 'permission' => 'collaboration.view'],
             'items' => [
                 ['route' => 'teachers.index', 'label' => 'Teachers List', 'icon' => 'teachers', 'permission' => 'people.manage'],
-                ['route' => 'collaboration.index', 'params' => ['section' => 'course-content'], 'label' => 'Course Content', 'icon' => 'academic', 'permission' => 'collaboration.view'],
+                ['route' => 'collaboration.index', 'params' => ['section' => 'course-content'], 'label' => 'Subject Agenda', 'icon' => 'academic', 'permission' => 'collaboration.view'],
                 ['route' => 'messages.index', 'label' => 'Messages', 'icon' => 'responsible', 'permission' => 'messages.view'],
                 ['route' => 'collaboration.index', 'params' => ['section' => 'calendar'], 'label' => 'Calendar', 'icon' => 'academic', 'permission' => 'collaboration.view'],
                 ['route' => 'collaboration.index', 'params' => ['section' => 'performance'], 'label' => 'Performance Appraisals', 'icon' => 'reports', 'permission' => 'performance.view'],
@@ -223,7 +223,7 @@
     unset($adminGroup);
     $collaborationMenu = [
         'Teachers List' => ['page' => 'teachers', 'label' => 'Liste des Enseignants'],
-        'Course Content' => ['page' => 'course-content', 'label' => 'Contenu du Cours'],
+        'Course Content' => ['page' => 'course-content', 'label' => 'Subject Agenda'],
         'Messages' => ['page' => 'messages', 'label' => 'Messages'],
         'Calendar' => ['page' => 'calendar', 'label' => 'Calendrier'],
         'Performance Appraisals' => ['page' => 'performance', 'label' => 'Évaluations de performance'],
@@ -320,7 +320,7 @@
     }
     unset($group);
     $moduleMenus['administration']['home']['label'] = 'Users and Roles';
-    $collaborationLabels = ['teachers' => 'Teachers List', 'course-content' => 'Course Content', 'messages' => 'Messages', 'calendar' => 'Calendar', 'performance' => 'Performance Appraisals', 'students' => 'Students', 'performance-dashboard' => 'Performance Dashboard', 'evaluation-dashboard' => 'Dashboard', 'evaluation-grades' => 'Evaluation Grades', 'grade-book' => 'Grade Book', 'evaluations-list' => 'Evaluations List', 'student-failures' => 'Student Failures', 'modification-requests' => 'Modification Requests', 'transcript-subject-choice' => 'Transcript by Subject Choice', 'evaluation-statement' => 'Evaluation Statement', 'homework' => 'Homework', 'homework-report' => 'Homework Report', 'homework-totals' => 'Homework Report Totals', 'homework-comparison' => 'Homework Comparison', 'skills-student' => 'Skills per Student', 'skills-approve' => 'Skills to Approve', 'remarks-approve' => 'Remarks to Approve', 'item-remarks' => 'Item Remarks', 'class-remarks' => 'Remarks per Class', 'principal-appreciations' => 'Cycle Principal Appreciations', 'remarks-entry' => 'Remarks Entry', 'attendance-management' => 'Attendance Management', 'standards' => 'Standards', 'report-card-receipt' => 'Report Card Acknowledgment of Receipt', 'icons' => 'Icons', 'system-error-log' => 'System Error Log', 'bulk-message' => 'Bulk Message'];
+    $collaborationLabels = ['teachers' => 'Teachers List', 'course-content' => 'Subject Agenda', 'messages' => 'Messages', 'calendar' => 'Calendar', 'performance' => 'Performance Appraisals', 'students' => 'Students', 'performance-dashboard' => 'Performance Dashboard', 'evaluation-dashboard' => 'Dashboard', 'evaluation-grades' => 'Evaluation Grades', 'grade-book' => 'Grade Book', 'evaluations-list' => 'Evaluations List', 'student-failures' => 'Student Failures', 'modification-requests' => 'Modification Requests', 'transcript-subject-choice' => 'Transcript by Subject Choice', 'evaluation-statement' => 'Evaluation Statement', 'homework' => 'Agenda Overview', 'homework-report' => 'Agenda Report', 'homework-totals' => 'Agenda Totals', 'homework-comparison' => 'Agenda Comparison', 'skills-student' => 'Skills per Student', 'skills-approve' => 'Skills to Approve', 'remarks-approve' => 'Remarks to Approve', 'item-remarks' => 'Item Remarks', 'class-remarks' => 'Remarks per Class', 'principal-appreciations' => 'Cycle Principal Appreciations', 'remarks-entry' => 'Remarks Entry', 'attendance-management' => 'Attendance Management', 'standards' => 'Standards', 'report-card-receipt' => 'Report Card Acknowledgment of Receipt', 'icons' => 'Icons', 'system-error-log' => 'System Error Log', 'bulk-message' => 'Bulk Message'];
     foreach ($moduleMenus['collaboration']['items'] as &$item) if (isset($item['collabPage'], $collaborationLabels[$item['collabPage']])) $item['label'] = $collaborationLabels[$item['collabPage']];
     unset($item);
     foreach ($moduleMenus['collaboration']['groups'] as &$group) {

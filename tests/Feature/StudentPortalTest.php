@@ -71,7 +71,7 @@ class StudentPortalTest extends TestCase
         $this->actingAs($user)->get(route('student-portal.index'))->assertForbidden();
     }
 
-    public function test_teacher_can_create_course_assessment_for_their_assigned_class(): void
+    public function test_teacher_can_create_subject_assessment_for_their_assigned_class(): void
     {
         $data = $this->portalData();
         $teacherRole = Role::create(['name' => 'teacher-portal', 'label' => 'Teacher']);
@@ -91,6 +91,6 @@ class StudentPortalTest extends TestCase
             'assessment_date' => '2031-10-20',
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('assessments', ['name' => 'October monthly test', 'maximum_score' => 20, 'weight' => '0.500', 'grade_id' => $data['grade']->id, 'section_id' => $data['section']->id]);
+        $this->assertDatabaseHas('assessments', ['name' => 'October monthly test', 'teacher_assignment_id' => $data['assignment']->id, 'maximum_score' => 20, 'weight' => '0.500', 'subject_id' => $data['subject']->id, 'grade_id' => $data['grade']->id, 'section_id' => $data['section']->id]);
     }
 }

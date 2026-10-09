@@ -32,7 +32,7 @@
         <div>
             <label class="form-label">Linked teacher profile</label>
             <select name="teacher_id"><option value="">Not a teacher account</option>@foreach($teachers as $teacher)<option value="{{ $teacher->id }}" @selected(old('teacher_id', $managedUser->teacher_id) == $teacher->id)>{{ $teacher->employee_number ? $teacher->employee_number.' · ' : '' }}{{ $teacher->full_name }}</option>@endforeach</select>
-            <p class="mt-1 text-xs text-slate-500">Teachers need this link to enter marks only for their assigned courses.</p>
+            <p class="mt-1 text-xs text-slate-500">Teachers need this link to enter marks only for the subjects they teach.</p>
         </div>
         <div>
             <label class="form-label">Linked student profile</label>

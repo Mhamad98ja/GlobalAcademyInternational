@@ -210,7 +210,7 @@ class SchoolReportsController extends Controller
     /** @return array{0:list<string>,1:Collection<int,array<int,string|int|float|null>>} */
     private function examAbsences(array $filters): array
     {
-        $records = ExamAbsence::query()->with('student', 'assessment.subject')
+        $records = ExamAbsence::query()->with('student', 'assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.subject')
             ->when($filters['academic_term_id'] ?? null, fn ($query, $id) => $query->where('academic_term_id', $id))
             ->when($filters['grade_id'] ?? null, fn ($query, $id) => $query->where('grade_id', $id))
             ->when($filters['section_id'] ?? null, fn ($query, $id) => $query->where('section_id', $id))
@@ -269,7 +269,7 @@ class SchoolReportsController extends Controller
     /** @return array{0:list<string>,1:Collection<int,array<int,string|int|float|null>>} */
     private function grades(array $filters): array
     {
-        $records = GradeEntry::query()->with('student', 'assessment.subject', 'teacher')
+        $records = GradeEntry::query()->with('student', 'assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.subject', 'teacher')
             ->when($filters['academic_term_id'] ?? null, fn ($query, $id) => $query->whereHas('assessment', fn ($assessment) => $assessment->where('academic_term_id', $id)))
             ->when($filters['grade_id'] ?? null, fn ($query, $id) => $query->whereHas('registration', fn ($registration) => $registration->where('grade_id', $id)))
             ->when($filters['section_id'] ?? null, fn ($query, $id) => $query->whereHas('registration', fn ($registration) => $registration->where('section_id', $id)))

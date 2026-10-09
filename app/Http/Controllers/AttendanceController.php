@@ -104,7 +104,7 @@ class AttendanceController extends Controller
             if (! $assignment->is_active || (int) $assignment->academic_year_id !== (int) $data['academic_year_id']
                 || $registrations->contains(fn ($registration) => (int) $registration->grade_id !== (int) $assignment->grade_id
                     || ($assignment->section_id && (int) $registration->section_id !== (int) $assignment->section_id))) {
-                throw ValidationException::withMessages(['teacher_assignment_id' => 'Choose an active course assignment for the same academic year, grade, and section as every selected student.']);
+                throw ValidationException::withMessages(['teacher_assignment_id' => 'Choose an active teacher subject assignment for the same academic year, grade, and section as every selected student.']);
             }
         }
         $period = (int) ($data['period_number'] ?? 0);

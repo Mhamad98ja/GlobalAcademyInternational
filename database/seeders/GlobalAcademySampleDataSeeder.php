@@ -174,7 +174,7 @@ class GlobalAcademySampleDataSeeder extends Seeder
                 $assessment = Assessment::updateOrCreate([
                     'branch_id' => $branch->id, 'academic_year_id' => $year->id, 'name' => $assignment->subject->name.' '.$label.' · '.$assignment->grade->name.' '.$assignment->section->name,
                 ], [
-                    'academic_term_id' => $termOne->id, 'subject_id' => $assignment->subject_id, 'grade_id' => $assignment->grade_id, 'section_id' => $assignment->section_id,
+                    'academic_term_id' => $termOne->id, 'teacher_assignment_id' => $assignment->id, 'subject_id' => $assignment->subject_id, 'grade_id' => $assignment->grade_id, 'section_id' => $assignment->section_id,
                     'type' => $type, 'maximum_score' => $maximum, 'assessment_date' => today()->subDays(21 - ($offset * 8)), 'status' => 'published', 'notes' => 'Term 1 academic assessment.',
                 ]);
                 $assessments->put($key.'-'.$offset, $assessment);

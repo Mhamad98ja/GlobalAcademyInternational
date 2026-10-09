@@ -12,7 +12,7 @@ class Assessment extends Model
 {
     use BelongsToBranch, HasPublicId;
 
-    protected $fillable = ['branch_id', 'academic_year_id', 'academic_term_id', 'subject_id', 'grade_id', 'section_id', 'name', 'type', 'maximum_score', 'weight', 'assessment_date', 'status', 'notes', 'created_by'];
+    protected $fillable = ['branch_id', 'academic_year_id', 'academic_term_id', 'teacher_assignment_id', 'subject_id', 'grade_id', 'section_id', 'name', 'type', 'maximum_score', 'weight', 'assessment_date', 'status', 'notes', 'created_by'];
 
     protected function casts(): array
     {
@@ -27,6 +27,11 @@ class Assessment extends Model
     public function term()
     {
         return $this->belongsTo(AcademicTerm::class, 'academic_term_id');
+    }
+
+    public function assignment()
+    {
+        return $this->belongsTo(TeacherAssignment::class, 'teacher_assignment_id');
     }
 
     public function subject()

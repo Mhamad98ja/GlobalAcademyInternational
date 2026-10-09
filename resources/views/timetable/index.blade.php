@@ -1,7 +1,7 @@
 @extends('layouts.app', ['title' => 'Timetable'])
 
 @section('content')
-<div class="page-header"><div><h1 class="page-title">Graphical timetable</h1><p class="page-subtitle">Drag an assigned course into an empty class slot. Server-side checks prevent teacher, class, room, and workload conflicts.</p></div><a class="btn btn-secondary" href="{{ route('substitutions.index') }}">Substitutions</a></div>
+<div class="page-header"><div><h1 class="page-title">Graphical timetable</h1><p class="page-subtitle">Drag a teacher subject assignment into an empty class slot. Server-side checks prevent teacher, class, room, and workload conflicts.</p></div><a class="btn btn-secondary" href="{{ route('substitutions.index') }}">Substitutions</a></div>
 
 <section class="panel"><div class="panel-header"><form method="GET" class="grid w-full gap-3 md:grid-cols-4">
     <select name="academic_year_id"><option value="">Academic year</option>
@@ -30,7 +30,7 @@
             @forelse ($assignments as $assignment)
                 <article class="schedule-card" draggable="true" data-schedule-card data-assignment-id="{{ $assignment->id }}"><div class="font-medium">{{ $assignment->subject?->name }}</div><div class="text-xs text-slate-600">{{ $assignment->teacher?->full_name }}</div><div class="mt-1 text-xs text-slate-500">{{ $assignment->required_periods_per_week }} required periods / week</div></article>
             @empty
-                <div class="empty">Create teacher course assignments for this class first.</div>
+                <div class="empty">Create teacher subject assignments for this class first.</div>
             @endforelse
         </div></section>
         <section class="panel"><div class="panel-header"><h2 class="panel-title">Period setup</h2></div><form method="POST" action="{{ route('timetable.periods.store') }}" class="space-y-2 p-4">
