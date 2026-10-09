@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -40,6 +41,14 @@ class CollaborationController extends Controller
         $search = trim((string) $request->query('q', ''));
         $gradeId = $request->integer('grade_id') ?: null;
         $date = $request->date('date');
+        $agendaDate = $request->date('agenda_date') ?? today();
+        $agendaStart = Carbon::parse($agendaDate)->startOfWeek(Carbon::MONDAY);
+        $agendaView = in_array($request->query('view'), ['weekly', 'daily', 'class'], true) ? (string) $request->query('view') : 'weekly';
+        $agendaDays = $agendaView === 'daily'
+            ? collect([Carbon::parse($agendaDate)])
+            : collect(range(0, 4))->map(fn (int $offset) => $agendaStart->copy()->addDays($offset));
+        $agendaFilterStart = $agendaDays->first()->copy()->startOfDay();
+        $agendaFilterEnd = $agendaDays->last()->copy()->endOfDay();
         $calendarFilters = $request->validate([
             'year' => ['nullable', 'integer', 'between:2000,2100'],
             'month' => ['nullable', 'integer', 'between:1,12'],
@@ -78,11 +87,35 @@ class CollaborationController extends Controller
             ->when($search !== '', fn (Builder $query) => $query->where(fn (Builder $contents) => $contents
                 ->whereInsensitiveLike('title', $search)
                 ->orWhereInsensitiveLike('content', $search)))
-            ->when($date, fn (Builder $query) => $query->whereDate('due_on', $date))
+            ->when($date && $section !== 'homework', fn (Builder $query) => $query->whereDate('due_on', $date))
+            ->when($section === 'homework', function (Builder $query) use ($agendaFilterStart, $agendaFilterEnd): void {
+                $query->where(function (Builder $items) use ($agendaFilterStart, $agendaFilterEnd): void {
+                    $items->whereBetween('due_on', [$agendaFilterStart->toDateString(), $agendaFilterEnd->toDateString()])
+                        ->orWhereBetween('available_from', [$agendaFilterStart, $agendaFilterEnd])
+                        ->orWhere(function (Builder $published) use ($agendaFilterStart, $agendaFilterEnd): void {
+                            $published->whereNull('due_on')->whereBetween('published_at', [$agendaFilterStart, $agendaFilterEnd]);
+                        });
+                });
+            })
             ->latest('published_at')
             ->latest('id')
-            ->take(15)
+            ->take($section === 'homework' ? 200 : 15)
             ->get();
+
+        $agendaGrid = [];
+        if ($section === 'homework') {
+            foreach ($assignments as $assignment) {
+                $agendaGrid[$assignment->id] = [];
+                foreach ($contents->where('teacher_assignment_id', $assignment->id) as $content) {
+                    $contentDate = $content->due_on?->toDateString()
+                        ?? $content->available_from?->toDateString()
+                        ?? $content->published_at?->toDateString();
+                    if ($contentDate) {
+                        $agendaGrid[$assignment->id][$contentDate][] = $content;
+                    }
+                }
+            }
+        }
 
         $events = SchoolEvent::query()
             ->with('grade', 'section', 'createdBy')
@@ -133,6 +166,11 @@ class CollaborationController extends Controller
             'selectedGradeId' => $gradeId,
             'selectedDate' => $date?->toDateString(),
             'calendarDate' => $calendarDate,
+            'agendaDate' => $agendaDate,
+            'agendaStart' => $agendaStart,
+            'agendaDays' => $agendaDays,
+            'agendaView' => $agendaView,
+            'agendaGrid' => $agendaGrid,
         ]);
     }
 
@@ -157,26 +195,48 @@ class CollaborationController extends Controller
             'teacher_assignment_id' => ['required', 'integer', 'exists:teacher_assignments,id'],
             'title' => ['required', 'string', 'max:180'],
             'content' => ['nullable', 'string', 'max:10000'],
-            'content_type' => ['required', Rule::in(['lesson', 'homework', 'document', 'link', 'video', 'other'])],
+            'content_type' => ['required', Rule::in(['lesson', 'homework', 'assignment', 'assessment', 'document', 'link', 'video', 'announcement', 'other'])],
             'resource_url' => ['nullable', 'url', 'max:2000'],
             'available_from' => ['nullable', 'date'],
             'due_on' => ['nullable', 'date'],
+            'estimated_minutes' => ['nullable', 'integer', 'between:0,1440'],
+            'disable_response' => ['nullable', 'boolean'],
         ]);
+        $this->ensureAgendaDates($data);
         $assignment = $this->authorizedAssignment($request->user(), (int) $data['teacher_assignment_id']);
         if (! $assignment->is_active) {
             throw ValidationException::withMessages(['teacher_assignment_id' => 'Select an active subject assignment. Inactive assignments cannot receive new agenda items.']);
         }
-        $content = CourseContent::create($data + [
-            'teacher_assignment_id' => $assignment->id,
+        $targets = collect([$assignment]);
+        if ($request->boolean('copy_to_sections')) {
+            $targets = TeacherAssignment::query()
+                ->where('branch_id', $assignment->branch_id)
+                ->where('academic_year_id', $assignment->academic_year_id)
+                ->where('teacher_id', $assignment->teacher_id)
+                ->where('subject_id', $assignment->subject_id)
+                ->where('grade_id', $assignment->grade_id)
+                ->where('is_active', true)
+                ->orderBy('section_id')
+                ->get();
+        }
+        $common = collect($data)->except('teacher_assignment_id')->all() + [
             'published_at' => $request->boolean('publish_now') ? now() : null,
             'created_by' => $request->user()->id,
-        ]);
-        if ($content->published_at) {
-            $this->notifyCourseAudience($assignment, $content->title, 'A new '.$content->content_type.' was published for '.$assignment->subject?->name.'.');
-        }
-        $audit->log('course_content.created', $content, [], $content->only(['teacher_assignment_id', 'title', 'content_type', 'published_at']));
+            'disable_response' => $request->boolean('disable_response', true),
+        ];
+        $contents = DB::transaction(fn () => $targets->map(fn (TeacherAssignment $target) => CourseContent::create($common + ['teacher_assignment_id' => $target->id])));
+        $contents->each(function (CourseContent $content) use ($audit): void {
+            $assignment = $content->assignment;
+            if ($content->published_at) {
+                $this->notifyCourseAudience($assignment, $content->title, 'A new '.$content->content_type.' was published for '.$assignment->subject?->name.'.');
+            }
+            $audit->log('course_content.created', $content, [], $content->only(['teacher_assignment_id', 'title', 'content_type', 'published_at']));
+        });
+        $content = $contents->first();
 
-        return back()->with('success', $content->published_at ? 'Subject agenda item published.' : 'Subject agenda item saved as a draft.');
+        return back()->with('success', $content->published_at
+            ? 'Subject agenda item published'.($contents->count() > 1 ? ' to all selected sections.' : '.')
+            : 'Subject agenda item saved as a draft'.($contents->count() > 1 ? ' for all selected sections.' : '.'));
     }
 
     public function updateCourseContent(Request $request, CourseContent $courseContent, AuditService $audit): RedirectResponse
@@ -185,14 +245,17 @@ class CollaborationController extends Controller
             'teacher_assignment_id' => ['required', 'integer', 'exists:teacher_assignments,id'],
             'title' => ['required', 'string', 'max:180'],
             'content' => ['nullable', 'string', 'max:10000'],
-            'content_type' => ['required', Rule::in(['lesson', 'homework', 'document', 'link', 'video', 'other'])],
+            'content_type' => ['required', Rule::in(['lesson', 'homework', 'assignment', 'assessment', 'document', 'link', 'video', 'announcement', 'other'])],
             'resource_url' => ['nullable', 'url', 'max:2000'],
             'available_from' => ['nullable', 'date'],
             'due_on' => ['nullable', 'date'],
+            'estimated_minutes' => ['nullable', 'integer', 'between:0,1440'],
+            'disable_response' => ['nullable', 'boolean'],
         ]);
+        $this->ensureAgendaDates($data);
         $assignment = $this->authorizedAssignment($request->user(), (int) $data['teacher_assignment_id']);
         $wasPublished = $courseContent->published_at !== null;
-        $courseContent->update($data + ['teacher_assignment_id' => $assignment->id, 'published_at' => $wasPublished || $request->boolean('publish_now') ? ($courseContent->published_at ?? now()) : null]);
+        $courseContent->update(collect($data)->except('teacher_assignment_id')->all() + ['teacher_assignment_id' => $assignment->id, 'disable_response' => $request->boolean('disable_response', true), 'published_at' => $wasPublished || $request->boolean('publish_now') ? ($courseContent->published_at ?? now()) : null]);
         if (! $wasPublished && $courseContent->published_at) {
             $this->notifyCourseAudience($assignment, $courseContent->title, 'A new '.$courseContent->content_type.' was published for '.$assignment->subject?->name.'.');
         }
@@ -306,7 +369,17 @@ class CollaborationController extends Controller
 
     private function canManageAllAssignments(User $user): bool
     {
-        return $user->hasPermission('academic_year.manage') || $user->hasPermission('admin.manage');
+        return $user->hasPermission('academic_year.manage')
+            || $user->hasPermission('admin.manage')
+            || ($user->hasRole('employee') && $user->hasPermission('collaboration.manage'));
+    }
+
+    /** @param array<string, mixed> $data */
+    private function ensureAgendaDates(array $data): void
+    {
+        if (! empty($data['available_from']) && ! empty($data['due_on']) && Carbon::parse((string) $data['due_on'])->lt(Carbon::parse((string) $data['available_from'])->startOfDay())) {
+            throw ValidationException::withMessages(['due_on' => 'The due date cannot be before the publication date.']);
+        }
     }
 
     private function notifyCourseAudience(TeacherAssignment $assignment, string $title, string $message): void

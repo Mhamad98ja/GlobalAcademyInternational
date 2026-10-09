@@ -12,11 +12,11 @@ class CourseContent extends Model
 {
     use BelongsToBranch, HasPublicId;
 
-    protected $fillable = ['branch_id', 'teacher_assignment_id', 'title', 'content', 'content_type', 'resource_url', 'available_from', 'due_on', 'published_at', 'created_by'];
+    protected $fillable = ['branch_id', 'teacher_assignment_id', 'title', 'content', 'content_type', 'resource_url', 'available_from', 'due_on', 'estimated_minutes', 'disable_response', 'published_at', 'created_by'];
 
     protected function casts(): array
     {
-        return ['available_from' => 'datetime', 'due_on' => 'date', 'published_at' => 'datetime'];
+        return ['available_from' => 'datetime', 'due_on' => 'date', 'estimated_minutes' => 'integer', 'disable_response' => 'boolean', 'published_at' => 'datetime'];
     }
 
     public function assignment()

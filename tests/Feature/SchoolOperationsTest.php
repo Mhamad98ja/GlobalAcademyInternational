@@ -180,9 +180,13 @@ class SchoolOperationsTest extends TestCase
             'content' => 'Read the first chapter before Monday.',
             'content_type' => 'homework',
             'resource_url' => 'https://example.test/chapter-1',
+            'available_from' => now()->format('Y-m-d H:i:s'),
+            'due_on' => today()->toDateString(),
+            'estimated_minutes' => 45,
+            'disable_response' => true,
             'publish_now' => true,
         ])->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('course_contents', ['teacher_assignment_id' => $assignment->id, 'title' => 'Chapter 1 reading']);
+        $this->assertDatabaseHas('course_contents', ['teacher_assignment_id' => $assignment->id, 'title' => 'Chapter 1 reading', 'estimated_minutes' => 45, 'disable_response' => true]);
 
         $this->actingAs($administrator)->post(route('collaboration.events.store'), [
             'academic_year_id' => $year->id,
@@ -211,6 +215,12 @@ class SchoolOperationsTest extends TestCase
             ->assertSee('Chapter 1 reading')
             ->assertSee('Reading week')
             ->assertSee('Thoughtful contributions during group reading.');
+        $this->actingAs($administrator)->get(route('collaboration.index', ['section' => 'homework']))
+            ->assertOk()
+            ->assertSee('Subject agenda')
+            ->assertSee('Add agenda item')
+            ->assertSee('Chapter 1 reading')
+            ->assertSee('Publication date');
         $this->actingAs($administrator)->get(route('students.show', $registration->student))
             ->assertOk()
             ->assertSee('Performance follow-up')

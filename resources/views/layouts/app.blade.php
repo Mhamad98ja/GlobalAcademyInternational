@@ -104,7 +104,7 @@
             'home' => ['route' => 'collaboration.index', 'label' => 'Home', 'icon' => 'dashboard', 'permission' => 'collaboration.view'],
             'items' => [
                 ['route' => 'teachers.index', 'label' => 'Teachers List', 'icon' => 'teachers', 'permission' => 'people.manage'],
-                ['route' => 'collaboration.index', 'params' => ['section' => 'course-content'], 'label' => 'Subject Agenda', 'icon' => 'academic', 'permission' => 'collaboration.view'],
+                ['route' => 'collaboration.index', 'params' => ['section' => 'homework'], 'label' => 'Subject Agenda', 'icon' => 'academic', 'permission' => 'collaboration.view'],
                 ['route' => 'messages.index', 'label' => 'Messages', 'icon' => 'responsible', 'permission' => 'messages.view'],
                 ['route' => 'collaboration.index', 'params' => ['section' => 'calendar'], 'label' => 'Calendar', 'icon' => 'academic', 'permission' => 'collaboration.view'],
                 ['route' => 'collaboration.index', 'params' => ['section' => 'performance'], 'label' => 'Performance Appraisals', 'icon' => 'reports', 'permission' => 'performance.view'],
@@ -119,8 +119,7 @@
                     ['route' => 'school-academic.index', 'label' => 'Evaluations List', 'icon' => 'academic', 'permission' => 'academic_year.manage', 'anchor' => 'assessments'],
                     ['route' => 'admin.audit', 'label' => 'Modification Requests', 'icon' => 'reports', 'permission' => 'admin.manage'],
                 ]],
-                ['label' => 'Agenda', 'items' => [
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'homework'], 'label' => 'Homework', 'icon' => 'academic', 'permission' => 'collaboration.view'],
+                ['label' => 'Agenda reports', 'items' => [
                     ['route' => 'collaboration.index', 'params' => ['section' => 'homework-report'], 'label' => 'Homework Report', 'icon' => 'reports', 'permission' => 'collaboration.view'],
                     ['route' => 'collaboration.index', 'params' => ['section' => 'homework-totals'], 'label' => 'Homework Report Totals', 'icon' => 'reports', 'permission' => 'collaboration.view'],
                     ['route' => 'collaboration.index', 'params' => ['section' => 'homework-comparison'], 'label' => 'Homework Comparison', 'icon' => 'reports', 'permission' => 'collaboration.view'],
