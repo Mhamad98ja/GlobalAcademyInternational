@@ -2,7 +2,7 @@
 
 @section('content')
 <section class="dars-reference-page">
-    <div class="dars-breadcrumb"><a href="{{ route('students.tools', ['section' => 'references']) }}">References</a><span>&gt;</span><strong>{{ $reference['title'] }}</strong></div>
+    <div class="dars-breadcrumb"><a href="{{ route('students.references.show', ['reference' => 'codes']) }}">Administration / References</a><span>&gt;</span><strong>{{ $reference['title'] }}</strong></div>
 
     @if($referenceKey === 'codes')
         <div class="flex flex-wrap items-end gap-3">

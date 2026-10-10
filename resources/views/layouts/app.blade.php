@@ -10,6 +10,7 @@
     $workspace = request()->route('workspace');
     $module = match (true) {
         request('module') === 'students' && request()->routeIs('reports.*', 'academic.*', 'school-academic.*') => 'students',
+        request()->routeIs('students.references.*') => 'administration',
         request()->routeIs('students.*', 'responsible.*', 'attendance.students*', 'discipline.*', 'medical.*', 'exam-absences.*') || $workspace === 'students' => 'students',
         (request()->routeIs('grades.*') && ! $isTeacherAccount) || request()->routeIs('reports.*', 'report-card.*', 'academic.*', 'school-academic.*', 'timetable.*') || $workspace === 'academic' => 'reports',
         request()->routeIs('collaboration.*', 'messages.*', 'teachers.*', 'attendance.teachers*', 'substitutions.*') || $workspace === 'teachers' => 'collaboration',
@@ -92,6 +93,13 @@
                     ['route' => 'admin.settings', 'label' => 'Dynamic Fields', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
                 ]],
                 ['label' => 'References', 'items' => [
+                    ['route' => 'students.references.show', 'params' => ['reference' => 'codes'], 'label' => 'Codes', 'icon' => 'administration', 'permission' => 'students.view'],
+                    ['route' => 'students.references.show', 'params' => ['reference' => 'division'], 'label' => 'Division', 'icon' => 'academic', 'permission' => 'students.view'],
+                    ['route' => 'students.references.show', 'params' => ['reference' => 'class-definition'], 'label' => 'Class Definitions', 'icon' => 'academic', 'permission' => 'students.view'],
+                    ['route' => 'students.references.show', 'params' => ['reference' => 'classes'], 'label' => 'Classes', 'icon' => 'academic', 'permission' => 'students.view'],
+                    ['route' => 'students.references.show', 'params' => ['reference' => 'other-schools'], 'label' => 'Other Schools', 'icon' => 'administration', 'permission' => 'students.view'],
+                    ['route' => 'students.references.show', 'params' => ['reference' => 'district'], 'label' => 'Districts', 'icon' => 'administration', 'permission' => 'students.view'],
+                    ['route' => 'students.references.show', 'params' => ['reference' => 'towns'], 'label' => 'Towns', 'icon' => 'administration', 'permission' => 'students.view'],
                     ['route' => 'admin.settings', 'label' => 'Dictionary', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
                     ['route' => 'responsible.index', 'label' => 'Family Type', 'icon' => 'responsible', 'permission' => 'people.manage'],
                     ['route' => 'discipline.index', 'label' => 'Family Remark Type', 'icon' => 'administration', 'permission' => 'discipline.view', 'anchor' => 'action-references'],

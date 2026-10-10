@@ -91,8 +91,11 @@ class StudentDossierController extends Controller
         return view('students.dossier.dashboard-page', compact('studentOverview', 'activeAcademicYear'));
     }
 
-    public function tools(Request $request, string $section): View
+    public function tools(Request $request, string $section): View|RedirectResponse
     {
+        if ($section === 'references') {
+            return redirect()->route('students.references.show', ['reference' => 'codes']);
+        }
         $section = StudentDossierNavigation::sections()[$section];
         $items = collect($section['items'])->filter(fn (array $item) => $request->user()->hasPermission($item['permission'])
             && (! str_starts_with($item['route'], 'reports.') || $request->user()->hasPermission('reports.view')));

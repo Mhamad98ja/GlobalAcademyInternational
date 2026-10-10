@@ -2,12 +2,12 @@
 
 @section('content')
 <section class="dars-reference-page">
-    <div class="dars-breadcrumb"><a href="{{ route('students.tools', ['section' => 'references']) }}">References</a><span>&gt;</span><a href="{{ route('students.references.show', ['reference' => $referenceKey]) }}">{{ $reference['title'] }}</a><span>&gt;</span><strong>{{ $mode === 'edit' ? 'Edit' : 'Add New' }}</strong></div>
+    <div class="dars-breadcrumb"><a href="{{ route('students.references.show', ['reference' => 'codes']) }}">Administration / References</a><span>&gt;</span><a href="{{ route('students.references.show', ['reference' => $referenceKey]) }}">{{ $reference['title'] }}</a><span>&gt;</span><strong>{{ $mode === 'edit' ? 'Edit' : 'Add New' }}</strong></div>
 
     <div class="panel max-w-3xl p-6">
         <div class="mb-6">
             <h1 class="page-title">{{ $categoryOnly ? 'Add New Code Category' : ($mode === 'edit' ? 'Edit '.$reference['title'] : 'Add New '.$reference['title']) }}</h1>
-            <p class="page-subtitle">This form stays inside Student Profile References and saves back to the selected reference list.</p>
+        <p class="page-subtitle">This reference is managed by administration and is used by student, family, and academic records.</p>
         </div>
 
         @if($categoryOnly)

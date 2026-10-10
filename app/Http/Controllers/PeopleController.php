@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\ResponsiblePerson;
+use App\Models\StudentReferenceEntry;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Services\AuditService;
@@ -74,6 +75,7 @@ class PeopleController extends Controller
                 ->withQueryString(),
             'teachers' => Teacher::where('is_active', true)->orderBy('first_name')->get(),
             'selectedStudents' => $this->studentsForPicker((array) old('student_ids', [])),
+            'referenceOptions' => $this->referenceOptions(),
         ]);
     }
 
@@ -138,6 +140,7 @@ class PeopleController extends Controller
                 ->orderBy('first_name')
                 ->get(),
             'selectedStudents' => $selectedStudents,
+            'referenceOptions' => $this->referenceOptions(),
         ]);
     }
 
@@ -216,6 +219,19 @@ class PeopleController extends Controller
         }
 
         return $data;
+    }
+
+    /** @return array{familyTypes: \Illuminate\Support\Collection, districts: \Illuminate\Support\Collection, towns: \Illuminate\Support\Collection} */
+    private function referenceOptions(): array
+    {
+        $entries = StudentReferenceEntry::query()->get();
+        $familyTypes = $entries->where('reference', 'codes')->filter(fn ($entry): bool => in_array(strtolower((string) $entry->category), ['family-type', 'family_type', 'family type'], true))->pluck('value');
+
+        return [
+            'familyTypes' => $familyTypes->merge(ResponsiblePerson::query()->whereNotNull('family_type')->pluck('family_type'))->filter()->unique()->sort()->values(),
+            'districts' => $entries->where('reference', 'district')->pluck('value')->merge(ResponsiblePerson::query()->whereNotNull('district')->pluck('district'))->filter()->unique()->sort()->values(),
+            'towns' => $entries->where('reference', 'towns')->pluck('value')->merge(ResponsiblePerson::query()->whereNotNull('town')->pluck('town'))->filter()->unique()->sort()->values(),
+        ];
     }
 
     private function syncStudents(ResponsiblePerson $person, array $studentIds): void

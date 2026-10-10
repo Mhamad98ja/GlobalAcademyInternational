@@ -146,7 +146,6 @@ class WorkspaceController extends Controller
             [
                 $this->task('students.view', 'Student directory', 'Search profiles, registrations, and student history.', 'students.index', 'students', 'Open students'),
                 $this->task('students.view', 'File', 'Open student files, families, photos, and section changes.', 'students.tools', 'students', 'Open file', ['section' => 'file']),
-                $this->task('students.view', 'References', 'Maintain years, classes, sections, subjects, terms, and action references.', 'students.tools', 'academic', 'Open references', ['section' => 'references']),
                 $this->task('reports.view', 'Attestations', 'Select students and print enrolment or attendance attestations.', 'students.attestations', 'reports', 'Prepare attestations'),
                 $this->task('reports.view', 'Reports', 'Open student, class, attendance, action, medical, exam, and grade reports from one organised report centre.', 'reports.school', 'reports', 'Open report centre', ['report' => 'student_attendance']),
                 $this->task('people.manage', 'Responsible persons', 'Link family and guardian contacts to student records.', 'responsible.index', 'responsible', 'Open contacts'),
