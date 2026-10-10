@@ -24,11 +24,15 @@
     <button class="btn btn-secondary">Load timetable</button>
 </form></div></section>
 
-<div class="mt-6 grid gap-6 2xl:grid-cols-[300px_1fr]">
+@php
+    $selectedGrade = $grades->firstWhere('id', $filters['grade_id'] ?? null);
+    $selectedSection = $selectedGrade?->sections?->firstWhere('id', $filters['section_id'] ?? null);
+@endphp
+<div class="mt-6 grid gap-6 2xl:grid-cols-[300px_1fr]" data-timetable data-section-id="{{ $filters['section_id'] ?? '' }}" data-store-url="{{ route('timetable.entries.store') }}" data-entry-base-url="{{ url('/timetable/entries') }}">
     <aside class="space-y-6">
-        <section class="panel"><div class="panel-header"><h2 class="panel-title">Course cards</h2></div><div class="space-y-2 p-4">
+        <section class="panel"><div class="panel-header"><div><h2 class="panel-title">Subjects to schedule</h2><p class="mt-1 text-xs text-slate-500">Drag a subject into this class schedule.</p></div></div><div class="space-y-2 p-4">
             @forelse ($assignments as $assignment)
-                <article class="schedule-card" draggable="true" data-schedule-card data-assignment-id="{{ $assignment->id }}"><div class="font-medium">{{ $assignment->subject?->name }}</div><div class="text-xs text-slate-600">{{ $assignment->teacher?->full_name }}</div><div class="mt-1 text-xs text-slate-500">{{ $assignment->required_periods_per_week }} required periods / week</div></article>
+                <article class="schedule-card" draggable="true" data-schedule-card data-assignment-id="{{ $assignment->id }}"><div class="font-medium">{{ $assignment->subject?->name }}</div><div class="text-xs text-slate-600">{{ $assignment->teacher?->full_name }}</div><div class="mt-1 text-xs text-slate-500">{{ $assignment->grade?->name }}{{ $assignment->section ? ' · '.$assignment->section->name : ' · All sections' }} · {{ $assignment->required_periods_per_week }} periods / week</div></article>
             @empty
                 <div class="empty">Create teacher subject assignments for this class first.</div>
             @endforelse
@@ -38,7 +42,7 @@
             <input type="hidden" name="academic_year_id" value="{{ $filters['academic_year_id'] }}"><div class="grid grid-cols-2 gap-2"><input type="number" name="period_number" min="1" required placeholder="#"><input name="label" required placeholder="Period 1"></div><div class="grid grid-cols-2 gap-2"><input type="time" name="starts_at"><input type="time" name="ends_at"></div><select name="kind"><option value="lesson">Lesson</option><option value="break">Break</option><option value="lunch">Lunch</option><option value="special">Special</option></select><button class="btn btn-secondary w-full">Save period</button>
         </form></section>
     </aside>
-    <section class="panel overflow-hidden" data-timetable data-store-url="{{ route('timetable.entries.store') }}" data-entry-base-url="{{ url('/timetable/entries') }}"><div class="table-wrap"><table class="timetable-grid"><thead><tr><th>Period</th>
+    <section class="panel overflow-hidden"><div class="panel-header"><div><h2 class="panel-title">Class schedule</h2><p class="mt-1 text-xs text-slate-500">{{ $selectedGrade?->name ?? 'Select a grade' }}{{ $selectedSection ? ' · '.$selectedSection->name : '' }} · assigned subjects and teachers</p></div></div><div class="table-wrap"><table class="timetable-grid"><thead><tr><th>Period</th>
         @foreach ($days as $day)
             <th>{{ str($day)->headline() }}</th>
         @endforeach
@@ -57,7 +61,7 @@
                                     <form method="POST" action="{{ route('timetable.entries.destroy', $entry) }}" class="mt-2">@csrf @method('DELETE')<button class="link text-xs text-rose-700">Remove</button></form>
                                 </article>
                             @elseif ($period->kind === 'lesson')
-                                <span class="text-xs text-slate-400">Drop course here</span>
+                                <span class="text-xs text-slate-400">Drop subject here</span>
                             @else
                                 <span class="text-xs text-slate-500">{{ str($period->kind)->headline() }}</span>
                             @endif

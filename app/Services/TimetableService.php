@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 
 final class TimetableService
 {
-    /** @param array{day_of_week:string,period_number:int,room?:string|null} $slot */
+    /** @param array{day_of_week:string,period_number:int,section_id?:int|null,room?:string|null} $slot */
     public function create(TeacherAssignment $assignment, array $slot): TimetableEntry
     {
         $attributes = $this->attributes($assignment, $slot);
@@ -19,7 +19,7 @@ final class TimetableService
         return TimetableEntry::create($attributes);
     }
 
-    /** @param array{day_of_week:string,period_number:int,room?:string|null} $slot */
+    /** @param array{day_of_week:string,period_number:int,section_id?:int|null,room?:string|null} $slot */
     public function update(TimetableEntry $entry, TeacherAssignment $assignment, array $slot): TimetableEntry
     {
         $attributes = $this->attributes($assignment, $slot);
@@ -29,7 +29,7 @@ final class TimetableService
         return $entry->refresh();
     }
 
-    /** @param array{day_of_week:string,period_number:int,room?:string|null} $slot
+    /** @param array{day_of_week:string,period_number:int,section_id?:int|null,room?:string|null} $slot
      * @return array<string, mixed>
      */
     private function attributes(TeacherAssignment $assignment, array $slot): array
@@ -40,7 +40,9 @@ final class TimetableService
             'teacher_id' => $assignment->teacher_id,
             'subject_id' => $assignment->subject_id,
             'grade_id' => $assignment->grade_id,
-            'section_id' => $assignment->section_id,
+            'section_id' => array_key_exists('section_id', $slot) && $slot['section_id'] !== null
+                ? (int) $slot['section_id']
+                : $assignment->section_id,
             'day_of_week' => strtolower($slot['day_of_week']),
             'period_number' => (int) $slot['period_number'],
             'room' => blank($slot['room'] ?? null) ? null : $slot['room'],

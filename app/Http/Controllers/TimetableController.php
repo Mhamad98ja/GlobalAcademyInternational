@@ -42,7 +42,7 @@ class TimetableController extends Controller
         $assignments = TeacherAssignment::query()->with('teacher', 'subject', 'grade', 'section')
             ->where('academic_year_id', $yearId)->where('is_active', true)
             ->when($gradeId, fn ($query) => $query->where('grade_id', $gradeId))
-            ->when($sectionId, fn ($query) => $query->where('section_id', $sectionId))
+            ->when($sectionId, fn ($query) => $query->where(fn ($scoped) => $scoped->where('section_id', $sectionId)->orWhereNull('section_id')))
             ->get();
 
         return view('timetable.index', [
@@ -121,6 +121,7 @@ class TimetableController extends Controller
             'teacher_assignment_id' => ['required', 'integer', 'exists:teacher_assignments,id'],
             'day_of_week' => ['required', Rule::in(self::DAYS)],
             'period_number' => ['required', 'integer', 'min:1', 'max:30'],
+            'section_id' => ['nullable', 'integer', 'exists:sections,id'],
             'room' => ['nullable', 'string', 'max:100'],
         ]);
     }
