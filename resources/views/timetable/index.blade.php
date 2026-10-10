@@ -30,12 +30,17 @@
 @endphp
 <div class="mt-6 grid gap-6 2xl:grid-cols-[300px_1fr]" data-timetable data-section-id="{{ $filters['section_id'] ?? '' }}" data-store-url="{{ route('timetable.entries.store') }}" data-entry-base-url="{{ url('/timetable/entries') }}">
     <aside class="space-y-6">
-        <section class="panel"><div class="panel-header"><div><h2 class="panel-title">Subjects to schedule</h2><p class="mt-1 text-xs text-slate-500">Drag a subject into this class schedule.</p></div></div><div class="space-y-2 p-4">
+        <section class="panel"><div class="panel-header"><div><h2 class="panel-title">Subjects to schedule</h2><p class="mt-1 text-xs text-slate-500">Drag a subject into this class schedule. Drag it again to create another weekly lesson.</p></div></div><div class="space-y-3 p-4">
+            @if(auth()->user()->hasPermission('timetable.manage'))
+                <label class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><input type="checkbox" data-parallel-toggle class="mt-0.5"><span><strong>Allow parallel / split lesson</strong><span class="mt-0.5 block text-amber-800">Use only when this class is divided into groups. Teacher conflicts remain blocked.</span></span></label>
+            @endif
+            <div class="space-y-2">
             @forelse ($assignments as $assignment)
                 <article class="schedule-card" draggable="true" data-schedule-card data-assignment-id="{{ $assignment->id }}"><div class="font-medium">{{ $assignment->subject?->name }}</div><div class="text-xs text-slate-600">{{ $assignment->teacher?->full_name }}</div><div class="mt-1 text-xs text-slate-500">{{ $assignment->grade?->name }}{{ $assignment->section ? ' · '.$assignment->section->name : ' · All sections' }} · {{ $assignment->required_periods_per_week }} periods / week</div></article>
             @empty
                 <div class="empty">Create teacher subject assignments for this class first.</div>
             @endforelse
+            </div>
         </div></section>
         <section class="panel"><div class="panel-header"><h2 class="panel-title">Period setup</h2></div><form method="POST" action="{{ route('timetable.periods.store') }}" class="space-y-2 p-4">
             @csrf
@@ -50,21 +55,21 @@
         @forelse ($periods as $period)
             <tr><th><div>{{ $period->label }}</div><div class="text-xs font-normal text-slate-500">{{ $period->starts_at ? substr($period->starts_at, 0, 5) : '' }}{{ $period->ends_at ? ' – '.substr($period->ends_at, 0, 5) : '' }}</div></th>
                 @foreach ($days as $day)
-                    @php($entry = $entries->get($period->period_number.'-'.$day))
+                    @php($slotEntries = $entries->get($period->period_number.'-'.$day, collect()))
                     <td class="{{ $period->kind !== 'lesson' ? 'timetable-break' : '' }}">
                         <div class="schedule-dropzone" @if ($period->kind === 'lesson') data-schedule-slot data-day="{{ $day }}" data-period="{{ $period->period_number }}" @endif>
-                            @if ($entry)
-                                <article class="schedule-card schedule-card-filled" draggable="true" data-schedule-card data-existing-entry-id="{{ $entry->public_id }}" data-assignment-id="{{ $entry->teacher_assignment_id }}"><div class="font-medium">{{ $entry->subject?->name }}</div><div class="text-xs">{{ $entry->teacher?->full_name }}</div>
-                                    @if ($entry->room)
-                                        <div class="text-xs text-slate-500">Room {{ $entry->room }}</div>
-                                    @endif
+                            @forelse ($slotEntries as $entry)
+                                <article class="schedule-card schedule-card-filled" draggable="true" data-schedule-card data-existing-entry-id="{{ $entry->public_id }}" data-assignment-id="{{ $entry->teacher_assignment_id }}"><div class="font-medium">{{ $entry->subject?->name }} @if($entry->is_parallel)<span class="badge badge-amber ml-1">Parallel</span>@endif</div><div class="text-xs">{{ $entry->teacher?->full_name }}</div>
+                                    @if ($entry->room)<div class="text-xs text-slate-500">Room {{ $entry->room }}</div>@endif
                                     <form method="POST" action="{{ route('timetable.entries.destroy', $entry) }}" class="mt-2">@csrf @method('DELETE')<button class="link text-xs text-rose-700">Remove</button></form>
                                 </article>
-                            @elseif ($period->kind === 'lesson')
+                            @empty
+                                @if ($period->kind === 'lesson')
                                 <span class="text-xs text-slate-400">Drop subject here</span>
-                            @else
+                                @else
                                 <span class="text-xs text-slate-500">{{ str($period->kind)->headline() }}</span>
-                            @endif
+                                @endif
+                            @endforelse
                         </div>
                     </td>
                 @endforeach

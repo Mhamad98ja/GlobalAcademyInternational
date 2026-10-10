@@ -884,12 +884,13 @@ document.querySelectorAll('[data-timetable]').forEach((timetable) => {
             slot.classList.remove('is-drag-over');
             if (!draggedCard) return;
             const existingCard = slot.querySelector('[data-schedule-card]');
-            if (existingCard && existingCard !== draggedCard) {
-                showError('Remove the scheduled lesson before replacing it.');
+            const allowParallel = timetable.querySelector('[data-parallel-toggle]')?.checked === true;
+            if (existingCard && existingCard !== draggedCard && !allowParallel) {
+                showError('This class section already has a lesson in that period. Enable parallel / split lesson only when the class is divided into groups.');
                 return;
             }
             if (draggedCard.closest('[data-schedule-slot]') === slot) return;
-            const body = { teacher_assignment_id: Number(draggedCard.dataset.assignmentId), section_id: timetable.dataset.sectionId ? Number(timetable.dataset.sectionId) : null, day_of_week: slot.dataset.day, period_number: Number(slot.dataset.period) };
+            const body = { teacher_assignment_id: Number(draggedCard.dataset.assignmentId), section_id: timetable.dataset.sectionId ? Number(timetable.dataset.sectionId) : null, is_parallel: allowParallel, day_of_week: slot.dataset.day, period_number: Number(slot.dataset.period) };
             const existingEntryId = draggedCard.dataset.existingEntryId;
             const endpoint = existingEntryId ? `${timetable.dataset.entryBaseUrl}/${existingEntryId}` : timetable.dataset.storeUrl;
             const response = await fetch(endpoint, {

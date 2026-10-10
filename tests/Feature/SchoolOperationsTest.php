@@ -136,6 +136,42 @@ class SchoolOperationsTest extends TestCase
         $this->assertDatabaseCount('timetable_entries', 1);
     }
 
+    public function test_timetable_allows_parallel_lessons_for_split_class_groups_but_not_teacher_collisions(): void
+    {
+        $administrator = $this->administrator();
+        [$year, $grade, $section] = $this->classRegistration($administrator);
+        $firstTeacher = Teacher::create(['first_name' => 'Samir', 'last_name' => 'Group A', 'is_active' => true]);
+        $secondTeacher = Teacher::create(['first_name' => 'Maya', 'last_name' => 'Group B', 'is_active' => true]);
+        $firstSubject = Subject::create(['name' => 'Mathematics']);
+        $secondSubject = Subject::create(['name' => 'Science']);
+        $first = TeacherAssignment::create(['academic_year_id' => $year->id, 'teacher_id' => $firstTeacher->id, 'subject_id' => $firstSubject->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'is_active' => true]);
+        $second = TeacherAssignment::create(['academic_year_id' => $year->id, 'teacher_id' => $secondTeacher->id, 'subject_id' => $secondSubject->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'is_active' => true]);
+
+        $this->actingAs($administrator)->post(route('timetable.entries.store'), [
+            'teacher_assignment_id' => $first->id,
+            'day_of_week' => 'monday',
+            'period_number' => 1,
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($administrator)->post(route('timetable.entries.store'), [
+            'teacher_assignment_id' => $second->id,
+            'day_of_week' => 'monday',
+            'period_number' => 1,
+            'is_parallel' => true,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('timetable_entries', 2);
+        $this->assertDatabaseHas('timetable_entries', ['teacher_assignment_id' => $second->id, 'is_parallel' => true]);
+
+        $this->actingAs($administrator)->post(route('timetable.entries.store'), [
+            'teacher_assignment_id' => $second->id,
+            'day_of_week' => 'monday',
+            'period_number' => 1,
+            'is_parallel' => true,
+        ])->assertSessionHasErrors('teacher_assignment_id');
+        $this->assertDatabaseCount('timetable_entries', 2);
+    }
+
     public function test_timetable_generator_distributes_assignment_lessons_for_the_selected_class(): void
     {
         $administrator = $this->administrator();

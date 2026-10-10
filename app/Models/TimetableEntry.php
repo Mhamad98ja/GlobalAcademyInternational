@@ -12,7 +12,12 @@ class TimetableEntry extends Model
 {
     use BelongsToBranch, HasPublicId;
 
-    protected $fillable = ['branch_id', 'academic_year_id', 'teacher_assignment_id', 'teacher_id', 'subject_id', 'grade_id', 'section_id', 'day_of_week', 'period_number', 'room'];
+    protected $fillable = ['branch_id', 'academic_year_id', 'teacher_assignment_id', 'teacher_id', 'subject_id', 'grade_id', 'section_id', 'day_of_week', 'period_number', 'is_parallel', 'room'];
+
+    protected function casts(): array
+    {
+        return ['is_parallel' => 'boolean'];
+    }
 
     public function assignment()
     {

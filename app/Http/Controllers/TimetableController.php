@@ -39,7 +39,7 @@ class TimetableController extends Controller
             ->when($gradeId, fn ($query) => $query->where('grade_id', $gradeId))
             ->when($sectionId, fn ($query) => $query->where('section_id', $sectionId))
             ->get()
-            ->keyBy(fn (TimetableEntry $entry) => $entry->period_number.'-'.$entry->day_of_week);
+            ->groupBy(fn (TimetableEntry $entry) => $entry->period_number.'-'.$entry->day_of_week);
         $assignments = TeacherAssignment::query()->with('teacher', 'subject', 'grade', 'section')
             ->where('academic_year_id', $yearId)->where('is_active', true)
             ->when($gradeId, fn ($query) => $query->where('grade_id', $gradeId))
@@ -220,6 +220,7 @@ class TimetableController extends Controller
             'day_of_week' => ['required', Rule::in(self::DAYS)],
             'period_number' => ['required', 'integer', 'min:1', 'max:30'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
+            'is_parallel' => ['nullable', 'boolean'],
             'room' => ['nullable', 'string', 'max:100'],
         ]);
     }
