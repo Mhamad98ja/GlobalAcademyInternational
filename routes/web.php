@@ -311,7 +311,8 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/admin/audit', [AdministrationController::class, 'audit'])->name('admin.audit');
     });
     Route::middleware(['permission:admin.manage', 'can:manage-branches'])->group(function (): void {
-        Route::get('/admin/roles', [AdministrationController::class, 'roles'])->name('admin.roles');
+        // Keep the legacy URL working, but manage access from each user row instead.
+        Route::get('/admin/roles', fn () => redirect()->route('admin.users'))->name('admin.roles');
         Route::get('/admin/recycle-bin', [AdministrationController::class, 'recycleBin'])->name('admin.recycle');
         Route::post('/admin/recycle-bin/{type}/{id}', [AdministrationController::class, 'restore'])->name('admin.recycle.restore');
         Route::get('/admin/settings', [AdministrationController::class, 'settings'])->name('admin.settings');
@@ -439,7 +440,7 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     Route::get('/Admin/AdminUsrSession.aspx', fn () => redirect()->route('admin.audit'))->middleware('permission:admin.manage')->name('dars.admin.session');
     Route::get('/Admin/ChangePassword.aspx', fn () => redirect()->route('dashboard'))->name('dars.admin.password');
     Route::get('/Online/Admin/admUsers.aspx', fn () => redirect()->route('admin.users'))->middleware('permission:admin.manage')->name('dars.admin.online-users');
-    Route::get('/Online/Admin/admUserAcces.aspx', fn () => redirect()->route('admin.roles'))->middleware('permission:admin.manage')->name('dars.admin.online-access');
+    Route::get('/Online/Admin/admUserAcces.aspx', fn () => redirect()->route('admin.users'))->middleware('permission:admin.manage')->name('dars.admin.online-access');
     Route::get('/Online/Admin/NotClasseMatiere.aspx', fn () => redirect()->route('school-academic.index'))->middleware('permission:academic_year.manage')->name('dars.admin.online-class-subjects');
     Route::get('/StudentProfile/References/SchoolYear.aspx', fn () => redirect()->route('academic.index'))->middleware('permission:academic.manage')->name('dars.admin.school-year');
     foreach ([

@@ -13,12 +13,6 @@
                 <span class="academic-hub-card-icon"><x-nav-icon name="administration" /></span>
                 <span><strong>Users</strong><small>Manage student, teacher, and employee accounts.</small><em>Open users</em></span>
             </a>
-            @if(auth()->user()->isControllerAdministrator())
-                <a class="academic-hub-card" href="{{ route('admin.roles') }}">
-                    <span class="academic-hub-card-icon"><x-nav-icon name="administration" /></span>
-                    <span><strong>Users Access</strong><small>Review roles and permissions for the school.</small><em>Open access</em></span>
-                </a>
-            @endif
         @endif
         @if(auth()->user()->hasPermission('academic_year.manage'))
             <a class="academic-hub-card" href="{{ route('school-academic.index') }}#assignments">
