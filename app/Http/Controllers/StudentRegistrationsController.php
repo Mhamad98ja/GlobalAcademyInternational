@@ -47,8 +47,12 @@ class StudentRegistrationsController extends Controller
             'years' => AcademicYear::orderByDesc('starts_on')->get(),
             'grades' => Grade::with('sections')->orderBy('sort_order')->get(),
             'teachers' => Teacher::query()
-                ->where('is_active', true)
-                ->when($registration->teacher_id, fn ($query) => $query->orWhereKey($registration->teacher_id))
+                ->where(function ($query) use ($registration): void {
+                    $query->where('is_active', true);
+                    if ($registration->teacher_id) {
+                        $query->orWhere('id', $registration->teacher_id);
+                    }
+                })
                 ->orderBy('first_name')
                 ->get(),
         ]);
