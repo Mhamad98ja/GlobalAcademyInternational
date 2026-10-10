@@ -357,6 +357,8 @@
         'groups' => [],
     ];
     $menu = $module ? $moduleMenus[$module] : null;
+    $showAdministrationReferences = $module === 'administration'
+        && (request()->routeIs('operations.index') || request()->routeIs('students.references.*'));
     $canSee = fn (array $item) => ($item['financial'] ?? false) ? $signedInUser->canViewFinancials() : ((! ($item['controller_only'] ?? false) || $signedInUser->isControllerAdministrator()) && $signedInUser->hasPermission($item['permission']));
     $darsAdministrationLabels = ['School Year', 'Menu', 'Pages', 'Report Header', 'Configuration', 'Dynamic Fields', 'Dictionary', 'Family Type', 'Family Remark Type', 'Colleges', 'Import', 'File Category', 'Mail Type'];
     $darsCollaborationSections = ['Teachers List' => 'teachers', 'Messages' => 'messages', 'Calendar' => 'calendar', 'Performance Appraisals' => 'performance', 'Students' => 'students', 'Performance Dashboard' => 'performance-dashboard', 'Evaluation Grades' => 'evaluation-grades', 'Grade Book' => 'grade-book', 'Evaluations List' => 'evaluations-list', 'Student Failures' => 'student-failures', 'Modification Requests' => 'modification-requests', 'Transcript by Subject Choice' => 'transcript-subject-choice', 'Evaluation Statement' => 'evaluation-statement', 'Skills per Student' => 'skills-student', 'Skills to Approve' => 'skills-approve', 'Remarks to Approve' => 'remarks-approve', 'Item Remarks' => 'item-remarks', 'Remarks per Class' => 'class-remarks', 'Cycle Principal Appreciations' => 'principal-appreciations', 'Remarks Entry' => 'remarks-entry', 'Attendance Management' => 'attendance-management', 'Standards' => 'standards', 'Report Card Acknowledgment of Receipt' => 'report-card-receipt', 'Icons' => 'icons', 'System Error Log' => 'system-error-log', 'Bulk Message' => 'bulk-message'];
@@ -439,6 +441,9 @@
                     @endif
                 @endforeach
                 @foreach ($menu['groups'] as $group)
+                    @if ($group['label'] === 'References' && ! $showAdministrationReferences)
+                        @continue
+                    @endif
                     @php($items = collect($group['items'])->filter(fn (array $item) => $canSee($item) && (!str_starts_with($item['route'], 'reports.') || $signedInUser->hasPermission('reports.view'))))
                     @if ($items->isNotEmpty())
                         @php($groupIsActive = $items->contains($itemIsActive))
