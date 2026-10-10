@@ -8,11 +8,9 @@ use App\Models\Assessment;
 use App\Models\GradeChangeAudit;
 use App\Models\GradeEntry;
 use App\Models\StudentRegistration;
-use App\Models\Student;
 use App\Models\TeacherAssignment;
 use App\Models\User;
 use App\Services\AuditService;
-use App\Notifications\StudentPortalNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -43,6 +41,13 @@ class GradesController extends Controller
             ->with('assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section')
             ->orderByDesc('assessment_date')->get() : collect();
         $assessment = $assessmentId ? $assessments->firstWhere('id', $assessmentId) : $assessments->first();
+        $editingAssessment = null;
+        if ($request->boolean('edit') && $assessmentId) {
+            $editingAssessment = $assessments->firstWhere('id', $assessmentId);
+            if ($editingAssessment && ! in_array($editingAssessment->review_status ?? 'draft', ['draft', 'rejected'], true) && ! $request->user()->hasPermission('academic_year.manage')) {
+                $editingAssessment = null;
+            }
+        }
         $registrations = $assignment && $assessment ? StudentRegistration::query()
             ->with('student')
             ->where('academic_year_id', $assignment->academic_year_id)
@@ -52,7 +57,7 @@ class GradesController extends Controller
             ->orderBy('student_id')->get() : collect();
         $grades = $assessment ? GradeEntry::query()->where('assessment_id', $assessment->id)->whereIn('student_registration_id', $registrations->modelKeys())->get()->keyBy('student_registration_id') : collect();
 
-        return view('grades.index', compact('assignments', 'assignment', 'assessments', 'assessment', 'registrations', 'grades'));
+        return view('grades.index', compact('assignments', 'assignment', 'assessments', 'assessment', 'editingAssessment', 'registrations', 'grades'));
     }
 
     public function storeAssessment(Request $request, AuditService $audit): RedirectResponse
@@ -78,6 +83,10 @@ class GradesController extends Controller
         if (! empty($data['academic_term_id']) && ! \App\Models\AcademicTerm::query()->whereKey($data['academic_term_id'])->where('academic_year_id', $assignment->academic_year_id)->exists()) {
             throw ValidationException::withMessages(['academic_term_id' => 'The selected term does not belong to this academic year.']);
         }
+        $workflowAction = $request->input('workflow_action', 'draft');
+        if (! in_array($workflowAction, ['draft', 'submit'], true)) {
+            $workflowAction = 'draft';
+        }
         $assessment = Assessment::create([
             'academic_year_id' => $assignment->academic_year_id,
             'academic_term_id' => $data['academic_term_id'] ?? null,
@@ -91,16 +100,16 @@ class GradesController extends Controller
             'maximum_score' => $data['maximum_score'],
             'weight' => $data['weight'] ?? 1,
             'assessment_date' => $data['assessment_date'] ?? null,
-            'status' => 'open',
+            'status' => 'draft',
+            'review_status' => $workflowAction === 'submit' ? 'submitted' : 'draft',
             'notes' => $data['notes'] ?? null,
             'online_quiz' => $request->boolean('online_quiz'),
             'per_question' => $request->boolean('per_question'),
             'created_by' => $request->user()->id,
         ]);
-        $this->notifyAssessmentAudience($assignment, $assessment);
-        $audit->log('assessment.created_by_teacher', $assessment, [], $assessment->only(['name', 'type', 'maximum_score', 'weight', 'teacher_assignment_id']));
+        $audit->log($workflowAction === 'submit' ? 'assessment.submitted_for_review' : 'assessment.created_by_teacher', $assessment, [], $assessment->only(['name', 'type', 'maximum_score', 'weight', 'teacher_assignment_id', 'review_status']));
 
-        return redirect()->route('grades.index', ['teacher_assignment_id' => $assignment->id, 'assessment_id' => $assessment->id])->with('success', 'Assessment created for the selected class.');
+        return redirect()->route('grades.index', ['teacher_assignment_id' => $assignment->id, 'assessment_id' => $assessment->id])->with('success', $workflowAction === 'submit' ? 'Assessment submitted to administration for review.' : 'Assessment saved as a draft.');
     }
 
     public function updateAssessment(Request $request, Assessment $assessment, AuditService $audit): RedirectResponse
@@ -116,15 +125,19 @@ class GradesController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
             'online_quiz' => ['nullable', 'boolean'],
             'per_question' => ['nullable', 'boolean'],
-            'status' => ['required', Rule::in(['draft', 'open', 'closed'])],
+            'workflow_action' => ['nullable', Rule::in(['draft', 'submit'])],
         ]);
         $assignment = TeacherAssignment::query()->findOrFail($data['teacher_assignment_id']);
         $this->ensureCanManageAssignment($request->user(), $assignment);
         $this->ensureAssessmentMatchesAssignment($assessment, $assignment);
-        $assessment->update(collect($data)->except('teacher_assignment_id')->put('teacher_assignment_id', $assignment->id)->put('weight', $data['weight'] ?? 1)->put('online_quiz', $request->boolean('online_quiz'))->put('per_question', $request->boolean('per_question'))->all());
-        $audit->log('assessment.updated_by_teacher', $assessment, [], $assessment->only(['name', 'type', 'maximum_score', 'weight', 'status']));
+        if (! $request->user()->hasPermission('academic_year.manage') && ! in_array($assessment->review_status ?? 'draft', ['draft', 'rejected'], true)) {
+            throw ValidationException::withMessages(['assessment_id' => 'Only draft or rejected assessments can be edited.']);
+        }
+        $workflowAction = $request->input('workflow_action', 'draft');
+        $assessment->update(collect($data)->except(['teacher_assignment_id', 'workflow_action'])->put('teacher_assignment_id', $assignment->id)->put('status', 'draft')->put('review_status', $workflowAction === 'submit' ? 'submitted' : 'draft')->put('reviewed_by', null)->put('reviewed_at', null)->put('rejection_reason', $workflowAction === 'submit' ? null : $assessment->rejection_reason)->put('weight', $data['weight'] ?? 1)->put('online_quiz', $request->boolean('online_quiz'))->put('per_question', $request->boolean('per_question'))->all());
+        $audit->log($workflowAction === 'submit' ? 'assessment.submitted_for_review' : 'assessment.updated_by_teacher', $assessment, [], $assessment->only(['name', 'type', 'maximum_score', 'weight', 'status', 'review_status']));
 
-        return back()->with('success', 'Assessment updated.');
+        return back()->with('success', $workflowAction === 'submit' ? 'Assessment submitted to administration for review.' : 'Assessment draft saved.');
     }
 
     public function save(Request $request, AuditService $audit): RedirectResponse
@@ -143,7 +156,7 @@ class GradesController extends Controller
         $assessment = Assessment::query()->findOrFail($data['assessment_id']);
         $this->ensureAssessmentMatchesAssignment($assessment, $assignment);
         if ($assessment->status !== 'open' && ! $request->user()->hasPermission('academic_year.manage')) {
-            throw ValidationException::withMessages(['assessment_id' => 'This assessment is closed. An authorized administrator must reopen it before marks can be changed.']);
+            throw ValidationException::withMessages(['assessment_id' => 'This assessment is waiting for administration approval before grades can be entered.']);
         }
         if ($data['save_as'] === 'published' && ! $request->user()->hasPermission('grades.publish')) {
             abort(403, 'You do not have permission to publish grades.');
@@ -256,23 +269,4 @@ class GradesController extends Controller
         }
     }
 
-    private function notifyAssessmentAudience(TeacherAssignment $assignment, Assessment $assessment): void
-    {
-        Student::query()
-            ->with('portalUser')
-            ->whereHas('registrations', function ($registrations) use ($assignment): void {
-                $registrations->where('status', 'active')
-                    ->where('academic_year_id', $assignment->academic_year_id)
-                    ->where('grade_id', $assignment->grade_id)
-                    ->when($assignment->section_id, fn ($query) => $query->where('section_id', $assignment->section_id));
-            })
-            ->get()
-            ->each(function (Student $student) use ($assessment): void {
-                $student->notify(new StudentPortalNotification(
-                    'New '.$assessment->type.' scheduled',
-                    $assessment->name.' is scheduled for '.($assessment->assessment_date?->format('d M Y') ?? 'a future date').'.',
-                    route('student-portal.index'),
-                ));
-            });
-    }
 }

@@ -192,6 +192,17 @@
 </section>
 
 <section class="panel mt-6">
+    <div class="panel-header"><div><h2 class="panel-title">Assessment review queue</h2><p class="text-sm text-slate-500">Approve submitted teacher evaluations to publish them to students, or return them with feedback.</p></div></div>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Evaluation</th><th>Teacher / class</th><th>Status</th><th>Decision</th></tr></thead><tbody>
+    @forelse ($assessments->where('review_status', 'submitted') as $assessment)
+        <tr><td><strong>{{ $assessment->name }}</strong><div class="text-xs text-slate-500">{{ str($assessment->type)->headline() }} · over {{ $assessment->maximum_score }}</div></td><td>{{ $assessment->assignment?->teacher?->full_name }} · {{ $assessment->assignment?->grade?->name }}{{ $assessment->assignment?->section ? ' / '.$assessment->assignment->section->name : '' }} · {{ $assessment->assignment?->subject?->name }}</td><td><span class="badge badge-amber">Submitted</span></td><td class="flex gap-2"><form method="POST" action="{{ route('school-academic.assessments.approve', $assessment) }}">@csrf<button class="btn btn-primary btn-small">Approve</button></form><form method="POST" action="{{ route('school-academic.assessments.reject', $assessment) }}" class="flex gap-2"><input name="rejection_reason" required placeholder="Reason for return"><button class="btn btn-secondary btn-small">Reject</button></form></td></tr>
+    @empty
+        <tr><td colspan="4" class="empty">No submitted evaluations are waiting for review.</td></tr>
+    @endforelse
+    </tbody></table></div>
+</section>
+
+<section class="panel mt-6">
     <div class="panel-header"><div><h2 class="panel-title">Edit academic configuration</h2><p class="text-sm text-slate-500">Historical records remain intact; changes here affect future work.</p></div></div>
     <div class="grid gap-4 p-5 xl:grid-cols-2">
         <div class="space-y-2">

@@ -82,6 +82,11 @@
     @media (max-width: 640px) { .module-launcher-grid { grid-template-columns: 1fr; } .module-launcher-card { min-height: 7.5rem; } .workspace-hero { align-items: flex-start; }.workspace-stat-grid, .workspace-task-grid { grid-template-columns: 1fr; }.workspace-task { min-height: 0; } }
 }
 
+.dars-evaluation-notice { margin:1rem; padding:1rem 1.2rem; border:1px solid #f5d48a; border-radius:.75rem; background:#fff9e8; color:#7c5a13; }
+.dars-evaluation-status.submitted { background:#fff4d6; color:#9a6700; }
+.dars-evaluation-status.approved { background:#dcfce7; color:#166534; }
+.dars-evaluation-status.rejected { background:#fee2e2; color:#991b1b; }
+
 /* Final application shell lock: kept last so legacy module styles inherit the new system. */
 @layer components {
     :root { --sbm-navy:#102a43; --sbm-ink:#15273f; --sbm-blue:#2563eb; --sbm-line:#dfe7f1; --sbm-muted:#65758b; --sbm-paper:#f7f9fc; --sbm-serif:Georgia,Cambria,"Times New Roman",serif; }

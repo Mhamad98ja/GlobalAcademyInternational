@@ -12,7 +12,9 @@ use App\Models\Section;
 use App\Models\Subject;
 use App\Models\Teacher;
 use App\Models\TeacherAssignment;
+use App\Models\Student;
 use App\Services\AuditService;
+use App\Notifications\StudentPortalNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -80,7 +82,8 @@ class SchoolAcademicController extends Controller
 
     public function storeAssessment(Request $request, AuditService $audit): RedirectResponse
     {
-        $assessment = Assessment::create($this->assessmentData($request) + ['created_by' => $request->user()->id]);
+        $data = $this->assessmentData($request);
+        $assessment = Assessment::create($data + ['review_status' => $data['status'] === 'open' ? 'approved' : 'draft', 'created_by' => $request->user()->id]);
         $audit->log('assessment.created', $assessment, [], $assessment->only(['academic_year_id', 'academic_term_id', 'teacher_assignment_id', 'name', 'status']));
 
         return back()->with('success', 'Assessment created.');
@@ -89,10 +92,51 @@ class SchoolAcademicController extends Controller
     public function updateAssessment(Request $request, Assessment $assessment, AuditService $audit): RedirectResponse
     {
         $old = $assessment->only(['academic_year_id', 'academic_term_id', 'teacher_assignment_id', 'subject_id', 'grade_id', 'section_id', 'name', 'type', 'maximum_score', 'assessment_date', 'status']);
-        $assessment->update($this->assessmentData($request));
+        $data = $this->assessmentData($request);
+        $assessment->update($data + ['review_status' => in_array($data['status'], ['open', 'closed'], true) ? 'approved' : 'draft']);
         $audit->log('assessment.updated', $assessment, $old, $assessment->only(array_keys($old)));
 
         return back()->with('success', 'Assessment updated.');
+    }
+
+    public function approveAssessment(Assessment $assessment, AuditService $audit): RedirectResponse
+    {
+        abort_unless($assessment->review_status === 'submitted', 422, 'Only submitted assessments can be approved.');
+        $assessment->update(['review_status' => 'approved', 'status' => 'open', 'reviewed_by' => request()->user()->id, 'reviewed_at' => now(), 'rejection_reason' => null]);
+        $audit->log('assessment.approved', $assessment, [], ['review_status' => 'approved', 'status' => 'open']);
+        $this->notifyAssessmentStudents($assessment);
+
+        return back()->with('success', 'Assessment approved and published to students.');
+    }
+
+    public function rejectAssessment(Request $request, Assessment $assessment, AuditService $audit): RedirectResponse
+    {
+        $data = $request->validate(['rejection_reason' => ['required', 'string', 'max:2000']]);
+        abort_unless($assessment->review_status === 'submitted', 422, 'Only submitted assessments can be rejected.');
+        $assessment->update(['review_status' => 'rejected', 'status' => 'draft', 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'rejection_reason' => $data['rejection_reason']]);
+        $audit->log('assessment.rejected', $assessment, [], ['review_status' => 'rejected', 'rejection_reason' => $data['rejection_reason']]);
+
+        return back()->with('success', 'Assessment returned to the teacher with feedback.');
+    }
+
+    private function notifyAssessmentStudents(Assessment $assessment): void
+    {
+        $assignment = $assessment->assignment;
+        if (! $assignment) {
+            return;
+        }
+        Student::query()->whereHas('registrations', function ($registrations) use ($assignment): void {
+            $registrations->where('status', 'active')
+                ->where('academic_year_id', $assignment->academic_year_id)
+                ->where('grade_id', $assignment->grade_id)
+                ->when($assignment->section_id, fn ($query) => $query->where('section_id', $assignment->section_id));
+        })->get()->each(function (Student $student) use ($assessment): void {
+            $student->notify(new StudentPortalNotification(
+                'New '.$assessment->type.' scheduled',
+                $assessment->name.' is scheduled for '.($assessment->assessment_date?->format('d M Y') ?? 'a future date').'.',
+                route('student-portal.index'),
+            ));
+        });
     }
 
     public function storeAssignment(Request $request, AuditService $audit): RedirectResponse

@@ -12,11 +12,11 @@ class Assessment extends Model
 {
     use BelongsToBranch, HasPublicId;
 
-    protected $fillable = ['branch_id', 'academic_year_id', 'academic_term_id', 'teacher_assignment_id', 'subject_id', 'grade_id', 'section_id', 'name', 'assessment_column', 'type', 'maximum_score', 'weight', 'assessment_date', 'status', 'notes', 'online_quiz', 'per_question', 'created_by'];
+    protected $fillable = ['branch_id', 'academic_year_id', 'academic_term_id', 'teacher_assignment_id', 'subject_id', 'grade_id', 'section_id', 'name', 'assessment_column', 'type', 'maximum_score', 'weight', 'assessment_date', 'status', 'review_status', 'reviewed_by', 'reviewed_at', 'rejection_reason', 'notes', 'online_quiz', 'per_question', 'created_by'];
 
     protected function casts(): array
     {
-        return ['assessment_date' => 'date', 'maximum_score' => 'decimal:2', 'weight' => 'decimal:3', 'online_quiz' => 'boolean', 'per_question' => 'boolean'];
+        return ['assessment_date' => 'date', 'reviewed_at' => 'datetime', 'maximum_score' => 'decimal:2', 'weight' => 'decimal:3', 'online_quiz' => 'boolean', 'per_question' => 'boolean'];
     }
 
     public function academicYear()
@@ -62,5 +62,10 @@ class Assessment extends Model
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function reviewedBy()
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
     }
 }

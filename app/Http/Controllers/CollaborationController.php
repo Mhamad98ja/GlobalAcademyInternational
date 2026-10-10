@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\AcademicYear;
+use App\Models\Assessment;
 use App\Models\CourseContent;
 use App\Models\Grade;
 use App\Models\SchoolAnnouncement;
@@ -146,6 +147,13 @@ class CollaborationController extends Controller
                 ->orWhereInsensitiveLike('employee_number', $search)))
             ->orderBy('first_name')->orderBy('last_name')->take(30)->get();
         $messages = SchoolMessage::query()->with('sender')->latest('sent_at')->latest('id')->take(30)->get();
+        $assessmentRequests = Assessment::query()
+            ->with('assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section', 'reviewedBy')
+            ->when($user->teacher_id && ! $this->canManageAllAssignments($user), fn (Builder $query) => $query->whereHas('assignment', fn (Builder $assignments) => $assignments->where('teacher_id', $user->teacher_id)))
+            ->when($gradeId, fn (Builder $query, int $id) => $query->whereHas('assignment', fn (Builder $assignments) => $assignments->where('grade_id', $id)))
+            ->when($request->filled('assessment_column'), fn (Builder $query) => $query->where('assessment_column', $request->string('assessment_column')->toString()))
+            ->when($request->filled('review_status'), fn (Builder $query) => $query->where('review_status', $request->string('review_status')->toString()))
+            ->latest('created_at')->take(100)->get();
 
         return view('collaboration.index', [
             'activeAcademicYear' => $activeAcademicYear,
@@ -158,6 +166,7 @@ class CollaborationController extends Controller
             'evaluations' => $evaluations,
             'teachers' => $teachers,
             'messages' => $messages,
+            'assessmentRequests' => $assessmentRequests,
             'canManage' => $canManage,
             'canManagePerformance' => $canManagePerformance,
             'canViewPerformance' => $canViewPerformance,

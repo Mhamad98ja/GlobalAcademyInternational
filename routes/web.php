@@ -207,6 +207,8 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::put('/academic/terms/{term}', [SchoolAcademicController::class, 'updateTerm'])->name('school-academic.terms.update');
         Route::post('/academic/assessments', [SchoolAcademicController::class, 'storeAssessment'])->name('school-academic.assessments.store');
         Route::put('/academic/assessments/{assessment}', [SchoolAcademicController::class, 'updateAssessment'])->name('school-academic.assessments.update');
+        Route::post('/academic/assessments/{assessment}/approve', [SchoolAcademicController::class, 'approveAssessment'])->name('school-academic.assessments.approve');
+        Route::post('/academic/assessments/{assessment}/reject', [SchoolAcademicController::class, 'rejectAssessment'])->name('school-academic.assessments.reject');
         Route::post('/academic/teacher-assignments', [SchoolAcademicController::class, 'storeAssignment'])->name('school-academic.assignments.store');
         Route::put('/academic/teacher-assignments/{assignment}', [SchoolAcademicController::class, 'updateAssignment'])->name('school-academic.assignments.update');
     });
