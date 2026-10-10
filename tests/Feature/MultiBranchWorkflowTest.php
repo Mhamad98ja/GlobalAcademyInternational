@@ -660,6 +660,31 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertSee($student->full_name);
     }
 
+    public function test_controller_can_manage_explicit_user_access_from_the_user_directory(): void
+    {
+        $controller = $this->user('access-controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        $managedUser = $this->branchUser('access-managed@example.test');
+        [$main] = $this->branches($controller, $managedUser);
+        $reportsPermission = Permission::firstOrCreate(['name' => 'reports.view'], ['label' => 'View reports']);
+        $studentsPermission = Permission::firstOrCreate(['name' => 'students.view'], ['label' => 'View students']);
+        $managedUser->roles()->firstOrFail()->permissions()->sync([$reportsPermission->id, $studentsPermission->id]);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('admin.users.access.edit', $managedUser))
+            ->assertOk()
+            ->assertSee('Manage access')
+            ->assertSee('permissions[]', false);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->put(route('admin.users.access.update', $managedUser), ['permissions' => [$reportsPermission->id]])
+            ->assertRedirect(route('admin.users'));
+
+        $this->assertTrue($managedUser->fresh()->hasPermission('reports.view'));
+        $this->assertFalse($managedUser->fresh()->hasPermission('students.view'));
+        $this->assertDatabaseHas('permission_user', ['user_id' => $managedUser->id, 'permission_id' => $studentsPermission->id, 'allowed' => false]);
+    }
+
     public function test_branch_super_administrator_controls_local_users_while_branch_users_cannot_view_financial_data(): void
     {
         $controller = $this->user('controller@example.test');

@@ -277,6 +277,54 @@ class AdministrationController extends Controller
         return view('admin.roles', ['roles' => Role::with('permissions')->get(), 'permissions' => Permission::orderBy('label')->get()]);
     }
 
+    public function editUserAccess(User $user, BranchContext $branches): View
+    {
+        $actor = auth()->user();
+        abort_unless($actor->isControllerAdministrator(), 403);
+        $this->ensureCanManageUser($actor, $user, $branches->id());
+
+        $user->load(['roles.permissions', 'permissions']);
+        $rolePermissionIds = $user->roles
+            ->flatMap(fn (Role $role) => $role->permissions->pluck('id'))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $directPermissions = $user->permissions->keyBy('id');
+        $effectivePermissionIds = $directPermissions
+            ->filter(fn (Permission $permission): bool => (bool) $permission->pivot->allowed)
+            ->keys()
+            ->merge($rolePermissionIds->reject(fn (int $id): bool => $directPermissions->has($id)))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        return view('admin.user-access', [
+            'managedUser' => $user,
+            'permissions' => Permission::orderBy('label')->get(),
+            'directPermissions' => $directPermissions,
+            'rolePermissionIds' => $rolePermissionIds,
+            'effectivePermissionIds' => $effectivePermissionIds,
+        ]);
+    }
+
+    public function updateUserAccess(Request $request, User $user, BranchContext $branches): RedirectResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor->isControllerAdministrator(), 403);
+        $this->ensureCanManageUser($actor, $user, $branches->id());
+        $data = $request->validate([
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => ['integer', 'exists:permissions,id'],
+        ]);
+        $selectedPermissionIds = collect($data['permissions'] ?? [])->map(fn ($id): int => (int) $id)->unique();
+        $pivot = Permission::query()->pluck('id')->mapWithKeys(fn ($id): array => [
+            (int) $id => ['allowed' => $selectedPermissionIds->contains((int) $id)],
+        ])->all();
+        $user->permissions()->sync($pivot);
+
+        return redirect()->route('admin.users')->with('success', "Access for {$user->name} was updated.");
+    }
+
     public function audit(): View
     {
         return view('admin.audit', ['logs' => AuditLog::with('user')->latest()->paginate(30)]);

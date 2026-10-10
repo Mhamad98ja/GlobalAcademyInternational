@@ -505,6 +505,32 @@
     .dars-icon-button { display: inline-grid; width: 2.1rem; height: 1.9rem; place-items: center; border: 1px solid #1681ee; border-radius: .2rem; background: #fff; color: #0874df; }
     .dars-icon-button svg { width: 1rem; height: 1rem; }
     .dars-edit-button { border-color: #748091; color: #516071 !important; font-size: 1rem; }
+    .dars-access-button { width: auto; min-width: 5.8rem; padding: 0 .45rem; font-size: .66rem; font-weight: 700; white-space: nowrap; }
+    .user-access-page { max-width: 74rem; }
+    .user-access-summary { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1.1rem 1.25rem; }
+    .user-access-summary > div:first-child { display:flex; align-items:center; gap:.8rem; }
+    .user-access-summary h2 { margin:0; color:var(--sbm-ink,#15273f); font-size:1rem; font-weight:800; }
+    .user-access-summary p { margin:.2rem 0 0; color:var(--sbm-muted,#65758b); font-size:.75rem; }
+    .user-access-avatar { display:grid; width:2.8rem; height:2.8rem; place-items:center; border-radius:50%; background:#eaf2ff; color:#2563eb; font-weight:800; }
+    .user-access-roles { display:grid; gap:.2rem; text-align:right; }
+    .user-access-roles span { color:#718096; font-size:.68rem; text-transform:uppercase; letter-spacing:.08em; }
+    .user-access-roles strong { color:#243b53; font-size:.78rem; }
+    .user-access-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; padding:1.2rem; }
+    .user-access-group { min-width:0; padding:0; border:1px solid #dfe7f1; border-radius:.6rem; }
+    .user-access-group legend { margin-left:.8rem; padding:0 .35rem; color:#1f4f86; font-size:.78rem; font-weight:800; }
+    .user-access-permission { display:flex; align-items:center; gap:.65rem; min-height:3.2rem; padding:.55rem .75rem; border-top:1px solid #edf1f6; cursor:pointer; }
+    .user-access-permission:first-of-type { border-top:0; }
+    .user-access-permission input { width:1rem; height:1rem; flex:0 0 auto; accent-color:#2563eb; }
+    .user-access-permission > span { min-width:0; flex:1; }
+    .user-access-permission strong,.user-access-permission small { display:block; }
+    .user-access-permission strong { color:#263c56; font-size:.75rem; }
+    .user-access-permission small { margin-top:.15rem; color:#8a98a9; font-size:.64rem; }
+    .user-access-permission em { padding:.2rem .35rem; border-radius:.3rem; background:#f1f5f9; color:#718096; font-size:.58rem; font-style:normal; font-weight:700; }
+    .user-access-permission em.is-explicit { background:#e8f5ed; color:#25804a; }
+    .user-access-permission em.is-blocked { background:#fff0ef; color:#c2413c; }
+    .user-access-footer { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.2rem; border-top:1px solid #dfe7f1; background:#f8fafc; }
+    .user-access-footer p { margin:0; color:#718096; font-size:.72rem; }
+    @media (max-width:760px) { .user-access-summary,.user-access-footer { align-items:flex-start; flex-direction:column; }.user-access-roles { text-align:left; }.user-access-grid { grid-template-columns:1fr; padding:.8rem; } }
     .dars-admin-pagination { padding: .75rem; }
     .dars-empty-workspace { min-height: calc(100vh - 7rem); }
     .dars-breadcrumb { display: flex; align-items: center; gap: .4rem; margin-bottom: .7rem; padding: .45rem .8rem; background: #f8f9fb; color: #536072; font-size: .78rem; }

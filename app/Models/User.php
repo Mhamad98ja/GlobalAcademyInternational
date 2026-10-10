@@ -69,6 +69,11 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class);
     }
 
+    public function permissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class)->withPivot('allowed')->withTimestamps();
+    }
+
     public function branches(): BelongsToMany
     {
         return $this->belongsToMany(Branch::class)->withPivot('is_default', 'is_branch_administrator')->withTimestamps();
@@ -106,6 +111,15 @@ class User extends Authenticatable
 
     public function hasPermission(string $permission): bool
     {
+        if ($this->isControllerAdministrator()) {
+            return true;
+        }
+
+        $directPermission = $this->permissions()->where('permissions.name', $permission)->first();
+        if ($directPermission) {
+            return (bool) $directPermission->pivot->allowed;
+        }
+
         return $this->roles()->where(function ($query) use ($permission): void {
             $query->where('name', 'super-administrator')
                 ->orWhereHas('permissions', fn ($permissions) => $permissions->where('name', $permission));

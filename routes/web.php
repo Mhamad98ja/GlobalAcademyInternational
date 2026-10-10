@@ -303,6 +303,8 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     Route::middleware('permission:admin.manage')->group(function (): void {
         Route::get('/admin/users', [AdministrationController::class, 'users'])->name('admin.users');
         Route::post('/admin/users', [AdministrationController::class, 'storeUser'])->name('admin.users.store');
+        Route::get('/admin/users/{user}/access', [AdministrationController::class, 'editUserAccess'])->name('admin.users.access.edit');
+        Route::put('/admin/users/{user}/access', [AdministrationController::class, 'updateUserAccess'])->name('admin.users.access.update');
         Route::post('/admin/users/{user}/toggle', [AdministrationController::class, 'toggleUser'])->name('admin.users.toggle');
         Route::delete('/admin/users/{user}', [AdministrationController::class, 'destroyUser'])->name('admin.users.destroy');
         Route::post('/admin/users/{user}/controller-administrator', [AdministrationController::class, 'transferControllerAuthority'])->middleware('can:manage-branches')->name('admin.users.controller.transfer');
