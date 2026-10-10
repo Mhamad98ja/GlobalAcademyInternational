@@ -632,6 +632,34 @@ class MultiBranchWorkflowTest extends TestCase
         Storage::disk('public')->assertExists($managedUser->profile_photo_path);
     }
 
+    public function test_branch_administrator_can_see_student_users_from_the_student_branch(): void
+    {
+        $branchAdministrator = $this->user('student-directory-admin@example.test');
+        [$main, $north] = $this->branches($branchAdministrator);
+        $north->users()->updateExistingPivot($branchAdministrator->id, ['is_branch_administrator' => true]);
+        $student = Student::withoutGlobalScopes()->create([
+            'branch_id' => $north->id,
+            'student_number' => 'NORTH-PORTAL-001',
+            'first_name' => 'North',
+            'last_name' => 'Portal Student',
+            'email' => 'north.portal.student@example.test',
+        ]);
+        $studentRole = Role::firstOrCreate(['name' => 'student'], ['label' => 'Student']);
+        $studentUser = User::factory()->create(['name' => $student->full_name, 'email' => $student->email, 'student_id' => $student->id, 'is_active' => true]);
+        $studentUser->roles()->attach($studentRole);
+
+        $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $north->id])
+            ->get(route('admin.users'))
+            ->assertOk()
+            ->assertSee($student->full_name)
+            ->assertSee('Student');
+
+        $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $north->id])
+            ->get(route('admin.users', ['role_id' => $studentRole->id]))
+            ->assertOk()
+            ->assertSee($student->full_name);
+    }
+
     public function test_branch_super_administrator_controls_local_users_while_branch_users_cannot_view_financial_data(): void
     {
         $controller = $this->user('controller@example.test');

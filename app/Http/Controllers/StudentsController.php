@@ -113,6 +113,7 @@ class StudentsController extends Controller
             ]);
             $studentRole = Role::query()->where('name', 'student')->firstOrFail();
             $portalUser->roles()->sync([$studentRole->id]);
+            $this->syncStudentPortalBranch($portalUser, $student);
 
             if ($request->filled('academic_year_id')) {
                 $registrations->register($student, $request->validate([
@@ -191,9 +192,20 @@ class StudentsController extends Controller
             $portalUser = User::create(['name' => $student->full_name, 'email' => $student->email, 'password' => $password, 'student_id' => $student->id, 'is_active' => true]);
             $studentRole = Role::query()->where('name', 'student')->firstOrFail();
             $portalUser->roles()->sync([$studentRole->id]);
+            $this->syncStudentPortalBranch($portalUser, $student);
+        }
+        if ($student->portalUser && $student->branch_id !== null) {
+            $this->syncStudentPortalBranch($student->portalUser, $student);
         }
 
         return redirect()->route('students.show', $student)->with('success', 'Student profile updated.');
+    }
+
+    private function syncStudentPortalBranch(User $portalUser, Student $student): void
+    {
+        if ($student->branch_id !== null) {
+            $portalUser->branches()->sync([(int) $student->branch_id => ['is_default' => true, 'is_branch_administrator' => false]]);
+        }
     }
 
     public function destroy(Student $student, AuditService $audit): RedirectResponse

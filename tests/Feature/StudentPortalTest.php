@@ -92,6 +92,7 @@ class StudentPortalTest extends TestCase
         $this->assertSame($student->full_name, $portalUser->name);
         $this->assertTrue($portalUser->hasRole('student'));
         $this->assertTrue(password_verify('StudentPortal1234!', $portalUser->password));
+        $this->assertDatabaseHas('branch_user', ['user_id' => $portalUser->id, 'branch_id' => $student->branch_id, 'is_default' => true]);
         $this->post(route('logout'))->assertRedirect(route('login'));
         $this->post(route('login.store'), ['email' => $portalUser->email, 'password' => 'StudentPortal1234!'])->assertRedirect(route('student-portal.index'));
     }

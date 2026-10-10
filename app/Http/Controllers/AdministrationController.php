@@ -20,6 +20,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -37,12 +38,22 @@ class AdministrationController extends Controller
             'q' => ['nullable', 'string', 'max:120'],
         ]);
         $status = $filters['status'] ?? 'active';
-        $query = User::with('roles', 'branches')
-            ->when(! $canManageBranchAssignments, fn ($users) => $users->whereHas('branches', fn ($assignedBranches) => $assignedBranches->whereKey($currentBranchId)))
+        $query = User::with('roles', 'branches', 'student')
+            ->when(! $canManageBranchAssignments, function ($users) use ($currentBranchId): void {
+                $users->where(function ($scopedUsers) use ($currentBranchId): void {
+                    $scopedUsers->whereHas('branches', fn ($assignedBranches) => $assignedBranches->whereKey($currentBranchId))
+                        ->orWhereHas('student', fn ($students) => $students->withoutGlobalScopes()->where('branch_id', $currentBranchId));
+                });
+            })
             ->when($status !== 'all', fn ($users) => $users->where('is_active', $status === 'active'))
             ->when($filters['role_id'] ?? null, fn ($users, $roleId) => $users->whereHas('roles', fn ($roles) => $roles->whereKey($roleId)))
             ->when($filters['q'] ?? null, fn ($users, $search) => $users->where(function ($names) use ($search): void {
-                $names->where('name', 'like', '%'.$search.'%')->orWhere('email', 'like', '%'.$search.'%');
+                $names->where('name', 'like', '%'.$search.'%')->orWhere('email', 'like', '%'.$search.'%')
+                    ->orWhereHas('student', fn ($students) => $students->withoutGlobalScopes()->where(function ($studentSearch) use ($search): void {
+                        $studentSearch->where('student_number', 'like', '%'.$search.'%')
+                            ->orWhere('first_name', 'like', '%'.$search.'%')
+                            ->orWhere('last_name', 'like', '%'.$search.'%');
+                    }));
             }));
 
         return view('admin.users', [
@@ -53,7 +64,9 @@ class AdministrationController extends Controller
             'canManageBranchAssignments' => $canManageBranchAssignments,
             'currentBranchId' => $currentBranchId,
             'teachers' => Teacher::where('is_active', true)->orderBy('first_name')->get(),
-            'students' => Student::query()->with('registrations.grade', 'registrations.section')->orderBy('first_name')->orderBy('last_name')->get(),
+            'students' => ($canManageBranchAssignments ? Student::withoutGlobalScopes() : Student::query())
+                ->with('branch', 'registrations.grade', 'registrations.section')
+                ->orderBy('first_name')->orderBy('last_name')->get(),
         ]);
     }
 
@@ -80,6 +93,8 @@ class AdministrationController extends Controller
             'branch_administrator_ids' => ['nullable', 'array'],
             'branch_administrator_ids.*' => ['integer', 'exists:branches,id'],
         ]);
+
+        $this->ensureStudentBranchAssignment($roleName, $data, $canManageBranchAssignments);
 
         $user = User::create([
             'name' => $data['name'],
@@ -117,7 +132,9 @@ class AdministrationController extends Controller
             'branches' => Branch::where('is_active', true)->orderBy('name')->get(),
             'canManageBranchAssignments' => $actor->isControllerAdministrator(),
             'teachers' => Teacher::where('is_active', true)->orderBy('first_name')->get(),
-            'students' => Student::query()->with('registrations.grade', 'registrations.section')->orderBy('first_name')->orderBy('last_name')->get(),
+            'students' => ($actor->isControllerAdministrator() ? Student::withoutGlobalScopes() : Student::query())
+                ->with('branch', 'registrations.grade', 'registrations.section')
+                ->orderBy('first_name')->orderBy('last_name')->get(),
         ]);
     }
 
@@ -146,6 +163,7 @@ class AdministrationController extends Controller
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:max_width=3000,max_height=3000'],
             'remove_profile_photo' => ['nullable', 'boolean'],
         ]);
+        $this->ensureStudentBranchAssignment($roleName, $data, $canManageBranchAssignments);
 
         $attributes = [
             'name' => $data['name'],
@@ -192,6 +210,19 @@ class AdministrationController extends Controller
         abort_unless($user->profile_photo_path && Storage::disk('public')->exists($user->profile_photo_path), 404);
 
         return Storage::disk('public')->response($user->profile_photo_path, null, ['Cache-Control' => 'private, max-age=3600']);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function ensureStudentBranchAssignment(?string $roleName, array $data, bool $canManageBranchAssignments): void
+    {
+        if (! $canManageBranchAssignments || $roleName !== 'student' || empty($data['student_id'])) {
+            return;
+        }
+
+        $studentBranchId = Student::withoutGlobalScopes()->whereKey($data['student_id'])->value('branch_id');
+        if ($studentBranchId !== null && ! in_array((int) $studentBranchId, array_map('intval', $data['branch_ids'] ?? []), true)) {
+            throw ValidationException::withMessages(['branch_ids' => 'The student account must be assigned to the student’s branch.']);
+        }
     }
 
     public function toggleUser(User $user, BranchContext $branches): RedirectResponse
