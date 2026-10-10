@@ -84,14 +84,6 @@
             'home' => ['route' => 'admin.users', 'label' => 'Users and Roles', 'icon' => 'administration', 'permission' => 'admin.manage'],
             'items' => [],
             'groups' => [
-                ['label' => 'Configuration', 'items' => [
-                    ['route' => 'academic.index', 'label' => 'School Year', 'icon' => 'academic', 'permission' => 'academic.manage', 'anchor' => 'academic-years'],
-                    ['route' => 'admin.roles', 'label' => 'Menu', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
-                    ['route' => 'admin.roles', 'label' => 'Pages', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
-                    ['route' => 'admin.settings', 'label' => 'Report Header', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
-                    ['route' => 'admin.settings', 'label' => 'Configuration', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
-                    ['route' => 'admin.settings', 'label' => 'Dynamic Fields', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
-                ]],
                 ['label' => 'References', 'items' => [
                     ['route' => 'students.references.show', 'params' => ['reference' => 'codes'], 'label' => 'Codes', 'icon' => 'administration', 'permission' => 'students.view'],
                     ['route' => 'students.references.show', 'params' => ['reference' => 'division'], 'label' => 'Division', 'icon' => 'academic', 'permission' => 'students.view'],
