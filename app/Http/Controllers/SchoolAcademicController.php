@@ -25,7 +25,33 @@ class SchoolAcademicController extends Controller
 {
     public function index(): View
     {
+        return $this->operationsPage('overview');
+    }
+
+    public function subjects(): View
+    {
+        return $this->operationsPage('subjects');
+    }
+
+    public function terms(): View
+    {
+        return $this->operationsPage('terms');
+    }
+
+    public function assignments(): View
+    {
+        return $this->operationsPage('assignments');
+    }
+
+    public function assessments(): View
+    {
+        return $this->operationsPage('assessments');
+    }
+
+    private function operationsPage(string $activeSection): View
+    {
         return view('school-academic.index', [
+            'activeSection' => $activeSection,
             'years' => AcademicYear::query()->orderByDesc('starts_on')->get(),
             'grades' => Grade::query()->with('sections')->orderBy('sort_order')->get(),
             'teachers' => Teacher::query()->where('is_active', true)->orderBy('first_name')->orderBy('last_name')->get(),

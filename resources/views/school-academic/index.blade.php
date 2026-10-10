@@ -1,16 +1,49 @@
 @extends('layouts.app', ['title' => 'Academic operations'])
 
 @section('content')
+@php
+    $activeSection = $activeSection ?? 'overview';
+    $operationSections = [
+        'overview' => ['label' => 'Operations overview', 'description' => 'Choose one focused setup area.', 'route' => 'school-academic.index'],
+        'subjects' => ['label' => 'Subjects', 'description' => 'Create the subjects taught by the school.', 'route' => 'school-academic.subjects'],
+        'terms' => ['label' => 'Terms / semesters', 'description' => 'Define dates and status for each academic period.', 'route' => 'school-academic.terms'],
+        'assignments' => ['label' => 'Teacher subject assignments', 'description' => 'Connect a teacher, subject, class, and section.', 'route' => 'school-academic.assignments'],
+        'assessments' => ['label' => 'Assessments', 'description' => 'Configure tests, exams, and the review queue.', 'route' => 'school-academic.assessments'],
+    ];
+@endphp
 @if(request('module') === 'students')<div class="mb-4 text-sm text-slate-500"><a class="link" href="{{ route('workspaces.show', ['workspace' => 'students']) }}">Student dossier</a> / <a class="link" href="{{ route('students.tools', ['section' => 'references']) }}">References</a></div>@endif
 <div class="page-header">
     <div>
-        <div class="text-sm text-slate-500"><a class="link" href="{{ route('academic.index') }}">Academic structure</a> / Operations</div>
+        <div class="text-sm text-slate-500"><a class="link" href="{{ route('academic.index') }}">Academic structure</a> / <a class="link" href="{{ route('school-academic.index') }}">Operations</a>@if ($activeSection !== 'overview') / <strong class="text-slate-700">{{ $operationSections[$activeSection]['label'] }}</strong>@endif</div>
         <h1 class="page-title mt-1">Academic operations</h1>
-        <p class="page-subtitle">Configure subjects, academic terms, assessments, and the subjects each teacher teaches for each class.</p>
+        <p class="page-subtitle">{{ $operationSections[$activeSection]['description'] ?? 'Manage academic setup in focused workspaces.' }} Each area has its own create, list, and edit workflow.</p>
     </div>
 </div>
 
-<div class="grid gap-6 2xl:grid-cols-3">
+<nav class="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5" aria-label="Academic operations sections">
+    @foreach ($operationSections as $key => $section)
+        <a href="{{ route($section['route']) }}" class="rounded-lg border p-4 transition hover:-translate-y-0.5 hover:shadow-sm {{ $activeSection === $key ? 'border-teal-600 bg-teal-50 ring-1 ring-teal-600/20' : 'border-slate-200 bg-white hover:border-teal-300' }}">
+            <span class="block text-sm font-semibold {{ $activeSection === $key ? 'text-teal-800' : 'text-slate-800' }}">{{ $section['label'] }}</span>
+            <span class="mt-1 block text-xs leading-5 text-slate-500">{{ $section['description'] }}</span>
+            <span class="mt-3 block text-xs font-semibold uppercase tracking-wide {{ $activeSection === $key ? 'text-teal-700' : 'text-slate-400' }}">{{ $activeSection === $key ? 'Current area' : 'Open area' }} <span aria-hidden="true">→</span></span>
+        </a>
+    @endforeach
+</nav>
+
+@if ($activeSection === 'overview')
+    <section class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        @foreach (['subjects' => ['count' => $subjects->count(), 'label' => 'Subjects ready', 'note' => 'Active and inactive subject records'], 'terms' => ['count' => $terms->count(), 'label' => 'Terms configured', 'note' => 'Academic periods across school years'], 'assignments' => ['count' => $assignments->where('is_active', true)->count(), 'label' => 'Active assignments', 'note' => 'Teacher-to-subject class links'], 'assessments' => ['count' => $assessments->count(), 'label' => 'Assessments', 'note' => 'Tests, exams, and evaluation setup']] as $key => $stat)
+            <a href="{{ route($operationSections[$key]['route']) }}" class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md">
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $stat['label'] }}</span>
+                <strong class="mt-2 block text-3xl font-semibold tracking-tight text-slate-900">{{ number_format($stat['count']) }}</strong>
+                <span class="mt-1 block text-sm text-slate-500">{{ $stat['note'] }}</span>
+                <span class="mt-4 block text-sm font-semibold text-teal-700">Manage {{ strtolower($operationSections[$key]['label']) }} →</span>
+            </a>
+        @endforeach
+    </section>
+@endif
+
+@if ($activeSection === 'subjects')
     <section class="panel">
         <div class="panel-header"><h2 id="subjects" class="panel-title scroll-mt-20">Subjects</h2></div>
         <form method="POST" action="{{ route('school-academic.subjects.store') }}" class="space-y-3 border-b border-slate-200 p-5">
@@ -40,7 +73,9 @@
             </table>
         </div>
     </section>
+@endif
 
+@if ($activeSection === 'terms')
     <section class="panel">
         <div class="panel-header"><h2 id="terms" class="panel-title scroll-mt-20">Terms / semesters</h2></div>
         <form method="POST" action="{{ route('school-academic.terms.store') }}" class="space-y-3 border-b border-slate-200 p-5">
@@ -76,7 +111,9 @@
             </table>
         </div>
     </section>
+@endif
 
+@if ($activeSection === 'assignments')
     <section class="panel">
         <div class="panel-header"><h2 id="assignments" class="panel-title scroll-mt-20">Teacher subject assignments</h2></div>
         <form method="POST" action="{{ route('school-academic.assignments.store') }}" class="space-y-3 border-b border-slate-200 p-5">
@@ -139,8 +176,9 @@
             </table>
         </div>
     </section>
-</div>
+@endif
 
+@if ($activeSection === 'assessments')
 <section class="panel mt-6">
     <div class="panel-header"><div><h2 id="assessments" class="panel-title scroll-mt-20">Assessments</h2><p class="text-sm text-slate-500">Every assessment belongs to the subject, teacher, and class where it will be delivered.</p></div></div>
     <form method="POST" action="{{ route('school-academic.assessments.store') }}" class="grid gap-3 border-b border-slate-200 p-5 md:grid-cols-2 xl:grid-cols-4">
@@ -205,6 +243,7 @@
 <section class="panel mt-6">
     <div class="panel-header"><div><h2 class="panel-title">Edit academic configuration</h2><p class="text-sm text-slate-500">Historical records remain intact; changes here affect future work.</p></div></div>
     <div class="grid gap-4 p-5 xl:grid-cols-2">
+        @if ($activeSection === 'subjects')
         <div class="space-y-2">
             <h3 class="font-medium">Subjects</h3>
             @foreach ($subjects as $subject)
@@ -221,7 +260,9 @@
                 </details>
             @endforeach
         </div>
+        @endif
 
+        @if ($activeSection === 'terms')
         <div class="space-y-2">
             <h3 class="font-medium">Terms</h3>
             @foreach ($terms as $term)
@@ -248,7 +289,9 @@
                 </details>
             @endforeach
         </div>
+        @endif
 
+        @if ($activeSection === 'assessments')
         <div class="space-y-2">
             <h3 class="font-medium">Assessments</h3>
             @foreach ($assessments as $assessment)
@@ -288,7 +331,9 @@
                 </details>
             @endforeach
         </div>
+        @endif
 
+        @if ($activeSection === 'assignments')
         <div class="space-y-2">
             <h3 class="font-medium">Teacher assignments</h3>
             @foreach ($assignments as $assignment)
@@ -333,6 +378,8 @@
                 </details>
             @endforeach
         </div>
+        @endif
     </div>
 </section>
+@endif
 @endsection

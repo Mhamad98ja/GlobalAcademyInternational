@@ -202,6 +202,10 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     });
     Route::middleware('permission:academic_year.manage')->group(function (): void {
         Route::get('/academic/operations', [SchoolAcademicController::class, 'index'])->name('school-academic.index');
+        Route::get('/academic/operations/subjects', [SchoolAcademicController::class, 'subjects'])->name('school-academic.subjects');
+        Route::get('/academic/operations/terms', [SchoolAcademicController::class, 'terms'])->name('school-academic.terms');
+        Route::get('/academic/operations/teacher-assignments', [SchoolAcademicController::class, 'assignments'])->name('school-academic.assignments');
+        Route::get('/academic/operations/assessments', [SchoolAcademicController::class, 'assessments'])->name('school-academic.assessments');
         Route::post('/academic/subjects', [SchoolAcademicController::class, 'storeSubject'])->name('school-academic.subjects.store');
         Route::put('/academic/subjects/{subject}', [SchoolAcademicController::class, 'updateSubject'])->name('school-academic.subjects.update');
         Route::post('/academic/terms', [SchoolAcademicController::class, 'storeTerm'])->name('school-academic.terms.store');
@@ -441,7 +445,7 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     Route::get('/Admin/ChangePassword.aspx', fn () => redirect()->route('dashboard'))->name('dars.admin.password');
     Route::get('/Online/Admin/admUsers.aspx', fn () => redirect()->route('admin.users'))->middleware('permission:admin.manage')->name('dars.admin.online-users');
     Route::get('/Online/Admin/admUserAcces.aspx', fn () => redirect()->route('admin.users'))->middleware('permission:admin.manage')->name('dars.admin.online-access');
-    Route::get('/Online/Admin/NotClasseMatiere.aspx', fn () => redirect()->route('school-academic.index'))->middleware('permission:academic_year.manage')->name('dars.admin.online-class-subjects');
+    Route::get('/Online/Admin/NotClasseMatiere.aspx', fn () => redirect()->route('school-academic.assignments'))->middleware('permission:academic_year.manage')->name('dars.admin.online-class-subjects');
     Route::get('/StudentProfile/References/SchoolYear.aspx', fn () => redirect()->route('academic.index'))->middleware('permission:academic.manage')->name('dars.admin.school-year');
     foreach ([
         '/Admin/UsrMenu.aspx' => 'menu',

@@ -118,7 +118,7 @@
                     ['route' => 'collaboration.index', 'params' => ['section' => 'evaluation-dashboard'], 'label' => 'Dashboard', 'icon' => 'reports', 'permission' => 'performance.view'],
                     ['route' => 'grades.index', 'params' => ['view' => 'evaluations'], 'label' => 'Evaluation Grades', 'icon' => 'academic', 'permission' => 'grades.enter'],
                     ['route' => 'grades.index', 'params' => ['view' => 'grade-book'], 'label' => 'Grade Book', 'icon' => 'academic', 'permission' => 'grades.enter'],
-                    ['route' => 'school-academic.index', 'label' => 'Evaluations List', 'icon' => 'academic', 'permission' => 'academic_year.manage', 'anchor' => 'assessments'],
+                    ['route' => 'school-academic.assessments', 'label' => 'Evaluations List', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
                     ['route' => 'collaboration.index', 'params' => ['section' => 'modification-requests'], 'label' => 'My Requests', 'icon' => 'reports', 'permission' => 'performance.view'],
                 ]],
                 ['label' => 'Agenda reports', 'items' => [
@@ -352,7 +352,7 @@
         'items' => [
             ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Report Card', 'icon' => 'reports', 'permission' => 'reports.view'],
             ['route' => 'reports.index', 'label' => 'Academic Reports', 'icon' => 'reports', 'permission' => 'reports.view'],
-            ['route' => 'school-academic.index', 'label' => 'Class Subjects', 'icon' => 'academic', 'permission' => 'academic_year.manage', 'anchor' => 'assignments'],
+            ['route' => 'school-academic.assignments', 'label' => 'Teacher Subject Assignments', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
         ],
         'groups' => [],
     ];

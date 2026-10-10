@@ -15,9 +15,9 @@
             </a>
         @endif
         @if(auth()->user()->hasPermission('academic_year.manage'))
-            <a class="academic-hub-card" href="{{ route('school-academic.index') }}#assignments">
+            <a class="academic-hub-card" href="{{ route('school-academic.assignments') }}">
                 <span class="academic-hub-card-icon"><x-nav-icon name="academic" /></span>
-                <span><strong>Class Subjects</strong><small>Connect each teacher, subject, grade, and section.</small><em>Open class subjects</em></span>
+                <span><strong>Teacher Subject Assignments</strong><small>Connect each teacher, subject, grade, and section.</small><em>Open assignments</em></span>
             </a>
         @endif
     </nav>

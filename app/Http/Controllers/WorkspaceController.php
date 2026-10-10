@@ -196,7 +196,7 @@ class WorkspaceController extends Controller
                 $this->task('people.manage', 'Teacher directory', 'Open teacher profiles, assignments, workloads, and history.', 'teachers.index', 'teachers', 'Open teachers'),
                 $this->task('attendance.teacher.manage', 'Teacher IN / OUT', 'Record check-ins, check-outs, absences, and late arrivals.', 'attendance.teachers', 'teachers', 'Record attendance'),
                 $this->task('substitutions.manage', 'Substitution desk', 'Review affected lessons and assign fair substitutes.', 'substitutions.index', 'teachers', 'Manage substitutions'),
-                $this->task('academic_year.manage', 'Teacher subject assignments', $assignments ? number_format($assignments).' active subject assignments connect teachers, classes, timetable, and workload.' : 'Set up the subjects each teacher teaches in each class.', 'school-academic.index', 'academic', 'Open assignments'),
+                $this->task('academic_year.manage', 'Teacher subject assignments', $assignments ? number_format($assignments).' active subject assignments connect teachers, classes, timetable, and workload.' : 'Set up the subjects each teacher teaches in each class.', 'school-academic.assignments', 'academic', 'Open assignments'),
                 $this->task('collaboration.view', 'Collaboration & class life', 'Publish subject agenda items, notices, calendar events, and student performance follow-up.', 'collaboration.index', 'responsible', 'Open collaboration'),
             ],
             [
@@ -233,12 +233,12 @@ class WorkspaceController extends Controller
             ],
             [
                 $this->task('academic.manage', 'Academic structure', 'Manage academic years, levels, grades, and sections.', 'academic.index', 'academic', 'Open structure'),
-                $this->task('academic_year.manage', 'Academic operations', 'Configure subjects, terms, assessments, and teacher assignments.', 'school-academic.index', 'academic', 'Open operations'),
+                $this->task('academic_year.manage', 'Academic operations', 'Configure subjects, terms, assessments, and teacher assignments in focused pages.', 'school-academic.index', 'academic', 'Open operations'),
                 $this->task('grades.enter', 'Grade entry', $gradeEntries ? number_format($gradeEntries).' grade records are available in your permitted assignments.' : 'Enter marks only for your permitted teacher assignments.', 'grades.index', 'academic', 'Enter grades'),
                 $this->task('timetable.view', 'Graphical timetable', 'Build class schedules and prevent teacher conflicts.', 'timetable.index', 'academic', 'Open timetable'),
             ],
             [
-                $this->activity('academic_year.manage', 'Assessment configuration', $assessments ? number_format($assessments).' assessments are configured for the active academic year.' : 'Set up terms and assessments for the active academic year.', 'school-academic.index', 'academic'),
+                $this->activity('academic_year.manage', 'Assessment configuration', $assessments ? number_format($assessments).' assessments are configured for the active academic year.' : 'Set up terms and assessments for the active academic year.', 'school-academic.assessments', 'academic'),
                 $this->activity('grades.enter', 'Grade work', $gradeEntries ? number_format($gradeEntries).' grade entries are saved in permitted assignments.' : 'No grade entries are saved in your permitted assignments yet.', 'grades.index', 'academic'),
                 $this->activity('timetable.view', 'Timetable work', $timetableEntries ? number_format($timetableEntries).' lessons are currently placed in the timetable.' : 'No lessons are placed in the timetable yet.', 'timetable.index', 'academic'),
             ],

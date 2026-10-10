@@ -142,9 +142,13 @@ class SchoolOperationsTest extends TestCase
         $this->actingAs($administrator)->get(route('dashboard'))->assertOk()->assertSee('Student Profile')->assertSee('Report Card')->assertSee('Administration')->assertSee('Online Collaboration');
         $this->actingAs($administrator)->get(route('workspaces.show', 'students'))->assertOk()->assertSee('Number of students and families')->assertSee('Remarks')->assertSee('Registrations by class');
         $this->actingAs($administrator)->get(route('workspaces.show', 'teachers'))->assertOk()->assertSee('Teacher IN / OUT')->assertSee('Substitution desk')->assertSee('Teacher subject assignments');
-        $this->actingAs($administrator)->get(route('workspaces.show', 'academic'))->assertOk()->assertSee('Users &amp; Access', false)->assertSee('Users Access')->assertSee("Class subject's teachers", false);
+        $this->actingAs($administrator)->get(route('workspaces.show', 'academic'))->assertOk()->assertSee('Users')->assertSee('Teacher Subject Assignments')->assertDontSee('Users Access');
         $this->actingAs($administrator)->get(route('workspaces.show', 'operations'))->assertOk()->assertSee('Distribute books')->assertSee('Distribution history')->assertSee('Inventory ledger');
         $this->actingAs($administrator)->get(route('school-academic.index'))->assertOk()->assertSee('Academic operations');
+        $this->actingAs($administrator)->get(route('school-academic.subjects'))->assertOk()->assertSee('Subjects')->assertSee('Add subject');
+        $this->actingAs($administrator)->get(route('school-academic.terms'))->assertOk()->assertSee('Terms / semesters')->assertSee('Add term');
+        $this->actingAs($administrator)->get(route('school-academic.assignments'))->assertOk()->assertSee('Teacher subject assignments')->assertSee('Assign subject to teacher');
+        $this->actingAs($administrator)->get(route('school-academic.assessments'))->assertOk()->assertSee('Assessments')->assertSee('Create assessment');
         $this->actingAs($administrator)->get(route('attendance.students', ['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'section_id' => $section->id]))->assertOk()->assertSee('Student attendance');
         $this->actingAs($administrator)->get(route('attendance.teachers'))->assertOk()->assertSee('Teacher attendance IN / OUT');
         $this->actingAs($administrator)->get(route('discipline.index'))->assertOk()->assertSee('Student actions & incidents', false);
