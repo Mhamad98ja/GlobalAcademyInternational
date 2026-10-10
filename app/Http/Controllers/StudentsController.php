@@ -187,6 +187,10 @@ class StudentsController extends Controller
                 $attributes['password'] = $password;
             }
             $student->portalUser->update($attributes);
+        } elseif ($password) {
+            $portalUser = User::create(['name' => $student->full_name, 'email' => $student->email, 'password' => $password, 'student_id' => $student->id, 'is_active' => true]);
+            $studentRole = Role::query()->where('name', 'student')->firstOrFail();
+            $portalUser->roles()->sync([$studentRole->id]);
         }
 
         return redirect()->route('students.show', $student)->with('success', 'Student profile updated.');

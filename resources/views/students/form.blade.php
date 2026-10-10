@@ -29,8 +29,8 @@
 
         <div><h2 class="panel-title">Student portal account</h2><p class="mt-1 text-sm text-slate-500">The student uses these credentials to sign in and see teacher agenda items, announcements, assessments, and grades.</p><div class="form-grid mt-4">
             <div><label class="form-label">Login email *</label><input type="email" name="email" value="{{ old('email', $student->email) }}" autocomplete="email" required></div>
-            <div><label class="form-label">Password {{ $student->exists ? '(leave blank to keep current password)' : '*' }}</label><input type="password" name="password" autocomplete="new-password" {{ $student->exists ? '' : 'required' }}></div>
-            <div><label class="form-label">Confirm password {{ $student->exists ? '' : '*' }}</label><input type="password" name="password_confirmation" autocomplete="new-password" {{ $student->exists ? '' : 'required' }}></div>
+            <div><label class="form-label">Password {{ $student->exists && $student->portalUser ? '(leave blank to keep current password)' : '*' }}</label><input type="password" name="password" autocomplete="new-password" {{ $student->exists && $student->portalUser ? '' : 'required' }}></div>
+            <div><label class="form-label">Confirm password {{ $student->exists && $student->portalUser ? '' : '*' }}</label><input type="password" name="password_confirmation" autocomplete="new-password" {{ $student->exists && $student->portalUser ? '' : 'required' }}></div>
         </div></div>
 
         <div><h2 class="panel-title">Contact</h2><div class="form-grid mt-4">

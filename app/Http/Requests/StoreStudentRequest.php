@@ -20,6 +20,7 @@ class StoreStudentRequest extends FormRequest
     {
         $student = $this->route('student');
         $portalUserId = $student?->portalUser?->id;
+        $requiresPortalPassword = ! $student || ! $portalUserId;
 
         return [
             'student_number' => ['nullable', 'string', 'max:50', Rule::unique('students', 'student_number')->ignore($student)],
@@ -36,7 +37,7 @@ class StoreStudentRequest extends FormRequest
                 Rule::unique('users', 'email')->ignore($portalUserId),
             ],
             'password' => [
-                Rule::requiredIf(fn (): bool => ! $student),
+                Rule::requiredIf(fn (): bool => $requiresPortalPassword),
                 'nullable', 'confirmed', Password::min(12)->mixedCase()->numbers(),
             ],
             'address' => ['nullable', 'string', 'max:2000'],
