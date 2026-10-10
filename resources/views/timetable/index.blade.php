@@ -1,7 +1,7 @@
 @extends('layouts.app', ['title' => 'Timetable'])
 
 @section('content')
-<div class="page-header"><div><h1 class="page-title">Graphical timetable</h1><p class="page-subtitle">Drag a teacher subject assignment into an empty class slot. Server-side checks prevent teacher, class, room, and workload conflicts.</p></div><a class="btn btn-secondary" href="{{ route('substitutions.index') }}">Substitutions</a></div>
+<div class="page-header"><div><h1 class="page-title">Graphical timetable</h1><p class="page-subtitle">Create lesson cards from subject and teacher assignments, then generate or adjust a balanced weekly class schedule.</p></div><div class="flex flex-wrap gap-2"><a class="btn btn-secondary" href="{{ route('substitutions.index') }}">Substitutions</a>@if(auth()->user()->hasPermission('timetable.manage'))<form method="POST" action="{{ route('timetable.generate') }}" onsubmit="return confirm('Generate the missing lessons for this class? Existing scheduled lessons will be kept.');">@csrf<input type="hidden" name="academic_year_id" value="{{ $filters['academic_year_id'] }}"><input type="hidden" name="grade_id" value="{{ $filters['grade_id'] }}"><input type="hidden" name="section_id" value="{{ $filters['section_id'] }}"><button class="btn btn-primary">Generate timetable</button></form>@endif</div></div>
 
 <section class="panel"><div class="panel-header"><form method="GET" class="grid w-full gap-3 md:grid-cols-4">
     <select name="academic_year_id"><option value="">Academic year</option>

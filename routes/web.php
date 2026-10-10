@@ -269,6 +269,7 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/timetable', [TimetableController::class, 'index'])->name('timetable.index');
         Route::middleware('permission:timetable.manage')->group(function (): void {
             Route::post('/timetable/periods', [TimetableController::class, 'storePeriod'])->name('timetable.periods.store');
+            Route::post('/timetable/generate', [TimetableController::class, 'generate'])->name('timetable.generate');
             Route::post('/timetable/entries', [TimetableController::class, 'store'])->name('timetable.entries.store');
             Route::put('/timetable/entries/{timetableEntry}', [TimetableController::class, 'update'])->name('timetable.entries.update');
             Route::delete('/timetable/entries/{timetableEntry}', [TimetableController::class, 'destroy'])->name('timetable.entries.destroy');

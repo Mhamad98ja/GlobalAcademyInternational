@@ -16,6 +16,8 @@ use App\Models\StudentRegistration;
 use App\Models\Subject;
 use App\Models\Teacher;
 use App\Models\TeacherAssignment;
+use App\Models\TimetableEntry;
+use App\Models\TimetablePeriod;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -132,6 +134,30 @@ class SchoolOperationsTest extends TestCase
 
         $this->actingAs($administrator)->post(route('timetable.entries.store'), ['teacher_assignment_id' => $second->id, 'day_of_week' => 'monday', 'period_number' => 1])->assertSessionHasErrors('period_number');
         $this->assertDatabaseCount('timetable_entries', 1);
+    }
+
+    public function test_timetable_generator_distributes_assignment_lessons_for_the_selected_class(): void
+    {
+        $administrator = $this->administrator();
+        [$year, $grade, $section] = $this->classRegistration($administrator);
+        $teacher = Teacher::create(['first_name' => 'Nour', 'last_name' => 'Planner', 'is_active' => true]);
+        $math = Subject::create(['name' => 'Mathematics']);
+        $science = Subject::create(['name' => 'Science']);
+        TeacherAssignment::create(['academic_year_id' => $year->id, 'teacher_id' => $teacher->id, 'subject_id' => $math->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'required_periods_per_week' => 2, 'is_active' => true]);
+        TeacherAssignment::create(['academic_year_id' => $year->id, 'teacher_id' => $teacher->id, 'subject_id' => $science->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'required_periods_per_week' => 2, 'is_active' => true]);
+        foreach (range(1, 4) as $period) {
+            TimetablePeriod::create(['academic_year_id' => $year->id, 'period_number' => $period, 'label' => 'Period '.$period, 'kind' => 'lesson']);
+        }
+
+        $this->actingAs($administrator)->post(route('timetable.generate'), [
+            'academic_year_id' => $year->id,
+            'grade_id' => $grade->id,
+            'section_id' => $section->id,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $entries = TimetableEntry::query()->where('academic_year_id', $year->id)->where('section_id', $section->id)->get();
+        $this->assertCount(4, $entries);
+        $this->assertCount(4, $entries->map(fn (TimetableEntry $entry) => $entry->day_of_week.'-'.$entry->period_number)->unique());
     }
 
     public function test_school_operations_screens_render_with_the_existing_navigation_context(): void

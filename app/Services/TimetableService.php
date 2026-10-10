@@ -76,7 +76,10 @@ final class TimetableService
         }
 
         $assignment = TeacherAssignment::findOrFail($attributes['teacher_assignment_id']);
-        $scheduledForAssignment = $withoutCurrent(TimetableEntry::query()->where('teacher_assignment_id', $assignment->id))->count();
+        $scheduledForAssignment = $withoutCurrent(TimetableEntry::query()
+            ->where('teacher_assignment_id', $assignment->id)
+            ->where('section_id', $attributes['section_id']))
+            ->count();
         if ($assignment->required_periods_per_week > 0 && $scheduledForAssignment >= $assignment->required_periods_per_week) {
             throw ValidationException::withMessages(['teacher_assignment_id' => 'The required weekly periods for this assignment are already scheduled.']);
         }
