@@ -181,6 +181,7 @@ class PeopleController extends Controller
             'middle_name' => ['nullable', 'string', 'max:100'],
             'last_name' => ['nullable', 'string', 'max:100'],
             'type' => ['required', 'in:teacher,father,mother,guardian,administrator,other'],
+            'blood_type' => ['nullable', Rule::in(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])],
             'religion' => ['nullable', 'string', 'max:100'],
             'family_type' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
@@ -221,14 +222,16 @@ class PeopleController extends Controller
         return $data;
     }
 
-    /** @return array{familyTypes: \Illuminate\Support\Collection, districts: \Illuminate\Support\Collection, towns: \Illuminate\Support\Collection} */
+    /** @return array{familyTypes: \Illuminate\Support\Collection, bloodTypes: \Illuminate\Support\Collection, districts: \Illuminate\Support\Collection, towns: \Illuminate\Support\Collection} */
     private function referenceOptions(): array
     {
         $entries = StudentReferenceEntry::query()->get();
         $familyTypes = $entries->where('reference', 'codes')->filter(fn ($entry): bool => in_array(strtolower((string) $entry->category), ['family-type', 'family_type', 'family type'], true))->pluck('value');
+        $bloodTypes = collect(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']);
 
         return [
             'familyTypes' => $familyTypes->merge(ResponsiblePerson::query()->whereNotNull('family_type')->pluck('family_type'))->filter()->unique()->sort()->values(),
+            'bloodTypes' => $bloodTypes,
             'districts' => $entries->where('reference', 'district')->pluck('value')->merge(ResponsiblePerson::query()->whereNotNull('district')->pluck('district'))->filter()->unique()->sort()->values(),
             'towns' => $entries->where('reference', 'towns')->pluck('value')->merge(ResponsiblePerson::query()->whereNotNull('town')->pluck('town'))->filter()->unique()->sort()->values(),
         ];

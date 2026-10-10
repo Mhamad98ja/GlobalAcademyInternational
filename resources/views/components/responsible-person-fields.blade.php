@@ -1,4 +1,4 @@
-@props(['person', 'teachers', 'selectedStudents', 'referenceOptions' => ['familyTypes' => [], 'districts' => [], 'towns' => []]])
+@props(['person', 'teachers', 'selectedStudents', 'referenceOptions' => ['familyTypes' => [], 'bloodTypes' => [], 'districts' => [], 'towns' => []]])
 
 <div class="space-y-6">
     <section><h2 class="panel-title">Parent or guardian identity</h2><div class="form-grid mt-4">
@@ -14,6 +14,7 @@
     <section><h2 class="panel-title">Contact, family &amp; work information</h2><div class="form-grid mt-4">
         <div><label class="form-label">Phone</label><input name="phone" value="{{ old('phone', $person->phone) }}"></div>
         <div><label class="form-label">Email</label><input type="email" name="email" value="{{ old('email', $person->email) }}"></div>
+        <div><label class="form-label">Blood type</label><select name="blood_type"><option value="">Select blood type</option>@foreach($referenceOptions['bloodTypes'] as $bloodType)<option value="{{ $bloodType }}" @selected(old('blood_type', $person->blood_type) === $bloodType)>{{ $bloodType }}</option>@endforeach</select></div>
         <div><label class="form-label">Religion / community</label><input name="religion" value="{{ old('religion', $person->religion) }}"></div>
         <div><label class="form-label">Family type</label><select name="family_type"><option value="">Select family type</option>@foreach($referenceOptions['familyTypes'] as $familyType)<option value="{{ $familyType }}" @selected(old('family_type', $person->family_type) === $familyType)>{{ $familyType }}</option>@endforeach</select></div>
         <div><label class="form-label">Occupation</label><input name="occupation" value="{{ old('occupation', $person->occupation) }}"></div>

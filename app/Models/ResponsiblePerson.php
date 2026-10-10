@@ -14,7 +14,7 @@ class ResponsiblePerson extends Model
 
     protected $table = 'responsible_persons';
 
-    protected $fillable = ['teacher_id', 'parent_code', 'title', 'full_name', 'first_name', 'middle_name', 'last_name', 'type', 'religion', 'family_type', 'occupation', 'occupation_details', 'employee_number', 'phone', 'email', 'register_number', 'district', 'town', 'nationality', 'secondary_nationality', 'is_alumni', 'is_deceased', 'employment_status', 'employer', 'position', 'work_address', 'family_status', 'is_second_marriage', 'address', 'notes'];
+    protected $fillable = ['teacher_id', 'parent_code', 'title', 'full_name', 'first_name', 'middle_name', 'last_name', 'type', 'blood_type', 'religion', 'family_type', 'occupation', 'occupation_details', 'employee_number', 'phone', 'email', 'register_number', 'district', 'town', 'nationality', 'secondary_nationality', 'is_alumni', 'is_deceased', 'employment_status', 'employer', 'position', 'work_address', 'family_status', 'is_second_marriage', 'address', 'notes'];
 
     protected function casts(): array
     {

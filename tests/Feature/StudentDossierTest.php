@@ -86,12 +86,12 @@ class StudentDossierTest extends TestCase
 
         $this->actingAs($user)->post(route('responsible.store'), [
             'parent_code' => 'DOS-PARENT-001', 'full_name' => 'Rana Dossier', 'first_name' => 'Rana', 'last_name' => 'Dossier',
-            'type' => 'mother', 'religion' => 'Demo', 'family_type' => 'Ordinary', 'occupation' => 'Designer',
+            'type' => 'mother', 'blood_type' => 'O-', 'religion' => 'Demo', 'family_type' => 'Ordinary', 'occupation' => 'Designer',
             'district' => 'Beirut', 'town' => 'Beirut', 'nationality' => 'Lebanese', 'employment_status' => 'Employed',
             'employer' => 'Demo Studio', 'family_status' => 'Married', 'is_alumni' => true, 'student_ids' => [$registration->student_id],
         ])->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('responsible_persons', ['parent_code' => 'DOS-PARENT-001', 'full_name' => 'Rana Dossier', 'occupation' => 'Designer', 'is_alumni' => true]);
+        $this->assertDatabaseHas('responsible_persons', ['parent_code' => 'DOS-PARENT-001', 'full_name' => 'Rana Dossier', 'occupation' => 'Designer', 'blood_type' => 'O-', 'is_alumni' => true]);
         $this->assertDatabaseHas('responsible_person_student', ['student_id' => $registration->student_id]);
     }
 
