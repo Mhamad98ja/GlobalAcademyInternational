@@ -320,7 +320,15 @@
         unset($item);
     }
     unset($group);
-    $moduleMenus['administration']['home']['label'] = 'Users and Roles';
+    $moduleMenus['administration']['home']['label'] = 'Users and Access';
+    foreach ($moduleMenus['administration']['groups'] as &$group) {
+        // Keep this administration category in English even if legacy menu
+        // definitions contain translated or mis-encoded labels.
+        if (in_array($group['label'], ['References', 'Références', 'Rأ©fأ©rences', 'Rط£آ©fط£آ©rences'], true)) {
+            $group['label'] = 'References';
+        }
+    }
+    unset($group);
     $collaborationLabels = ['teachers' => 'Teachers List', 'course-content' => 'Subject Agenda', 'messages' => 'Messages', 'calendar' => 'Calendar', 'performance' => 'Performance Appraisals', 'students' => 'Students', 'performance-dashboard' => 'Performance Dashboard', 'evaluation-dashboard' => 'Dashboard', 'evaluation-grades' => 'Evaluation Grades', 'grade-book' => 'Grade Book', 'evaluations-list' => 'Evaluations List', 'student-failures' => 'Student Failures', 'modification-requests' => 'My Requests', 'transcript-subject-choice' => 'Transcript by Subject Choice', 'evaluation-statement' => 'Evaluation Statement', 'homework' => 'Agenda Overview', 'homework-report' => 'Agenda Report', 'homework-totals' => 'Agenda Totals', 'homework-comparison' => 'Agenda Comparison', 'skills-student' => 'Skills per Student', 'skills-approve' => 'Skills to Approve', 'remarks-approve' => 'Remarks to Approve', 'item-remarks' => 'Item Remarks', 'class-remarks' => 'Remarks per Class', 'principal-appreciations' => 'Cycle Principal Appreciations', 'remarks-entry' => 'Remarks Entry', 'attendance-management' => 'Attendance Management', 'standards' => 'Standards', 'report-card-receipt' => 'Report Card Acknowledgment of Receipt', 'icons' => 'Icons', 'system-error-log' => 'System Error Log', 'bulk-message' => 'Bulk Message'];
     foreach ($moduleMenus['collaboration']['items'] as &$item) if (isset($item['collabPage'], $collaborationLabels[$item['collabPage']])) $item['label'] = $collaborationLabels[$item['collabPage']];
     unset($item);
@@ -407,7 +415,7 @@
         'students' => ['label' => 'Student Records', 'route' => route('students.index')],
         'reports' => ['label' => 'Academic & Report Card', 'route' => route('workspaces.show', ['workspace' => 'academic'])],
         'collaboration' => ['label' => 'Teaching & Collaboration', 'route' => route('collaboration.index')],
-        'administration' => ['label' => 'Operations', 'route' => route('operations.index')],
+        'administration' => ['label' => 'Administration & Operations', 'route' => route('operations.index')],
         default => null,
     };
     $showNavigationContext = $moduleContext !== null && ! request()->routeIs('dashboard');
