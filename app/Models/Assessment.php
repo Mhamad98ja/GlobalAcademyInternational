@@ -12,6 +12,15 @@ class Assessment extends Model
 {
     use BelongsToBranch, HasPublicId;
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $assessment): void {
+            if (! $assessment->review_status) {
+                $assessment->review_status = $assessment->status === 'open' ? 'approved' : 'draft';
+            }
+        });
+    }
+
     protected $fillable = ['branch_id', 'academic_year_id', 'academic_term_id', 'teacher_assignment_id', 'subject_id', 'grade_id', 'section_id', 'name', 'assessment_column', 'type', 'maximum_score', 'weight', 'assessment_date', 'status', 'review_status', 'reviewed_by', 'reviewed_at', 'rejection_reason', 'notes', 'online_quiz', 'per_question', 'created_by'];
 
     protected function casts(): array
