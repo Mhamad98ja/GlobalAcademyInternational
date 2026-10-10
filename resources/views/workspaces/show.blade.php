@@ -68,7 +68,7 @@
         <div class="panel-header"><div><h2 class="panel-title">Current activity</h2><p class="mt-0.5 text-xs text-slate-500">Live counts from the existing Global Academy International work records.</p></div></div>
         <div class="workspace-activity-list">
             @foreach ($activities as $activity)
-                <a class="workspace-activity" href="{{ route($activity['route']) }}">
+                <a class="workspace-activity" href="{{ route($activity['route'], $activity['params'] ?? []) }}">
                     <span class="workspace-activity-icon" aria-hidden="true"><x-nav-icon :name="$activity['icon']" /></span>
                     <span><span class="workspace-activity-title">{{ $activity['title'] }}</span><span class="workspace-activity-description">{{ $activity['description'] }}</span></span>
                     <span class="workspace-activity-arrow" aria-hidden="true">→</span>

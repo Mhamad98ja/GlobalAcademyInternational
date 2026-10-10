@@ -232,14 +232,13 @@ class WorkspaceController extends Controller
                 $this->stat($user, 'timetable.view', 'Scheduled lessons', $timetableEntries, 'Timetable entries in the active year'),
             ],
             [
-                $this->task('academic.manage', 'Academic structure', 'Manage academic years, levels, grades, and sections.', 'academic.index', 'academic', 'Open structure'),
                 $this->task('academic_year.manage', 'Academic operations', 'Configure subjects, terms, assessments, and teacher assignments in focused pages.', 'school-academic.index', 'academic', 'Open operations'),
-                $this->task('grades.enter', 'Grade entry', $gradeEntries ? number_format($gradeEntries).' grade records are available in your permitted assignments.' : 'Enter marks only for your permitted teacher assignments.', 'grades.index', 'academic', 'Enter grades'),
+                $this->task('grades.enter', 'Grade entry', $gradeEntries ? number_format($gradeEntries).' grade records are available in your permitted assignments.' : 'Enter marks only for your permitted teacher assignments.', 'grades.index', 'academic', 'Enter grades', ['view' => 'evaluations']),
                 $this->task('timetable.view', 'Graphical timetable', 'Build class schedules and prevent teacher conflicts.', 'timetable.index', 'academic', 'Open timetable'),
             ],
             [
-                $this->activity('academic_year.manage', 'Assessment configuration', $assessments ? number_format($assessments).' assessments are configured for the active academic year.' : 'Set up terms and assessments for the active academic year.', 'school-academic.assessments', 'academic'),
-                $this->activity('grades.enter', 'Grade work', $gradeEntries ? number_format($gradeEntries).' grade entries are saved in permitted assignments.' : 'No grade entries are saved in your permitted assignments yet.', 'grades.index', 'academic'),
+                $this->activity('academic_year.manage', 'Evaluation requests', $assessments ? number_format($assessments).' assessment requests are available for review.' : 'Open Online Collaboration to review assessment requests.', 'collaboration.section', 'academic', ['section' => 'modification-requests']),
+                $this->activity('grades.enter', 'Grade work', $gradeEntries ? number_format($gradeEntries).' grade entries are saved in permitted assignments.' : 'No grade entries are saved in your permitted assignments yet.', 'grades.index', 'academic', ['view' => 'evaluations']),
                 $this->activity('timetable.view', 'Timetable work', $timetableEntries ? number_format($timetableEntries).' lessons are currently placed in the timetable.' : 'No lessons are placed in the timetable yet.', 'timetable.index', 'academic'),
             ],
         );
@@ -319,9 +318,9 @@ class WorkspaceController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function activity(string $permission, string $title, string $description, string $route, string $icon): array
+    private function activity(string $permission, string $title, string $description, string $route, string $icon, array $params = []): array
     {
-        return compact('permission', 'title', 'description', 'route', 'icon');
+        return compact('permission', 'title', 'description', 'route', 'icon', 'params');
     }
 
     /** @param array<int, array<string, mixed>> $items */

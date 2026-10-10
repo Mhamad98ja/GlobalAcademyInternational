@@ -10,10 +10,8 @@
         'assignments' => ['label' => 'Teacher subject assignments', 'description' => 'Connect a teacher, subject, class, and section.', 'route' => 'school-academic.assignments'],
     ];
 @endphp
-@if(request('module') === 'students')<div class="mb-4 text-sm text-slate-500"><a class="link" href="{{ route('workspaces.show', ['workspace' => 'students']) }}">Student dossier</a> / <a class="link" href="{{ route('students.tools', ['section' => 'references']) }}">References</a></div>@endif
 <div class="page-header">
     <div>
-        <div class="text-sm text-slate-500"><a class="link" href="{{ route('academic.index') }}">Academic structure</a> / <a class="link" href="{{ route('school-academic.index') }}">Operations</a>@if ($activeSection !== 'overview') / <strong class="text-slate-700">{{ $operationSections[$activeSection]['label'] }}</strong>@endif</div>
         <h1 class="page-title mt-1">Academic operations</h1>
         <p class="page-subtitle">{{ $operationSections[$activeSection]['description'] ?? 'Manage academic setup in focused workspaces.' }} Each area has its own create, list, and edit workflow.</p>
     </div>

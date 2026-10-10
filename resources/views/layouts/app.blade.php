@@ -9,10 +9,11 @@
     $homeRoute = $isTeacherAccount ? route('collaboration.index', ['section' => 'homework']) : route('dashboard');
     $workspace = request()->route('workspace');
     $module = match (true) {
-        request('module') === 'students' && request()->routeIs('reports.*', 'academic.*', 'school-academic.*') => 'students',
-        request()->routeIs('students.references.*') => 'administration',
+        request('module') === 'students' && request()->routeIs('reports.*', 'school-academic.*') => 'students',
+        request()->routeIs('students.references.*', 'academic.*') => 'administration',
         request()->routeIs('students.*', 'responsible.*', 'attendance.students*', 'discipline.*', 'medical.*', 'exam-absences.*') || $workspace === 'students' => 'students',
-        (request()->routeIs('grades.*') && ! $isTeacherAccount) || request()->routeIs('reports.*', 'report-card.*', 'academic.*', 'school-academic.*', 'timetable.*') || $workspace === 'academic' => 'reports',
+        request()->routeIs('grades.*') => 'collaboration',
+        request()->routeIs('reports.*', 'report-card.*', 'school-academic.*', 'timetable.*') || $workspace === 'academic' => 'reports',
         request()->routeIs('collaboration.*', 'messages.*', 'teachers.*', 'attendance.teachers*', 'substitutions.*') || $workspace === 'teachers' => 'collaboration',
         request()->routeIs('admin.*', 'books.*', 'class-lists.*', 'suppliers.*', 'purchases.*', 'supplier-returns.*', 'distributions.*', 'inventory.*', 'transfers.*', 'finance.*', 'invoices.*', 'payments.*', 'returns.*', 'operations.*') || $workspace === 'operations' => 'administration',
         default => null,
@@ -92,10 +93,12 @@
                     ['route' => 'students.references.show', 'params' => ['reference' => 'other-schools'], 'label' => 'Other Schools', 'icon' => 'administration', 'permission' => 'students.view'],
                     ['route' => 'students.references.show', 'params' => ['reference' => 'district'], 'label' => 'Districts', 'icon' => 'administration', 'permission' => 'students.view'],
                     ['route' => 'students.references.show', 'params' => ['reference' => 'towns'], 'label' => 'Towns', 'icon' => 'administration', 'permission' => 'students.view'],
+                    ['route' => 'academic.index', 'anchor' => 'academic-years', 'label' => 'Academic Years', 'icon' => 'academic', 'permission' => 'academic.manage'],
+                    ['route' => 'academic.index', 'anchor' => 'levels-grades', 'label' => 'Levels & Grades', 'icon' => 'academic', 'permission' => 'academic.manage'],
+                    ['route' => 'academic.index', 'anchor' => 'sections', 'label' => 'Sections', 'icon' => 'academic', 'permission' => 'academic.manage'],
                     ['route' => 'admin.settings', 'label' => 'Dictionary', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
                     ['route' => 'responsible.index', 'label' => 'Family Type', 'icon' => 'responsible', 'permission' => 'people.manage'],
                     ['route' => 'discipline.index', 'label' => 'Family Remark Type', 'icon' => 'administration', 'permission' => 'discipline.view', 'anchor' => 'action-references'],
-                    ['route' => 'academic.index', 'label' => 'Colleges', 'icon' => 'academic', 'permission' => 'academic.manage'],
                     ['route' => 'admin.imports', 'label' => 'Import', 'icon' => 'administration', 'permission' => 'admin.manage'],
                     ['route' => 'admin.settings', 'label' => 'File Category', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
                     ['route' => 'messages.index', 'label' => 'Mail Type', 'icon' => 'responsible', 'permission' => 'messages.view'],
@@ -352,13 +355,14 @@
         'items' => [
             ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Report Card', 'icon' => 'reports', 'permission' => 'reports.view'],
             ['route' => 'reports.index', 'label' => 'Academic Reports', 'icon' => 'reports', 'permission' => 'reports.view'],
+            ['route' => 'school-academic.index', 'label' => 'Academic Operations', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
             ['route' => 'school-academic.assignments', 'label' => 'Teacher Subject Assignments', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
         ],
         'groups' => [],
     ];
     $menu = $module ? $moduleMenus[$module] : null;
     $showAdministrationReferences = $module === 'administration'
-        && (request()->routeIs('operations.index') || request()->routeIs('students.references.*'));
+        && (request()->routeIs('operations.index') || request()->routeIs('students.references.*') || request()->routeIs('academic.*'));
     $canSee = fn (array $item) => ($item['financial'] ?? false) ? $signedInUser->canViewFinancials() : ((! ($item['controller_only'] ?? false) || $signedInUser->isControllerAdministrator()) && $signedInUser->hasPermission($item['permission']));
     $darsAdministrationLabels = ['School Year', 'Menu', 'Pages', 'Report Header', 'Configuration', 'Dynamic Fields', 'Dictionary', 'Family Type', 'Family Remark Type', 'Colleges', 'Import', 'File Category', 'Mail Type'];
     $darsCollaborationSections = ['Teachers List' => 'teachers', 'Messages' => 'messages', 'Calendar' => 'calendar', 'Performance Appraisals' => 'performance', 'Students' => 'students', 'Performance Dashboard' => 'performance-dashboard', 'Evaluation Grades' => 'evaluation-grades', 'Grade Book' => 'grade-book', 'Evaluations List' => 'evaluations-list', 'Student Failures' => 'student-failures', 'Modification Requests' => 'modification-requests', 'Transcript by Subject Choice' => 'transcript-subject-choice', 'Evaluation Statement' => 'evaluation-statement', 'Skills per Student' => 'skills-student', 'Skills to Approve' => 'skills-approve', 'Remarks to Approve' => 'remarks-approve', 'Item Remarks' => 'item-remarks', 'Remarks per Class' => 'class-remarks', 'Cycle Principal Appreciations' => 'principal-appreciations', 'Remarks Entry' => 'remarks-entry', 'Attendance Management' => 'attendance-management', 'Standards' => 'standards', 'Report Card Acknowledgment of Receipt' => 'report-card-receipt', 'Icons' => 'icons', 'System Error Log' => 'system-error-log', 'Bulk Message' => 'bulk-message'];

@@ -1,11 +1,10 @@
-@extends('layouts.app', ['title' => 'Academic structure'])
+@extends('layouts.app', ['title' => 'Academic references'])
 
 @section('content')
-@if(request('module') === 'students')<div class="mb-4 text-sm text-slate-500"><a class="link" href="{{ route('workspaces.show', ['workspace' => 'students']) }}">Student dossier</a> / <a class="link" href="{{ route('students.tools', ['section' => 'references']) }}">References</a></div>@endif
 <div class="page-header">
     <div>
-        <h1 class="page-title">Academic structure</h1>
-        <p class="page-subtitle">Manage academic years, levels, grades and sections. Existing records can be edited without deleting them.</p>
+        <h1 class="page-title">Academic references</h1>
+        <p class="page-subtitle">Manage academic years, levels, grades and sections from Administration &amp; Operations. These references are used throughout student records, classes, timetables, and report cards.</p>
     </div>
 </div>
 
