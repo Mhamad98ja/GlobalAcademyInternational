@@ -59,11 +59,15 @@ class GradesController extends Controller
     {
         $data = $request->validate([
             'teacher_assignment_id' => ['required', 'integer', 'exists:teacher_assignments,id'],
-            'name' => ['required', 'string', 'max:120'],
+            'name' => ['nullable', 'string', 'max:120'],
+            'assessment_column' => ['nullable', 'string', 'max:80'],
             'type' => ['required', 'string', 'max:50'],
             'maximum_score' => ['required', 'numeric', 'min:0.01', 'max:99999'],
             'weight' => ['nullable', 'numeric', 'min:0.001', 'max:10'],
             'assessment_date' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'online_quiz' => ['nullable', 'boolean'],
+            'per_question' => ['nullable', 'boolean'],
             'academic_term_id' => ['nullable', 'integer', 'exists:academic_terms,id'],
         ]);
         $assignment = TeacherAssignment::query()->findOrFail($data['teacher_assignment_id']);
@@ -81,12 +85,16 @@ class GradesController extends Controller
             'subject_id' => $assignment->subject_id,
             'grade_id' => $assignment->grade_id,
             'section_id' => $assignment->section_id,
-            'name' => $data['name'],
+            'name' => $data['name'] ?? ((($data['assessment_column'] ?? null) ?: str($data['type'])->headline()).' '.today()->format('d/m/Y')),
+            'assessment_column' => $data['assessment_column'] ?? null,
             'type' => $data['type'],
             'maximum_score' => $data['maximum_score'],
             'weight' => $data['weight'] ?? 1,
             'assessment_date' => $data['assessment_date'] ?? null,
             'status' => 'open',
+            'notes' => $data['notes'] ?? null,
+            'online_quiz' => $request->boolean('online_quiz'),
+            'per_question' => $request->boolean('per_question'),
             'created_by' => $request->user()->id,
         ]);
         $this->notifyAssessmentAudience($assignment, $assessment);
@@ -100,16 +108,20 @@ class GradesController extends Controller
         $data = $request->validate([
             'teacher_assignment_id' => ['required', 'integer', 'exists:teacher_assignments,id'],
             'name' => ['required', 'string', 'max:120'],
+            'assessment_column' => ['nullable', 'string', 'max:80'],
             'type' => ['required', 'string', 'max:50'],
             'maximum_score' => ['required', 'numeric', 'min:0.01', 'max:99999'],
             'weight' => ['nullable', 'numeric', 'min:0.001', 'max:10'],
             'assessment_date' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'online_quiz' => ['nullable', 'boolean'],
+            'per_question' => ['nullable', 'boolean'],
             'status' => ['required', Rule::in(['draft', 'open', 'closed'])],
         ]);
         $assignment = TeacherAssignment::query()->findOrFail($data['teacher_assignment_id']);
         $this->ensureCanManageAssignment($request->user(), $assignment);
         $this->ensureAssessmentMatchesAssignment($assessment, $assignment);
-        $assessment->update(collect($data)->except('teacher_assignment_id')->put('teacher_assignment_id', $assignment->id)->put('weight', $data['weight'] ?? 1)->all());
+        $assessment->update(collect($data)->except('teacher_assignment_id')->put('teacher_assignment_id', $assignment->id)->put('weight', $data['weight'] ?? 1)->put('online_quiz', $request->boolean('online_quiz'))->put('per_question', $request->boolean('per_question'))->all());
         $audit->log('assessment.updated_by_teacher', $assessment, [], $assessment->only(['name', 'type', 'maximum_score', 'weight', 'status']));
 
         return back()->with('success', 'Assessment updated.');

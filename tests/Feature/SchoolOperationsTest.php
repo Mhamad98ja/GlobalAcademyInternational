@@ -87,6 +87,12 @@ class SchoolOperationsTest extends TestCase
         $teacherUser = User::factory()->create(['is_active' => true, 'teacher_id' => $teacher->id]);
         $teacherUser->roles()->attach($role);
 
+        $this->actingAs($teacherUser)->get(route('grades.index', ['teacher_assignment_id' => $assignment->id]))
+            ->assertOk()
+            ->assertSee('Evaluation Grades')
+            ->assertSee('Add new')
+            ->assertSee('Midterm');
+
         $this->actingAs($teacherUser)->post(route('grades.save'), [
             'teacher_assignment_id' => $assignment->id,
             'assessment_id' => $assessment->id,

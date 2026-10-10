@@ -84,7 +84,7 @@ class DatabaseSeeder extends Seeder
             'teacher' => [
                 'label' => 'Teacher',
                 'description' => 'Online collaboration access for assigned subjects, agenda, messages, and performance follow-up.',
-                'permissions' => ['collaboration.view', 'collaboration.manage', 'performance.view', 'performance.manage', 'messages.view', 'messages.send'],
+                'permissions' => ['collaboration.view', 'collaboration.manage', 'performance.view', 'performance.manage', 'messages.view', 'messages.send', 'grades.enter'],
             ],
         ];
 

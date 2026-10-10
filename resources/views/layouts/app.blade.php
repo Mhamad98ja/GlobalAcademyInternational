@@ -11,7 +11,7 @@
     $module = match (true) {
         request('module') === 'students' && request()->routeIs('reports.*', 'academic.*', 'school-academic.*') => 'students',
         request()->routeIs('students.*', 'responsible.*', 'attendance.students*', 'discipline.*', 'medical.*', 'exam-absences.*') || $workspace === 'students' => 'students',
-        request()->routeIs('grades.*', 'reports.*', 'report-card.*', 'academic.*', 'school-academic.*', 'timetable.*') || $workspace === 'academic' => 'reports',
+        (request()->routeIs('grades.*') && ! $isTeacherAccount) || request()->routeIs('reports.*', 'report-card.*', 'academic.*', 'school-academic.*', 'timetable.*') || $workspace === 'academic' => 'reports',
         request()->routeIs('collaboration.*', 'messages.*', 'teachers.*', 'attendance.teachers*', 'substitutions.*') || $workspace === 'teachers' => 'collaboration',
         request()->routeIs('admin.*', 'books.*', 'class-lists.*', 'suppliers.*', 'purchases.*', 'supplier-returns.*', 'distributions.*', 'inventory.*', 'transfers.*', 'finance.*', 'invoices.*', 'payments.*', 'returns.*', 'operations.*') || $workspace === 'operations' => 'administration',
         default => null,
@@ -116,10 +116,10 @@
             'groups' => [
                 ['label' => 'Evaluations', 'items' => [
                     ['route' => 'collaboration.index', 'params' => ['section' => 'evaluation-dashboard'], 'label' => 'Dashboard', 'icon' => 'reports', 'permission' => 'performance.view'],
-                    ['route' => 'grades.index', 'label' => 'Evaluation Grades', 'icon' => 'academic', 'permission' => 'grades.enter'],
-                    ['route' => 'grades.index', 'label' => 'Grade Book', 'icon' => 'academic', 'permission' => 'grades.enter'],
+                    ['route' => 'grades.index', 'params' => ['view' => 'evaluations'], 'label' => 'Evaluation Grades', 'icon' => 'academic', 'permission' => 'grades.enter'],
+                    ['route' => 'grades.index', 'params' => ['view' => 'grade-book'], 'label' => 'Grade Book', 'icon' => 'academic', 'permission' => 'grades.enter'],
                     ['route' => 'school-academic.index', 'label' => 'Evaluations List', 'icon' => 'academic', 'permission' => 'academic_year.manage', 'anchor' => 'assessments'],
-                    ['route' => 'admin.audit', 'label' => 'Modification Requests', 'icon' => 'reports', 'permission' => 'admin.manage'],
+                    ['route' => 'collaboration.index', 'params' => ['section' => 'modification-requests'], 'label' => 'My Requests', 'icon' => 'reports', 'permission' => 'performance.view'],
                 ]],
                 ['label' => 'Agenda reports', 'items' => [
                     ['route' => 'collaboration.index', 'params' => ['section' => 'homework-report'], 'label' => 'Homework Report', 'icon' => 'reports', 'permission' => 'collaboration.view'],
@@ -321,7 +321,7 @@
     }
     unset($group);
     $moduleMenus['administration']['home']['label'] = 'Users and Roles';
-    $collaborationLabels = ['teachers' => 'Teachers List', 'course-content' => 'Subject Agenda', 'messages' => 'Messages', 'calendar' => 'Calendar', 'performance' => 'Performance Appraisals', 'students' => 'Students', 'performance-dashboard' => 'Performance Dashboard', 'evaluation-dashboard' => 'Dashboard', 'evaluation-grades' => 'Evaluation Grades', 'grade-book' => 'Grade Book', 'evaluations-list' => 'Evaluations List', 'student-failures' => 'Student Failures', 'modification-requests' => 'Modification Requests', 'transcript-subject-choice' => 'Transcript by Subject Choice', 'evaluation-statement' => 'Evaluation Statement', 'homework' => 'Agenda Overview', 'homework-report' => 'Agenda Report', 'homework-totals' => 'Agenda Totals', 'homework-comparison' => 'Agenda Comparison', 'skills-student' => 'Skills per Student', 'skills-approve' => 'Skills to Approve', 'remarks-approve' => 'Remarks to Approve', 'item-remarks' => 'Item Remarks', 'class-remarks' => 'Remarks per Class', 'principal-appreciations' => 'Cycle Principal Appreciations', 'remarks-entry' => 'Remarks Entry', 'attendance-management' => 'Attendance Management', 'standards' => 'Standards', 'report-card-receipt' => 'Report Card Acknowledgment of Receipt', 'icons' => 'Icons', 'system-error-log' => 'System Error Log', 'bulk-message' => 'Bulk Message'];
+    $collaborationLabels = ['teachers' => 'Teachers List', 'course-content' => 'Subject Agenda', 'messages' => 'Messages', 'calendar' => 'Calendar', 'performance' => 'Performance Appraisals', 'students' => 'Students', 'performance-dashboard' => 'Performance Dashboard', 'evaluation-dashboard' => 'Dashboard', 'evaluation-grades' => 'Evaluation Grades', 'grade-book' => 'Grade Book', 'evaluations-list' => 'Evaluations List', 'student-failures' => 'Student Failures', 'modification-requests' => 'My Requests', 'transcript-subject-choice' => 'Transcript by Subject Choice', 'evaluation-statement' => 'Evaluation Statement', 'homework' => 'Agenda Overview', 'homework-report' => 'Agenda Report', 'homework-totals' => 'Agenda Totals', 'homework-comparison' => 'Agenda Comparison', 'skills-student' => 'Skills per Student', 'skills-approve' => 'Skills to Approve', 'remarks-approve' => 'Remarks to Approve', 'item-remarks' => 'Item Remarks', 'class-remarks' => 'Remarks per Class', 'principal-appreciations' => 'Cycle Principal Appreciations', 'remarks-entry' => 'Remarks Entry', 'attendance-management' => 'Attendance Management', 'standards' => 'Standards', 'report-card-receipt' => 'Report Card Acknowledgment of Receipt', 'icons' => 'Icons', 'system-error-log' => 'System Error Log', 'bulk-message' => 'Bulk Message'];
     foreach ($moduleMenus['collaboration']['items'] as &$item) if (isset($item['collabPage'], $collaborationLabels[$item['collabPage']])) $item['label'] = $collaborationLabels[$item['collabPage']];
     unset($item);
     foreach ($moduleMenus['collaboration']['groups'] as &$group) {

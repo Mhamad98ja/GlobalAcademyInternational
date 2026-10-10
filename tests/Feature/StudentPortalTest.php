@@ -85,12 +85,16 @@ class StudentPortalTest extends TestCase
         $this->actingAs($teacherUser)->post(route('grades.assessments.store'), [
             'teacher_assignment_id' => $data['assignment']->id,
             'name' => 'October monthly test',
+            'assessment_column' => '1 - Cntr1',
             'type' => 'monthly_test',
             'maximum_score' => 20,
             'weight' => 0.5,
             'assessment_date' => '2031-10-20',
+            'notes' => 'Bring the revision sheet.',
+            'online_quiz' => true,
+            'per_question' => true,
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('assessments', ['name' => 'October monthly test', 'teacher_assignment_id' => $data['assignment']->id, 'maximum_score' => 20, 'weight' => '0.500', 'subject_id' => $data['subject']->id, 'grade_id' => $data['grade']->id, 'section_id' => $data['section']->id]);
+        $this->assertDatabaseHas('assessments', ['name' => 'October monthly test', 'teacher_assignment_id' => $data['assignment']->id, 'assessment_column' => '1 - Cntr1', 'maximum_score' => 20, 'weight' => '0.500', 'subject_id' => $data['subject']->id, 'grade_id' => $data['grade']->id, 'section_id' => $data['section']->id, 'notes' => 'Bring the revision sheet.', 'online_quiz' => true, 'per_question' => true]);
     }
 }

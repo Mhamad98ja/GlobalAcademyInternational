@@ -12,11 +12,11 @@ class Assessment extends Model
 {
     use BelongsToBranch, HasPublicId;
 
-    protected $fillable = ['branch_id', 'academic_year_id', 'academic_term_id', 'teacher_assignment_id', 'subject_id', 'grade_id', 'section_id', 'name', 'type', 'maximum_score', 'weight', 'assessment_date', 'status', 'notes', 'created_by'];
+    protected $fillable = ['branch_id', 'academic_year_id', 'academic_term_id', 'teacher_assignment_id', 'subject_id', 'grade_id', 'section_id', 'name', 'assessment_column', 'type', 'maximum_score', 'weight', 'assessment_date', 'status', 'notes', 'online_quiz', 'per_question', 'created_by'];
 
     protected function casts(): array
     {
-        return ['assessment_date' => 'date', 'maximum_score' => 'decimal:2', 'weight' => 'decimal:3'];
+        return ['assessment_date' => 'date', 'maximum_score' => 'decimal:2', 'weight' => 'decimal:3', 'online_quiz' => 'boolean', 'per_question' => 'boolean'];
     }
 
     public function academicYear()

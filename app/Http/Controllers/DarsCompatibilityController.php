@@ -83,6 +83,14 @@ class DarsCompatibilityController extends Controller
 
     public function collaborationPage(string $section): RedirectResponse
     {
+        if ($section === 'evaluation-grades') {
+            return redirect()->route('grades.index', ['view' => 'evaluations'] + request()->query());
+        }
+
+        if ($section === 'grade-book') {
+            return redirect()->route('grades.index', ['view' => 'grade-book'] + request()->query());
+        }
+
         return redirect()->route('collaboration.section', ['section' => $section] + request()->query());
     }
 }
