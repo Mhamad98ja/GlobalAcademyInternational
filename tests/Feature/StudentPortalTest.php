@@ -71,6 +71,31 @@ class StudentPortalTest extends TestCase
         $this->actingAs($user)->get(route('student-portal.index'))->assertForbidden();
     }
 
+    public function test_creating_a_student_creates_a_portal_login_account(): void
+    {
+        $permission = Permission::firstOrCreate(['name' => 'students.manage'], ['label' => 'Manage students']);
+        $role = Role::firstOrCreate(['name' => 'student-account-admin'], ['label' => 'Student account administrator']);
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $administrator = User::factory()->create(['is_active' => true]);
+        $administrator->roles()->attach($role);
+
+        $this->actingAs($administrator)->post(route('students.store'), [
+            'first_name' => 'New',
+            'last_name' => 'Portal Student',
+            'email' => 'new.portal.student@example.test',
+            'password' => 'StudentPortal1234!',
+            'password_confirmation' => 'StudentPortal1234!',
+        ])->assertRedirect();
+
+        $student = Student::query()->where('email', 'new.portal.student@example.test')->firstOrFail();
+        $portalUser = User::query()->where('student_id', $student->id)->firstOrFail();
+        $this->assertSame($student->full_name, $portalUser->name);
+        $this->assertTrue($portalUser->hasRole('student'));
+        $this->assertTrue(password_verify('StudentPortal1234!', $portalUser->password));
+        $this->post(route('logout'))->assertRedirect(route('login'));
+        $this->post(route('login.store'), ['email' => $portalUser->email, 'password' => 'StudentPortal1234!'])->assertRedirect(route('student-portal.index'));
+    }
+
     public function test_teacher_can_create_subject_assessment_for_their_assigned_class(): void
     {
         $data = $this->portalData();

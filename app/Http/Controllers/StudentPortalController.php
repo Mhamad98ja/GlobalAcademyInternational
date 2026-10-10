@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Assessment;
 use App\Models\CourseContent;
+use App\Models\SchoolAnnouncement;
 use App\Models\Student;
 use App\Models\StudentRegistration;
 use App\Models\User;
@@ -39,7 +40,8 @@ class StudentPortalController extends Controller
                 $assignments->where('is_active', true)->where(function (Builder $scopes) use ($registrations): void {
                     foreach ($registrations as $registration) {
                         $scopes->orWhere(function (Builder $scope) use ($registration): void {
-                            $scope->where('grade_id', $registration->grade_id)
+                            $scope->where('academic_year_id', $registration->academic_year_id)
+                                ->where('grade_id', $registration->grade_id)
                                 ->where(fn (Builder $section) => $section->whereNull('section_id')->orWhere('section_id', $registration->section_id));
                         });
                     }
@@ -80,6 +82,32 @@ class StudentPortalController extends Controller
             ->take(50)
             ->get();
 
+        $announcements = SchoolAnnouncement::query()
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->where(fn (Builder $query) => $query->whereNull('expires_on')->orWhereDate('expires_on', '>=', today()))
+            ->when($registrations->isEmpty(), fn (Builder $query) => $query->whereRaw('1 = 0'))
+            ->where(function (Builder $query) use ($registrations): void {
+                $query->whereIn('audience', ['all', 'students'])
+                    ->orWhere(function (Builder $scoped) use ($registrations): void {
+                        $scoped->whereIn('audience', ['grade', 'section'])
+                            ->where(function (Builder $matches) use ($registrations): void {
+                                foreach ($registrations as $registration) {
+                                    $matches->orWhere(function (Builder $scope) use ($registration): void {
+                                        $scope->where('grade_id', $registration->grade_id)
+                                            ->where(function (Builder $audience) use ($registration): void {
+                                                $audience->where('audience', 'grade')
+                                                    ->orWhere(fn (Builder $section) => $section->where('audience', 'section')->where('section_id', $registration->section_id));
+                                            });
+                                    });
+                                }
+                            });
+                    });
+            })
+            ->latest('published_at')
+            ->take(30)
+            ->get();
+
         $publishedGrades = $student->gradeEntries()
             ->with('assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.assignment.grade', 'assessment.assignment.section', 'assessment.subject', 'assessment.term', 'assignment.teacher', 'assignment.grade', 'assignment.section')
             ->where('status', 'published')
@@ -89,6 +117,6 @@ class StudentPortalController extends Controller
 
         $notifications = $student->notifications()->latest()->take(20)->get();
 
-        return view('student-portal.index', compact('student', 'registrations', 'contents', 'assessments', 'publishedGrades', 'notifications'));
+        return view('student-portal.index', compact('student', 'registrations', 'contents', 'assessments', 'publishedGrades', 'notifications', 'announcements'));
     }
 }

@@ -10,6 +10,8 @@ use App\Models\Grade;
 use App\Models\Student;
 use App\Models\StudentRegistration;
 use App\Models\Teacher;
+use App\Models\Role;
+use App\Models\User;
 use App\Services\AuditService;
 use App\Services\StudentRegistrationService;
 use Illuminate\Http\RedirectResponse;
@@ -98,8 +100,19 @@ class StudentsController extends Controller
     {
         return DB::transaction(function () use ($request, $registrations): RedirectResponse {
             $data = $request->validated();
-            $data['student_number'] = $data['student_number'] ?: 'STU-'.now()->format('Y').'-'.str_pad((string) ((Student::max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT);
+            $portalPassword = $data['password'];
+            unset($data['password']);
+            $data['student_number'] = $data['student_number'] ?? 'STU-'.now()->format('Y').'-'.str_pad((string) ((Student::max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT);
             $student = Student::create($data);
+            $portalUser = User::create([
+                'name' => $student->full_name,
+                'email' => $student->email,
+                'password' => $portalPassword,
+                'student_id' => $student->id,
+                'is_active' => true,
+            ]);
+            $studentRole = Role::query()->where('name', 'student')->firstOrFail();
+            $portalUser->roles()->sync([$studentRole->id]);
 
             if ($request->filled('academic_year_id')) {
                 $registrations->register($student, $request->validate([
@@ -112,7 +125,7 @@ class StudentsController extends Controller
                 ]) + ['notes' => $request->input('registration_notes')], $request->user());
             }
 
-            return redirect()->route('students.show', $student)->with('success', 'Student profile and registration were saved.');
+            return redirect()->route('students.show', $student)->with('success', 'Student profile, portal account, and registration were saved. The student can now sign in with their email and password.');
         });
     }
 
@@ -164,7 +177,17 @@ class StudentsController extends Controller
 
     public function update(StoreStudentRequest $request, Student $student): RedirectResponse
     {
-        $student->update($request->validated());
+        $data = $request->validated();
+        $password = $data['password'] ?? null;
+        unset($data['password']);
+        $student->update($data);
+        if ($student->portalUser) {
+            $attributes = ['name' => $student->full_name, 'email' => $student->email];
+            if ($password) {
+                $attributes['password'] = $password;
+            }
+            $student->portalUser->update($attributes);
+        }
 
         return redirect()->route('students.show', $student)->with('success', 'Student profile updated.');
     }
