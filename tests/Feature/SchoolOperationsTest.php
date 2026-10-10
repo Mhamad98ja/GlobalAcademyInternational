@@ -155,7 +155,8 @@ class SchoolOperationsTest extends TestCase
         $this->actingAs($administrator)->get(route('discipline.index'))->assertOk()->assertSee('Student actions & incidents', false);
         $this->actingAs($administrator)->get(route('medical.index'))->assertOk()->assertSee('Medical archive');
         $this->actingAs($administrator)->get(route('exam-absences.index'))->assertOk()->assertSee('Exam absences');
-        $this->actingAs($administrator)->get(route('timetable.index', ['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'section_id' => $section->id]))->assertOk()->assertSee('Graphical timetable');
+        $this->actingAs($administrator)->get(route('timetable.index', ['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'section_id' => $section->id]))
+            ->assertOk()->assertSee('Graphical timetable')->assertSee('Subjects to schedule')->assertSee('Class schedule')->assertDontSee('Course cards');
         $this->actingAs($administrator)->get(route('reports.school'))->assertOk()->assertSee('School operations reports');
     }
 
