@@ -55,6 +55,10 @@ class AuthController extends Controller
             return redirect()->intended(route('student-portal.index'));
         }
 
+        if ($user->hasRole('teacher') || $user->teacher_id) {
+            return redirect()->intended(route('collaboration.index', ['section' => 'homework']));
+        }
+
         return redirect()->intended(route('dashboard'));
     }
 

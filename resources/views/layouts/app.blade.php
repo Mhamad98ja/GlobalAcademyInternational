@@ -5,6 +5,8 @@
 @if(isset($title))<script>document.title = @json($title.' · Global Academy International');</script>@endif
 @php
     $signedInUser = auth()->user();
+    $isTeacherAccount = $signedInUser && ($signedInUser->hasRole('teacher') || $signedInUser->teacher_id);
+    $homeRoute = $isTeacherAccount ? route('collaboration.index', ['section' => 'homework']) : route('dashboard');
     $workspace = request()->route('workspace');
     $module = match (true) {
         request('module') === 'students' && request()->routeIs('reports.*', 'academic.*', 'school-academic.*') => 'students',
@@ -403,7 +405,7 @@
     <div class="sidebar-backdrop no-print" data-sidebar-backdrop></div>
     <aside id="primary-sidebar" class="sidebar no-print" aria-label="Module navigation">
         <div class="sidebar-brand">
-            <a class="sidebar-brand-mark ga-brand" href="{{ route('dashboard') }}" aria-label="Global Academy International home"><img src="{{ asset('images/global-academy-international-logo.png') }}" alt=""><span><strong>Global Academy</strong><small>International</small></span></a>
+            <a class="sidebar-brand-mark ga-brand" href="{{ $homeRoute }}" aria-label="Global Academy International home"><img src="{{ asset('images/global-academy-international-logo.png') }}" alt=""><span><strong>Global Academy</strong><small>International</small></span></a>
             <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close navigation">&times;</button>
         </div>
         <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-3">
@@ -440,7 +442,7 @@
         <header class="topbar no-print">
             <div class="flex min-w-0 items-center gap-3">
                 <button type="button" class="nav-toggle" data-sidebar-toggle aria-controls="primary-sidebar" aria-expanded="true"><span class="sr-only">Toggle navigation</span><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
-                <a href="{{ route('dashboard') }}" class="topbar-school-chip ga-topbar-brand"><img src="{{ asset('images/global-academy-international-logo.png') }}" alt=""><span>Global Academy International</span></a>
+                <a href="{{ $homeRoute }}" class="topbar-school-chip ga-topbar-brand"><img src="{{ asset('images/global-academy-international-logo.png') }}" alt=""><span>Global Academy International</span></a>
                 <form method="GET" action="{{ route('students.index') }}" class="sbm-global-search" role="search">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg>
                     <input type="search" name="search" value="{{ request('search') }}" placeholder="Search students, staff, classes..." aria-label="Search students, staff, or classes">
@@ -468,7 +470,7 @@
         @if ($showNavigationContext)
             <nav class="app-context no-print" aria-label="Page location">
                 <div class="app-context-trail">
-                    <a href="{{ route('dashboard') }}">Home</a>
+                    <a href="{{ $homeRoute }}">Home</a>
                     <span aria-hidden="true">/</span>
                     <a href="{{ $moduleContext['route'] }}">{{ $moduleContext['label'] }}</a>
                     <span aria-hidden="true">/</span>

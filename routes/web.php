@@ -44,7 +44,13 @@ use App\Http\Controllers\TimetableController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/dashboard');
+Route::get('/', static function () {
+    $user = auth()->user();
+
+    return $user && ($user->hasRole('teacher') || $user->teacher_id)
+        ? redirect()->route('collaboration.index', ['section' => 'homework'])
+        : redirect()->route('dashboard');
+});
 Route::get('/health', static fn () => response()->json(['status' => 'ok']))->name('health');
 $authThrottle = config('auth.rate_limiting') ? ['throttle:5,15'] : [];
 

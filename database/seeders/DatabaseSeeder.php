@@ -79,12 +79,12 @@ class DatabaseSeeder extends Seeder
             'employee' => [
                 'label' => 'Branch User',
                 'description' => 'Daily student, inventory, transfer, and distribution work without financial access.',
-                'permissions' => ['dashboard.view', 'students.view', 'students.manage', 'books.view', 'class-lists.view', 'distributions.create', 'people.manage', 'reports.view', 'attendance.student.manage', 'attendance.teacher.manage', 'discipline.view', 'discipline.create', 'discipline.edit', 'grades.enter', 'timetable.view', 'collaboration.view', 'performance.view', 'messages.view', 'messages.send'],
+                'permissions' => ['dashboard.view', 'students.view', 'students.manage', 'books.view', 'class-lists.view', 'distributions.create', 'people.manage', 'reports.view', 'attendance.student.manage', 'attendance.teacher.manage', 'discipline.view', 'discipline.create', 'discipline.edit', 'grades.enter', 'timetable.view', 'collaboration.view', 'collaboration.manage', 'performance.view', 'messages.view', 'messages.send'],
             ],
             'teacher' => [
                 'label' => 'Teacher',
-                'description' => 'Assigned-course grading, course content, student performance follow-up, and classroom timetable access.',
-                'permissions' => ['dashboard.view', 'students.view', 'grades.enter', 'timetable.view', 'collaboration.view', 'collaboration.manage', 'performance.view', 'performance.manage', 'messages.view', 'messages.send'],
+                'description' => 'Online collaboration access for assigned subjects, agenda, messages, and performance follow-up.',
+                'permissions' => ['collaboration.view', 'collaboration.manage', 'performance.view', 'performance.manage', 'messages.view', 'messages.send'],
             ],
         ];
 
