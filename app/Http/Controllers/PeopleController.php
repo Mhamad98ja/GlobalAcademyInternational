@@ -181,7 +181,7 @@ class PeopleController extends Controller
             'middle_name' => ['nullable', 'string', 'max:100'],
             'last_name' => ['nullable', 'string', 'max:100'],
             'type' => ['required', 'in:teacher,father,mother,guardian,administrator,other'],
-            'blood_type' => ['nullable', Rule::in(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])],
+            'blood_type' => ['nullable', Rule::in($this->referenceOptions()['bloodTypes']->all())],
             'religion' => ['nullable', 'string', 'max:100'],
             'family_type' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
@@ -226,8 +226,18 @@ class PeopleController extends Controller
     private function referenceOptions(): array
     {
         $entries = StudentReferenceEntry::query()->get();
-        $familyTypes = $entries->where('reference', 'codes')->filter(fn ($entry): bool => in_array(strtolower((string) $entry->category), ['family-type', 'family_type', 'family type'], true))->pluck('value');
-        $bloodTypes = collect(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']);
+        $codeEntries = $entries->where('reference', 'codes');
+        $familyTypes = $codeEntries->filter(fn ($entry): bool => in_array(strtolower((string) $entry->category), ['family-type', 'family_type', 'family type'], true))->pluck('value');
+        $bloodTypeEntries = $codeEntries->where('category', 'blood-type');
+        $suppressedBloodTypes = $bloodTypeEntries->where('value', '__deleted__')->pluck('code');
+        $bloodTypes = collect(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
+            ->reject(fn (string $value): bool => $suppressedBloodTypes->contains($value))
+            ->merge($bloodTypeEntries->reject(fn ($entry): bool => $entry->value === '__deleted__')->pluck('value'))
+            ->merge(ResponsiblePerson::query()->whereNotNull('blood_type')->pluck('blood_type'))
+            ->filter(fn ($value): bool => filled($value) && $value !== '--')
+            ->unique()
+            ->sort()
+            ->values();
 
         return [
             'familyTypes' => $familyTypes->merge(ResponsiblePerson::query()->whereNotNull('family_type')->pluck('family_type'))->filter()->unique()->sort()->values(),
