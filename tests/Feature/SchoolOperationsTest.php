@@ -148,7 +148,8 @@ class SchoolOperationsTest extends TestCase
         $this->actingAs($administrator)->get(route('school-academic.subjects'))->assertOk()->assertSee('Subjects')->assertSee('Add subject');
         $this->actingAs($administrator)->get(route('school-academic.terms'))->assertOk()->assertSee('Terms / semesters')->assertSee('Add term');
         $this->actingAs($administrator)->get(route('school-academic.assignments'))->assertOk()->assertSee('Teacher subject assignments')->assertSee('Assign subject to teacher');
-        $this->actingAs($administrator)->get(route('school-academic.assessments'))->assertOk()->assertSee('Assessments')->assertSee('Create assessment');
+        $this->actingAs($administrator)->get(route('school-academic.assessments'))->assertRedirect(route('collaboration.section', ['section' => 'modification-requests']));
+        $this->actingAs($administrator)->get(route('collaboration.section', ['section' => 'modification-requests']))->assertOk()->assertSee('Evaluation Requests');
         $this->actingAs($administrator)->get(route('attendance.students', ['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'section_id' => $section->id]))->assertOk()->assertSee('Student attendance');
         $this->actingAs($administrator)->get(route('attendance.teachers'))->assertOk()->assertSee('Teacher attendance IN / OUT');
         $this->actingAs($administrator)->get(route('discipline.index'))->assertOk()->assertSee('Student actions & incidents', false);

@@ -118,7 +118,7 @@
                     ['route' => 'collaboration.index', 'params' => ['section' => 'evaluation-dashboard'], 'label' => 'Dashboard', 'icon' => 'reports', 'permission' => 'performance.view'],
                     ['route' => 'grades.index', 'params' => ['view' => 'evaluations'], 'label' => 'Evaluation Grades', 'icon' => 'academic', 'permission' => 'grades.enter'],
                     ['route' => 'grades.index', 'params' => ['view' => 'grade-book'], 'label' => 'Grade Book', 'icon' => 'academic', 'permission' => 'grades.enter'],
-                    ['route' => 'school-academic.assessments', 'label' => 'Evaluations List', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
+                    ['route' => 'collaboration.section', 'params' => ['section' => 'modification-requests'], 'label' => 'Evaluation Requests', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
                     ['route' => 'collaboration.index', 'params' => ['section' => 'modification-requests'], 'label' => 'My Requests', 'icon' => 'reports', 'permission' => 'performance.view'],
                 ]],
                 ['label' => 'Agenda reports', 'items' => [

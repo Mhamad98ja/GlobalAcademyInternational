@@ -205,7 +205,8 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/academic/operations/subjects', [SchoolAcademicController::class, 'subjects'])->name('school-academic.subjects');
         Route::get('/academic/operations/terms', [SchoolAcademicController::class, 'terms'])->name('school-academic.terms');
         Route::get('/academic/operations/teacher-assignments', [SchoolAcademicController::class, 'assignments'])->name('school-academic.assignments');
-        Route::get('/academic/operations/assessments', [SchoolAcademicController::class, 'assessments'])->name('school-academic.assessments');
+        // Keep the old URL as a compatibility redirect; evaluations live in Online Collaboration.
+        Route::get('/academic/operations/assessments', fn () => redirect()->route('collaboration.section', ['section' => 'modification-requests']))->name('school-academic.assessments');
         Route::post('/academic/subjects', [SchoolAcademicController::class, 'storeSubject'])->name('school-academic.subjects.store');
         Route::put('/academic/subjects/{subject}', [SchoolAcademicController::class, 'updateSubject'])->name('school-academic.subjects.update');
         Route::post('/academic/terms', [SchoolAcademicController::class, 'storeTerm'])->name('school-academic.terms.store');

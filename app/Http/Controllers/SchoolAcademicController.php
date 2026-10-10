@@ -43,11 +43,6 @@ class SchoolAcademicController extends Controller
         return $this->operationsPage('assignments');
     }
 
-    public function assessments(): View
-    {
-        return $this->operationsPage('assessments');
-    }
-
     private function operationsPage(string $activeSection): View
     {
         return view('school-academic.index', [

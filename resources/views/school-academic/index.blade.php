@@ -8,7 +8,6 @@
         'subjects' => ['label' => 'Subjects', 'description' => 'Create the subjects taught by the school.', 'route' => 'school-academic.subjects'],
         'terms' => ['label' => 'Terms / semesters', 'description' => 'Define dates and status for each academic period.', 'route' => 'school-academic.terms'],
         'assignments' => ['label' => 'Teacher subject assignments', 'description' => 'Connect a teacher, subject, class, and section.', 'route' => 'school-academic.assignments'],
-        'assessments' => ['label' => 'Assessments', 'description' => 'Configure tests, exams, and the review queue.', 'route' => 'school-academic.assessments'],
     ];
 @endphp
 @if(request('module') === 'students')<div class="mb-4 text-sm text-slate-500"><a class="link" href="{{ route('workspaces.show', ['workspace' => 'students']) }}">Student dossier</a> / <a class="link" href="{{ route('students.tools', ['section' => 'references']) }}">References</a></div>@endif
@@ -20,7 +19,7 @@
     </div>
 </div>
 
-<nav class="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5" aria-label="Academic operations sections">
+<nav class="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4" aria-label="Academic operations sections">
     @foreach ($operationSections as $key => $section)
         <a href="{{ route($section['route']) }}" class="rounded-lg border p-4 transition hover:-translate-y-0.5 hover:shadow-sm {{ $activeSection === $key ? 'border-teal-600 bg-teal-50 ring-1 ring-teal-600/20' : 'border-slate-200 bg-white hover:border-teal-300' }}">
             <span class="block text-sm font-semibold {{ $activeSection === $key ? 'text-teal-800' : 'text-slate-800' }}">{{ $section['label'] }}</span>
@@ -32,7 +31,7 @@
 
 @if ($activeSection === 'overview')
     <section class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        @foreach (['subjects' => ['count' => $subjects->count(), 'label' => 'Subjects ready', 'note' => 'Active and inactive subject records'], 'terms' => ['count' => $terms->count(), 'label' => 'Terms configured', 'note' => 'Academic periods across school years'], 'assignments' => ['count' => $assignments->where('is_active', true)->count(), 'label' => 'Active assignments', 'note' => 'Teacher-to-subject class links'], 'assessments' => ['count' => $assessments->count(), 'label' => 'Assessments', 'note' => 'Tests, exams, and evaluation setup']] as $key => $stat)
+        @foreach (['subjects' => ['count' => $subjects->count(), 'label' => 'Subjects ready', 'note' => 'Active and inactive subject records'], 'terms' => ['count' => $terms->count(), 'label' => 'Terms configured', 'note' => 'Academic periods across school years'], 'assignments' => ['count' => $assignments->where('is_active', true)->count(), 'label' => 'Active assignments', 'note' => 'Teacher-to-subject class links']] as $key => $stat)
             <a href="{{ route($operationSections[$key]['route']) }}" class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md">
                 <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $stat['label'] }}</span>
                 <strong class="mt-2 block text-3xl font-semibold tracking-tight text-slate-900">{{ number_format($stat['count']) }}</strong>
