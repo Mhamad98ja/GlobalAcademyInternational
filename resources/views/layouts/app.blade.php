@@ -94,6 +94,7 @@
                     ['route' => 'students.references.show', 'params' => ['reference' => 'district'], 'label' => 'Districts', 'icon' => 'administration', 'permission' => 'students.view'],
                     ['route' => 'students.references.show', 'params' => ['reference' => 'towns'], 'label' => 'Towns', 'icon' => 'administration', 'permission' => 'students.view'],
                     ['route' => 'academic.index', 'anchor' => 'academic-years', 'label' => 'Academic Years', 'icon' => 'academic', 'permission' => 'academic.manage'],
+                    ['route' => 'academic.index', 'anchor' => 'terms-semesters', 'label' => 'Terms / Semesters', 'icon' => 'academic', 'permission' => 'academic.manage'],
                     ['route' => 'academic.index', 'anchor' => 'levels-grades', 'label' => 'Levels & Grades', 'icon' => 'academic', 'permission' => 'academic.manage'],
                     ['route' => 'academic.index', 'anchor' => 'sections', 'label' => 'Sections', 'icon' => 'academic', 'permission' => 'academic.manage'],
                     ['route' => 'admin.settings', 'label' => 'Dictionary', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
@@ -356,7 +357,6 @@
             ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Report Card', 'icon' => 'reports', 'permission' => 'reports.view'],
             ['route' => 'reports.index', 'label' => 'Academic Reports', 'icon' => 'reports', 'permission' => 'reports.view'],
             ['route' => 'school-academic.index', 'label' => 'Academic Operations', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
-            ['route' => 'school-academic.assignments', 'label' => 'Teacher Subject Assignments', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
         ],
         'groups' => [],
     ];

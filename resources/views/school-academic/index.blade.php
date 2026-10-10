@@ -6,7 +6,7 @@
     $operationSections = [
         'overview' => ['label' => 'Operations overview', 'description' => 'Choose one focused setup area.', 'route' => 'school-academic.index'],
         'subjects' => ['label' => 'Subjects', 'description' => 'Create the subjects taught by the school.', 'route' => 'school-academic.subjects'],
-        'terms' => ['label' => 'Terms / semesters', 'description' => 'Define dates and status for each academic period.', 'route' => 'school-academic.terms'],
+        'terms' => ['label' => 'Terms / semesters', 'description' => 'Define dates and status for each academic period.', 'route' => 'school-academic.terms', 'navigation' => false],
         'assignments' => ['label' => 'Teacher subject assignments', 'description' => 'Connect a teacher, subject, class, and section.', 'route' => 'school-academic.assignments'],
     ];
 @endphp
@@ -19,17 +19,19 @@
 
 <nav class="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4" aria-label="Academic operations sections">
     @foreach ($operationSections as $key => $section)
+        @if ($section['navigation'] ?? true)
         <a href="{{ route($section['route']) }}" class="rounded-lg border p-4 transition hover:-translate-y-0.5 hover:shadow-sm {{ $activeSection === $key ? 'border-teal-600 bg-teal-50 ring-1 ring-teal-600/20' : 'border-slate-200 bg-white hover:border-teal-300' }}">
             <span class="block text-sm font-semibold {{ $activeSection === $key ? 'text-teal-800' : 'text-slate-800' }}">{{ $section['label'] }}</span>
             <span class="mt-1 block text-xs leading-5 text-slate-500">{{ $section['description'] }}</span>
             <span class="mt-3 block text-xs font-semibold uppercase tracking-wide {{ $activeSection === $key ? 'text-teal-700' : 'text-slate-400' }}">{{ $activeSection === $key ? 'Current area' : 'Open area' }} <span aria-hidden="true">→</span></span>
         </a>
+        @endif
     @endforeach
 </nav>
 
 @if ($activeSection === 'overview')
     <section class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        @foreach (['subjects' => ['count' => $subjects->count(), 'label' => 'Subjects ready', 'note' => 'Active and inactive subject records'], 'terms' => ['count' => $terms->count(), 'label' => 'Terms configured', 'note' => 'Academic periods across school years'], 'assignments' => ['count' => $assignments->where('is_active', true)->count(), 'label' => 'Active assignments', 'note' => 'Teacher-to-subject class links']] as $key => $stat)
+        @foreach (['subjects' => ['count' => $subjects->count(), 'label' => 'Subjects ready', 'note' => 'Active and inactive subject records'], 'assignments' => ['count' => $assignments->where('is_active', true)->count(), 'label' => 'Active assignments', 'note' => 'Teacher-to-subject class links']] as $key => $stat)
             <a href="{{ route($operationSections[$key]['route']) }}" class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md">
                 <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $stat['label'] }}</span>
                 <strong class="mt-2 block text-3xl font-semibold tracking-tight text-slate-900">{{ number_format($stat['count']) }}</strong>

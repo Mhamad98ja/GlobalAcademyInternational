@@ -8,7 +8,7 @@
     </div>
 </div>
 
-<div class="grid gap-6 xl:grid-cols-3">
+<div class="grid gap-6 xl:grid-cols-4">
     <section class="panel">
         <div class="panel-header"><h2 id="academic-years" class="panel-title scroll-mt-20">Academic years</h2></div>
         <form method="POST" action="{{ route('academic.years.store') }}" class="space-y-3 border-b border-slate-200 p-5" data-submit-lock>
@@ -41,6 +41,43 @@
                 </div>
             @empty
                 <div class="empty">No academic year yet.</div>
+            @endforelse
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-header"><h2 id="terms-semesters" class="panel-title scroll-mt-20">Terms / semesters</h2></div>
+        <form method="POST" action="{{ route('school-academic.terms.store') }}" class="space-y-3 border-b border-slate-200 p-5" data-submit-lock>
+            @csrf
+            <select name="academic_year_id" required>
+                <option value="">Academic year</option>
+                @foreach ($years as $year)<option value="{{ $year->id }}">{{ $year->name }}</option>@endforeach
+            </select>
+            <input name="name" required placeholder="Semester 1">
+            <input name="type" required value="semester" placeholder="Type">
+            <div class="grid grid-cols-2 gap-2"><input type="date" name="starts_on" required><input type="date" name="ends_on" required></div>
+            <select name="status"><option value="draft">Draft</option><option value="open">Open</option><option value="closed">Closed</option></select>
+            <input type="number" min="0" name="sort_order" value="0" placeholder="Order">
+            <button class="btn btn-primary w-full">Add term / semester</button>
+        </form>
+        <div class="divide-y divide-slate-100">
+            @forelse ($terms as $term)
+                <div class="px-5 py-3">
+                    <div class="flex items-center justify-between gap-3"><div><div class="font-medium">{{ $term->name }}</div><div class="text-xs muted">{{ $term->academicYear?->name }} · {{ $term->starts_on->format('d M Y') }} - {{ $term->ends_on->format('d M Y') }}</div></div><span class="badge badge-blue">{{ str($term->status)->headline() }}</span></div>
+                    <details class="mt-3"><summary class="link cursor-pointer text-xs">Edit term / semester</summary>
+                        <form method="POST" action="{{ route('school-academic.terms.update', $term) }}" class="mt-3 space-y-2 rounded-md bg-slate-50 p-3" data-submit-lock>
+                            @csrf @method('PUT')
+                            <select name="academic_year_id" required>@foreach ($years as $year)<option value="{{ $year->id }}" @selected($term->academic_year_id === $year->id)>{{ $year->name }}</option>@endforeach</select>
+                            <div class="grid grid-cols-2 gap-2"><input name="name" value="{{ $term->name }}" required><input name="type" value="{{ $term->type }}" required></div>
+                            <div class="grid grid-cols-2 gap-2"><input type="date" name="starts_on" value="{{ $term->starts_on->format('Y-m-d') }}" required><input type="date" name="ends_on" value="{{ $term->ends_on->format('Y-m-d') }}" required></div>
+                            <select name="status">@foreach (['draft', 'open', 'closed'] as $status)<option value="{{ $status }}" @selected($term->status === $status)>{{ str($status)->headline() }}</option>@endforeach</select>
+                            <input type="number" min="0" name="sort_order" value="{{ $term->sort_order }}">
+                            <button class="btn btn-secondary btn-small w-full">Save term changes</button>
+                        </form>
+                    </details>
+                </div>
+            @empty
+                <div class="empty">No terms or semesters yet.</div>
             @endforelse
         </div>
     </section>

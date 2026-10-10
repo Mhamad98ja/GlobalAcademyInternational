@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\AcademicYear;
+use App\Models\AcademicTerm;
 use App\Models\Grade;
 use App\Models\SchoolLevel;
 use App\Models\Section;
@@ -20,6 +21,7 @@ class AcademicController extends Controller
     {
         return view('academic.index', [
             'years' => AcademicYear::orderByDesc('starts_on')->get(),
+            'terms' => AcademicTerm::query()->with('academicYear')->orderByDesc('starts_on')->orderBy('sort_order')->get(),
             'levels' => SchoolLevel::with('grades.sections')->orderBy('sort_order')->get(),
         ]);
     }
