@@ -12,10 +12,27 @@
     <a class="btn btn-secondary" href="{{ route('admin.users') }}">Cancel</a>
 </div>
 
-<form method="POST" action="{{ route('admin.users.update', $managedUser) }}" class="panel max-w-2xl" data-submit-lock>
+<form method="POST" action="{{ route('admin.users.update', $managedUser) }}" class="panel max-w-2xl" data-submit-lock enctype="multipart/form-data">
     @csrf
     @method('PUT')
     <div class="space-y-4 p-5">
+        <div class="flex flex-wrap items-center gap-5 border-b border-slate-200 pb-5">
+            <div class="h-20 w-20 overflow-hidden rounded-full bg-slate-100 ring-4 ring-slate-50">
+                @if($managedUser->profile_photo_path)
+                    <img src="{{ route('admin.users.photo', $managedUser) }}" alt="Profile photo of {{ $managedUser->name }}" class="h-full w-full object-cover">
+                @else
+                    <div class="flex h-full w-full items-center justify-center text-2xl font-semibold text-slate-500">{{ str($managedUser->name)->trim()->substr(0, 1)->upper() }}</div>
+                @endif
+            </div>
+            <div class="min-w-64 flex-1">
+                <h2 class="panel-title">Profile photo</h2>
+                <p class="mt-1 text-xs text-slate-500">Add or replace this person’s photo from their profile. JPG, PNG, or WebP up to 4 MB.</p>
+                <div class="mt-3 flex flex-wrap items-center gap-3">
+                    <input type="file" name="profile_photo" accept="image/jpeg,image/png,image/webp" class="max-w-full text-sm">
+                    @if($managedUser->profile_photo_path)<label class="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" name="remove_profile_photo" value="1"> Remove current photo</label>@endif
+                </div>
+            </div>
+        </div>
         <div>
             <label class="form-label">Full name *</label>
             <input name="name" required value="{{ old('name', $managedUser->name) }}">
@@ -29,12 +46,12 @@
             <input name="whatsapp_number" value="{{ old('whatsapp_number', $managedUser->whatsapp_number) }}" placeholder="+961XXXXXXXX">
             <p class="mt-1 text-xs text-slate-500">Use international format. This is used only for password reset codes.</p>
         </div>
-        <div>
+        <div data-role-field="teacher">
             <label class="form-label">Linked teacher profile</label>
             <select name="teacher_id"><option value="">Not a teacher account</option>@foreach($teachers as $teacher)<option value="{{ $teacher->id }}" @selected(old('teacher_id', $managedUser->teacher_id) == $teacher->id)>{{ $teacher->employee_number ? $teacher->employee_number.' · ' : '' }}{{ $teacher->full_name }}</option>@endforeach</select>
             <p class="mt-1 text-xs text-slate-500">Teachers need this link to enter marks only for the subjects they teach.</p>
         </div>
-        <div>
+        <div data-role-field="student">
             <label class="form-label">Linked student profile</label>
             <select name="student_id"><option value="">Not a student account</option>@foreach($students as $student)<option value="{{ $student->id }}" @selected(old('student_id', $managedUser->student_id) == $student->id)>{{ $student->full_name }} · {{ $student->student_number }}</option>@endforeach</select>
             <p class="mt-1 text-xs text-slate-500">Link this account to a student to open the private student portal after sign-in.</p>
@@ -51,7 +68,7 @@
         <div class="border-t border-slate-200 pt-4">
             <h2 class="panel-title">Branch authority</h2>
             <p class="mt-1 text-xs text-slate-500">Users can work only in assigned branches. The Controller Administrator is the only account with whole-school branch authority.</p>
-            <div class="mt-3" data-branch-administrator-selection>
+            <div class="mt-3">
                 <label class="form-label">Assigned branches</label>
                 <div class="max-h-48 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
                     @foreach ($branches as $branch)
@@ -63,7 +80,7 @@
                 <label class="form-label">Default branch</label>
                 <select name="default_branch_id"><option value="">None</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}" @selected(old('default_branch_id', $managedUser->branches->firstWhere('pivot.is_default', true)?->id) == $branch->id)>{{ $branch->name }}</option>@endforeach</select>
             </div>
-            <div class="mt-3">
+            <div class="mt-3" data-branch-administrator-selection>
                 <label class="form-label">Branch Super Administrator for selected branches</label>
                 <div class="max-h-48 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
                     @foreach ($branches as $branch)

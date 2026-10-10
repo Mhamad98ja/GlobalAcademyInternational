@@ -22,6 +22,8 @@ use App\Models\StudentRegistration;
 use App\Models\User;
 use App\Services\BookTransferService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class MultiBranchWorkflowTest extends TestCase
@@ -586,6 +588,48 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertSee('data-user-role-select', false)
             ->assertSee('data-branch-administrator-selection', false)
             ->assertSee('data-role-name="super-administrator"', false);
+    }
+
+    public function test_user_profile_photo_is_uploaded_replaced_and_served_from_the_user_profile(): void
+    {
+        Storage::fake('public');
+        $controller = $this->user('photo-controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        $managedUser = $this->branchUser('photo-user@example.test');
+        [$main] = $this->branches($controller, $managedUser);
+
+        $first = UploadedFile::fake()->image('first.jpg');
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->put(route('admin.users.update', $managedUser), [
+                'name' => $managedUser->name,
+                'email' => $managedUser->email,
+                'profile_photo' => $first,
+                'role_id' => Role::where('name', 'employee')->value('id'),
+                'branch_ids' => [$main->id],
+                'default_branch_id' => $main->id,
+            ])->assertRedirect();
+
+        $managedUser->refresh();
+        $oldPath = $managedUser->profile_photo_path;
+        $this->assertNotNull($oldPath);
+        Storage::disk('public')->assertExists($oldPath);
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('admin.users.photo', $managedUser))->assertOk();
+
+        $second = UploadedFile::fake()->image('second.jpg');
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->put(route('admin.users.update', $managedUser), [
+                'name' => $managedUser->name,
+                'email' => $managedUser->email,
+                'profile_photo' => $second,
+                'role_id' => Role::where('name', 'employee')->value('id'),
+                'branch_ids' => [$main->id],
+                'default_branch_id' => $main->id,
+            ])->assertRedirect();
+
+        $managedUser->refresh();
+        Storage::disk('public')->assertMissing($oldPath);
+        Storage::disk('public')->assertExists($managedUser->profile_photo_path);
     }
 
     public function test_branch_super_administrator_controls_local_users_while_branch_users_cannot_view_financial_data(): void

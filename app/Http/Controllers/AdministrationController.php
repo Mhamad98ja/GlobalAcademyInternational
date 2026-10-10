@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class AdministrationController extends Controller
@@ -62,17 +63,19 @@ class AdministrationController extends Controller
         $currentBranchId = $branches->id();
         $canManageBranchAssignments = $actor->isControllerAdministrator();
         abort_unless($actor->canManageUsersInBranch($currentBranchId), 403);
+        $role = $canManageBranchAssignments ? Role::find($request->integer('role_id')) : Role::where('name', 'employee')->first();
+        $roleName = $role?->name;
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', 'unique:users,whatsapp_number'],
-            'teacher_id' => ['nullable', 'integer', 'exists:teachers,id'],
-            'student_id' => [Rule::requiredIf(fn (): bool => Role::query()->whereKey($request->integer('role_id'))->where('name', 'student')->exists()), 'nullable', 'integer', 'exists:students,id', Rule::unique('users', 'student_id')],
+            'teacher_id' => [Rule::requiredIf($roleName === 'teacher'), 'nullable', 'integer', 'exists:teachers,id', Rule::unique('users', 'teacher_id')],
+            'student_id' => [Rule::requiredIf($roleName === 'student'), 'nullable', 'integer', 'exists:students,id', Rule::unique('users', 'student_id')],
             'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()],
             'role_id' => [$canManageBranchAssignments ? 'required' : 'nullable', 'exists:roles,id'],
-            'branch_ids' => ['nullable', 'array'],
+            'branch_ids' => [Rule::requiredIf($canManageBranchAssignments), 'array', 'min:1'],
             'branch_ids.*' => ['integer', 'exists:branches,id'],
-            'default_branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'default_branch_id' => [Rule::requiredIf($canManageBranchAssignments), 'nullable', 'integer', 'exists:branches,id'],
             'has_all_branch_access' => ['nullable', 'boolean'],
             'branch_administrator_ids' => ['nullable', 'array'],
             'branch_administrator_ids.*' => ['integer', 'exists:branches,id'],
@@ -124,20 +127,24 @@ class AdministrationController extends Controller
         $currentBranchId = $branches->id();
         $this->ensureCanManageUser($actor, $user, $currentBranchId);
         $canManageBranchAssignments = $actor->isControllerAdministrator();
+        $role = $canManageBranchAssignments ? Role::find($request->integer('role_id')) : $user->roles()->first();
+        $roleName = $role?->name;
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', Rule::unique('users', 'whatsapp_number')->ignore($user->id)],
-            'teacher_id' => ['nullable', 'integer', 'exists:teachers,id'],
-            'student_id' => [Rule::requiredIf(fn (): bool => Role::query()->whereKey($request->integer('role_id'))->where('name', 'student')->exists()), 'nullable', 'integer', 'exists:students,id', Rule::unique('users', 'student_id')->ignore($user)],
+            'teacher_id' => [Rule::requiredIf($roleName === 'teacher'), 'nullable', 'integer', 'exists:teachers,id', Rule::unique('users', 'teacher_id')->ignore($user)],
+            'student_id' => [Rule::requiredIf($roleName === 'student'), 'nullable', 'integer', 'exists:students,id', Rule::unique('users', 'student_id')->ignore($user)],
             'password' => ['nullable', 'confirmed', Password::min(12)->mixedCase()->numbers()],
             'role_id' => [$canManageBranchAssignments ? 'required' : 'nullable', 'exists:roles,id'],
-            'branch_ids' => ['nullable', 'array'],
+            'branch_ids' => [Rule::requiredIf($canManageBranchAssignments), 'array', 'min:1'],
             'branch_ids.*' => ['integer', 'exists:branches,id'],
-            'default_branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'default_branch_id' => [Rule::requiredIf($canManageBranchAssignments), 'nullable', 'integer', 'exists:branches,id'],
             'has_all_branch_access' => ['nullable', 'boolean'],
             'branch_administrator_ids' => ['nullable', 'array'],
             'branch_administrator_ids.*' => ['integer', 'exists:branches,id'],
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:max_width=3000,max_height=3000'],
+            'remove_profile_photo' => ['nullable', 'boolean'],
         ]);
 
         $attributes = [
@@ -152,6 +159,17 @@ class AdministrationController extends Controller
         }
 
         $user->update($attributes);
+        if ($request->hasFile('profile_photo')) {
+            $oldPhoto = $user->profile_photo_path;
+            $newPhoto = $request->file('profile_photo')->store('user-profile-photos/'.$user->public_id, 'public');
+            $user->update(['profile_photo_path' => $newPhoto]);
+            if ($oldPhoto && $oldPhoto !== $newPhoto) {
+                Storage::disk('public')->delete($oldPhoto);
+            }
+        } elseif ($request->boolean('remove_profile_photo') && $user->profile_photo_path) {
+            Storage::disk('public')->delete($user->profile_photo_path);
+            $user->update(['profile_photo_path' => null]);
+        }
         if ($canManageBranchAssignments) {
             if ($user->is_controller_administrator && Role::whereKey($data['role_id'])->where('name', '!=', 'super-administrator')->exists()) {
                 abort(422, 'The Controller Administrator must remain a Branch Super Administrator.');
@@ -166,6 +184,14 @@ class AdministrationController extends Controller
         }
 
         return redirect()->route('admin.users')->with('success', 'User account updated.');
+    }
+
+    public function userPhoto(User $user, BranchContext $branches)
+    {
+        $this->ensureCanManageUser(auth()->user(), $user, $branches->id());
+        abort_unless($user->profile_photo_path && Storage::disk('public')->exists($user->profile_photo_path), 404);
+
+        return Storage::disk('public')->response($user->profile_photo_path, null, ['Cache-Control' => 'private, max-age=3600']);
     }
 
     public function toggleUser(User $user, BranchContext $branches): RedirectResponse

@@ -94,6 +94,7 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/admin/dars/{page}', [DarsAdministrationController::class, 'show'])->name('admin.dars.show');
         Route::get('/admin/users/{user}/edit', [AdministrationController::class, 'editUser'])->name('admin.users.edit');
         Route::put('/admin/users/{user}', [AdministrationController::class, 'updateUser'])->name('admin.users.update');
+        Route::get('/admin/users/{user}/photo', [AdministrationController::class, 'userPhoto'])->name('admin.users.photo');
     });
     Route::middleware('permission:students.manage')->group(function (): void {
         Route::get('/students/section-changes', [StudentDossierController::class, 'sectionChanges'])->name('students.section-changes');

@@ -127,14 +127,24 @@ document.querySelectorAll('[data-grade-select]').forEach((gradeSelect) => {
 document.querySelectorAll('[data-user-role-select]').forEach((roleSelect) => {
     const form = roleSelect.form;
     const branchAdministratorSelection = form?.querySelector('[data-branch-administrator-selection]');
-    if (!branchAdministratorSelection) return;
+    const roleFields = form?.querySelectorAll('[data-role-field]') ?? [];
 
     const syncBranchAdministratorSelection = () => {
         const role = roleSelect.options[roleSelect.selectedIndex]?.dataset.roleName;
-        const isBranchAdministrator = role === 'super-administrator';
-        branchAdministratorSelection.hidden = !isBranchAdministrator;
-        branchAdministratorSelection.querySelectorAll('input').forEach((input) => {
-            input.disabled = !isBranchAdministrator;
+        if (branchAdministratorSelection) {
+            const isBranchAdministrator = role === 'super-administrator';
+            branchAdministratorSelection.hidden = !isBranchAdministrator;
+            branchAdministratorSelection.querySelectorAll('input').forEach((input) => {
+                input.disabled = !isBranchAdministrator;
+            });
+        }
+        roleFields.forEach((field) => {
+            const isMatchingRole = field.dataset.roleField === role;
+            field.hidden = !isMatchingRole;
+            field.querySelectorAll('select, input').forEach((input) => {
+                input.disabled = !isMatchingRole;
+                input.required = isMatchingRole;
+            });
         });
     };
 
