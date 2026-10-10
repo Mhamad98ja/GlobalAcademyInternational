@@ -96,6 +96,7 @@ class GlobalAcademySampleDataSeeder extends Seeder
             ['GAI-STAFF-005', 'Clara', 'Mansour', 'FRE'], ['GAI-STAFF-006', 'Tarek', 'Farhat', 'SOC'],
         ];
         $teacherRoleId = Role::query()->where('name', 'teacher')->value('id');
+        $studentRoleId = Role::query()->where('name', 'student')->value('id');
         $teachers = collect();
         $teacherUsers = collect();
         foreach ($teacherProfiles as [$number, $first, $last, $subjectCode]) {
@@ -151,6 +152,28 @@ class GlobalAcademySampleDataSeeder extends Seeder
             if ($student->trashed()) {
                 $student->restore();
             }
+            // Every student record has a matching portal account. Keep an
+            // existing password when the seeder is re-run, while creating a
+            // predictable local-demo password for new sample accounts.
+            $studentUser = User::withTrashed()->firstOrNew(['student_id' => $student->id]);
+            $studentUser->fill([
+                'name' => $student->full_name,
+                'email' => $student->email,
+                'is_active' => true,
+            ]);
+            if (! $studentUser->exists) {
+                $studentUser->password = 'GlobalAcademy2026!';
+            }
+            $studentUser->save();
+            if ($studentUser->trashed()) {
+                $studentUser->restore();
+            }
+            if ($studentRoleId) {
+                $studentUser->roles()->sync([$studentRoleId]);
+            }
+            $studentUser->branches()->syncWithoutDetaching([
+                $branch->id => ['is_default' => true, 'is_branch_administrator' => false],
+            ]);
             $registration = StudentRegistration::withoutGlobalScopes()->updateOrCreate(['student_id' => $student->id, 'academic_year_id' => $year->id], [
                 'branch_id' => $branch->id, 'grade_id' => $class['grade']->id, 'section_id' => $class['section']->id, 'teacher_id' => $teachers['ENG']->id,
                 'status' => 'active', 'registered_on' => $year->starts_on, 'notes' => 'Current academic year registration.', 'created_by' => $administrator->id,
