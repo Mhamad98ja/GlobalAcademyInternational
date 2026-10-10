@@ -221,10 +221,10 @@ class WorkspaceController extends Controller
 
         return $this->page(
             $user,
-            'Academic affairs',
+            'Academic & Report Card',
             'academic',
             'academic',
-            'Operate the learning programme: academic structure, terms and assessments, teacher assignments, grades, and the graphical timetable.',
+            'Manage report cards, class subjects, assessments, grades, and the academic timetable from one focused workspace.',
             [
                 $this->stat($user, 'academic_year.manage', 'Terms', $terms, 'Configured for the active year'),
                 $this->stat($user, 'academic_year.manage', 'Assessments', $assessments, 'Tests, exams, projects, and more'),

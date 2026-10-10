@@ -344,6 +344,18 @@
     }
     unset($group);
     $moduleMenus['collaboration']['home']['label'] = 'Home';
+    // Academic & Report Card is intentionally a shallow workspace. Detailed
+    // report choices live in the report centre; the sidebar should only expose
+    // the few destinations users need every day.
+    $moduleMenus['reports'] = [
+        'home' => ['route' => 'workspaces.show', 'params' => ['workspace' => 'academic'], 'label' => 'Academic & Report Card', 'icon' => 'dashboard', 'permission' => 'dashboard.view'],
+        'items' => [
+            ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Report Card', 'icon' => 'reports', 'permission' => 'reports.view'],
+            ['route' => 'reports.index', 'label' => 'Academic Reports', 'icon' => 'reports', 'permission' => 'reports.view'],
+            ['route' => 'school-academic.index', 'label' => 'Class Subjects', 'icon' => 'academic', 'permission' => 'academic_year.manage', 'anchor' => 'assignments'],
+        ],
+        'groups' => [],
+    ];
     $menu = $module ? $moduleMenus[$module] : null;
     $canSee = fn (array $item) => ($item['financial'] ?? false) ? $signedInUser->canViewFinancials() : ((! ($item['controller_only'] ?? false) || $signedInUser->isControllerAdministrator()) && $signedInUser->hasPermission($item['permission']));
     $darsAdministrationLabels = ['School Year', 'Menu', 'Pages', 'Report Header', 'Configuration', 'Dynamic Fields', 'Dictionary', 'Family Type', 'Family Remark Type', 'Colleges', 'Import', 'File Category', 'Mail Type'];
@@ -401,7 +413,7 @@
         && (isset($item['report']) || collect($item['params'] ?? [])->every(fn ($value, $key) => (string) (request()->route($key) ?? request($key)) === (string) $value));
     $moduleContext = match ($module) {
         'students' => ['label' => 'Student Records', 'route' => route('students.index')],
-        'reports' => ['label' => 'Reports Centre', 'route' => route('reports.school', ['report' => 'student_attendance'])],
+        'reports' => ['label' => 'Academic & Report Card', 'route' => route('workspaces.show', ['workspace' => 'academic'])],
         'collaboration' => ['label' => 'Teaching & Collaboration', 'route' => route('collaboration.index')],
         'administration' => ['label' => 'Operations', 'route' => route('operations.index')],
         default => null,
