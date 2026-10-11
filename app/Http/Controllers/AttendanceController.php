@@ -85,10 +85,18 @@ class AttendanceController extends Controller
             'student_id' => ['nullable', 'integer', 'exists:students,id'],
             'entries' => ['required', 'array', 'min:1'],
             'entries.*.registration_id' => ['required', 'integer', 'distinct', 'exists:student_registrations,id'],
+            'entries.*.selected' => ['nullable', 'boolean'],
             'entries.*.status' => ['required', Rule::in(['present', 'absent', 'late', 'excused', 'left_early'])],
             'entries.*.notes' => ['nullable', 'string', 'max:1000'],
         ]);
-        $registrationIds = collect($data['entries'])->pluck('registration_id')->map(fn ($id) => (int) $id)->all();
+        $entries = collect($data['entries'])
+            ->filter(fn (array $entry): bool => ! array_key_exists('selected', $entry) || (bool) $entry['selected'])
+            ->values();
+        if ($entries->isEmpty()) {
+            throw ValidationException::withMessages(['entries' => 'Select at least one student before saving attendance.']);
+        }
+        $data['entries'] = $entries->all();
+        $registrationIds = $entries->pluck('registration_id')->map(fn ($id) => (int) $id)->all();
         $registrations = StudentRegistration::query()
             ->whereIn('id', $registrationIds)
             ->where('academic_year_id', $data['academic_year_id'])

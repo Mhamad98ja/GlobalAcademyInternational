@@ -907,3 +907,18 @@ document.querySelectorAll('[data-timetable]').forEach((timetable) => {
         });
     });
 });
+
+document.querySelectorAll('[data-attendance-select-all]').forEach((toggle) => {
+    const form = toggle.closest('form');
+    if (!form) return;
+    toggle.addEventListener('change', () => {
+        form.querySelectorAll('[data-attendance-student]').forEach((checkbox) => {
+            checkbox.checked = toggle.checked;
+        });
+    });
+    form.querySelectorAll('[data-attendance-student]').forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+            toggle.checked = [...form.querySelectorAll('[data-attendance-student]')].every((item) => item.checked);
+        });
+    });
+});

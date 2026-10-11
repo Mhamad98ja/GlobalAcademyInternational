@@ -20,7 +20,9 @@ use App\Models\TimetableEntry;
 use App\Models\TimetablePeriod;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class SchoolOperationsTest extends TestCase
@@ -75,6 +77,26 @@ class SchoolOperationsTest extends TestCase
         ]);
     }
 
+    public function test_attendance_can_be_saved_for_only_the_checked_students(): void
+    {
+        $administrator = $this->administrator();
+        [$year, $grade, $section, $firstRegistration] = $this->classRegistration($administrator);
+        $secondStudent = Student::create(['student_number' => 'OPS-002', 'first_name' => 'Omar', 'last_name' => 'Haddad']);
+        $secondRegistration = StudentRegistration::create(['student_id' => $secondStudent->id, 'academic_year_id' => $year->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'status' => 'active', 'registered_on' => '2028-09-01', 'created_by' => $administrator->id]);
+
+        $this->actingAs($administrator)->post(route('attendance.students.save'), [
+            'academic_year_id' => $year->id,
+            'attendance_date' => '2028-09-05',
+            'entries' => [
+                ['registration_id' => $firstRegistration->id, 'selected' => 0, 'status' => 'absent'],
+                ['registration_id' => $secondRegistration->id, 'selected' => 1, 'status' => 'present'],
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('student_attendances', ['student_registration_id' => $firstRegistration->id, 'attendance_date' => '2028-09-05']);
+        $this->assertDatabaseHas('student_attendances', ['student_registration_id' => $secondRegistration->id, 'attendance_date' => '2028-09-05 00:00:00', 'status' => 'present']);
+    }
+
     public function test_teacher_grade_entry_is_limited_to_their_course_assignment(): void
     {
         $administrator = $this->administrator();
@@ -117,6 +139,51 @@ class SchoolOperationsTest extends TestCase
             'save_as' => 'draft',
             'entries' => [['registration_id' => $registration->id, 'score' => 90]],
         ])->assertForbidden();
+    }
+
+    public function test_student_support_and_subject_exemptions_are_recorded_on_the_student_profile(): void
+    {
+        $administrator = $this->administrator();
+        [$year, $grade, $section, $registration] = $this->classRegistration($administrator);
+        $supportUser = User::factory()->create(['name' => 'Dr. Support', 'email' => 'support@example.test', 'is_active' => true]);
+        $subject = Subject::create(['name' => 'Music']);
+        TeacherAssignment::create(['academic_year_id' => $year->id, 'teacher_id' => Teacher::create(['first_name' => 'Music', 'last_name' => 'Teacher', 'is_active' => true])->id, 'subject_id' => $subject->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'is_active' => true]);
+
+        $this->actingAs($administrator)->post(route('students.support.store', $registration->student), ['user_id' => $supportUser->id, 'role' => 'Psychologist', 'notes' => 'Weekly wellbeing check-in'])->assertSessionHasNoErrors();
+        $this->actingAs($administrator)->post(route('students.subject-exemptions.store', $registration->student), ['student_registration_id' => $registration->id, 'subject_id' => $subject->id, 'reason' => 'Approved learning plan'])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('student_support_assignments', ['student_id' => $registration->student_id, 'user_id' => $supportUser->id, 'role' => 'Psychologist']);
+        $this->assertDatabaseHas('student_subject_exemptions', ['student_id' => $registration->student_id, 'student_registration_id' => $registration->id, 'subject_id' => $subject->id]);
+    }
+
+    public function test_agenda_supports_uploaded_resources_and_online_meetings(): void
+    {
+        Storage::fake('local');
+        $administrator = $this->administrator();
+        [$year, $grade, $section] = $this->classRegistration($administrator);
+        $teacher = Teacher::create(['first_name' => 'Agenda', 'last_name' => 'Teacher', 'is_active' => true]);
+        $subject = Subject::create(['name' => 'Science']);
+        $assignment = TeacherAssignment::create(['academic_year_id' => $year->id, 'teacher_id' => $teacher->id, 'subject_id' => $subject->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'is_active' => true]);
+
+        $this->actingAs($administrator)->post(route('collaboration.course-content.store'), [
+            'teacher_assignment_id' => $assignment->id,
+            'title' => 'Read the science guide',
+            'content_type' => 'document',
+            'attachment' => UploadedFile::fake()->create('science-guide.pdf', 25, 'application/pdf'),
+            'publish_now' => 1,
+        ])->assertSessionHasNoErrors();
+        $this->actingAs($administrator)->post(route('collaboration.events.store'), [
+            'title' => 'Family science meeting',
+            'audience' => 'section',
+            'grade_id' => $grade->id,
+            'section_id' => $section->id,
+            'starts_at' => '2028-09-10 16:00',
+            'meeting_platform' => 'zoom',
+            'meeting_url' => 'https://zoom.us/j/12345',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('course_contents', ['teacher_assignment_id' => $assignment->id, 'attachment_name' => 'science-guide.pdf']);
+        $this->assertDatabaseHas('school_events', ['title' => 'Family science meeting', 'meeting_platform' => 'zoom']);
     }
 
     public function test_timetable_rejects_a_teacher_double_booking(): void

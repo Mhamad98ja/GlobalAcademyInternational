@@ -109,6 +109,11 @@ class User extends Authenticatable
         return $this->belongsTo(Student::class);
     }
 
+    public function studentSupportAssignments(): HasMany
+    {
+        return $this->hasMany(StudentSupportAssignment::class);
+    }
+
     public function hasPermission(string $permission): bool
     {
         if ($this->isControllerAdministrator()) {

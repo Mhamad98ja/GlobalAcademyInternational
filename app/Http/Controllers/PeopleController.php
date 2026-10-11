@@ -118,10 +118,16 @@ class PeopleController extends Controller
         $studentIds = $data['student_ids'] ?? [];
         unset($data['student_ids']);
 
-        DB::transaction(function () use ($data, $studentIds): void {
+        $person = DB::transaction(function () use ($data, $studentIds): ResponsiblePerson {
             $person = ResponsiblePerson::create($data);
             $this->syncStudents($person, $studentIds);
+
+            return $person;
         });
+
+        if ($request->boolean('add_student')) {
+            return redirect()->route('students.create', ['responsible_person_id' => $person->id])->with('success', 'Parent saved. Add the student profile below; you can return and add more students later.');
+        }
 
         return back()->with('success', 'Responsible person and student links saved.');
     }

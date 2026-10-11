@@ -12,7 +12,7 @@ class SchoolEvent extends Model
 {
     use BelongsToBranch, HasPublicId;
 
-    protected $fillable = ['branch_id', 'academic_year_id', 'grade_id', 'section_id', 'audience', 'title', 'description', 'starts_at', 'ends_at', 'created_by'];
+    protected $fillable = ['branch_id', 'academic_year_id', 'grade_id', 'section_id', 'audience', 'title', 'description', 'starts_at', 'ends_at', 'meeting_platform', 'meeting_url', 'created_by'];
 
     protected function casts(): array
     {

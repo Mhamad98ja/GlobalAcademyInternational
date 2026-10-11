@@ -15,6 +15,7 @@
 <form class="panel" method="POST" action="{{ $student->exists ? route('students.update', $student) : route('students.store') }}" data-submit-lock>
     @csrf
     @if($student->exists) @method('PUT') @endif
+    @if(isset($responsiblePerson) && $responsiblePerson?->id)<input type="hidden" name="responsible_person_id" value="{{ $responsiblePerson->id }}"><div class="mx-5 mt-5 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">Adding a student for <strong>{{ $responsiblePerson->full_name }}</strong>. You can add more students from the parent record later.</div>@endif
     <div class="space-y-6 p-5">
         <div><h2 class="panel-title">Identity</h2><div class="form-grid mt-4">
             <div><label class="form-label">Student number</label><input name="student_number" value="{{ old('student_number', $student->student_number) }}" placeholder="Generated if blank"></div>
@@ -35,7 +36,7 @@
 
         <div><h2 class="panel-title">Contact</h2><div class="form-grid mt-4">
             <div><label class="form-label">Phone</label><input name="phone" value="{{ old('phone', $student->phone) }}"></div>
-            <div class="md:col-span-2"><label class="form-label">Address</label><textarea name="address" rows="2">{{ old('address', $student->address) }}</textarea></div>
+            <div class="md:col-span-2"><label class="form-label">Address details</label><div class="form-grid"><input name="area" placeholder="Area" value="{{ old('area', $student->area) }}"><input name="street" placeholder="Street" value="{{ old('street', $student->street) }}"><input name="area_number" placeholder="Area number (text)" value="{{ old('area_number', $student->area_number) }}"><input name="street_number" placeholder="Street number (text)" value="{{ old('street_number', $student->street_number) }}"><input name="building_name" placeholder="Building name" value="{{ old('building_name', $student->building_name) }}"><input name="building_number" placeholder="Building number" value="{{ old('building_number', $student->building_number) }}"><input name="apartment" placeholder="Apartment" value="{{ old('apartment', $student->apartment) }}"><textarea name="address" rows="2" placeholder="Additional address details">{{ old('address', $student->address) }}</textarea></div></div>
             <div><label class="form-label">Previous school</label><input name="previous_school" value="{{ old('previous_school', $student->previous_school) }}"></div>
             <div class="md:col-span-2"><label class="form-label">Notes</label><textarea name="notes" rows="3">{{ old('notes', $student->notes) }}</textarea></div>
         </div></div>

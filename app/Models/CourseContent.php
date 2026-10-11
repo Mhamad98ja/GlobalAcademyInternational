@@ -12,7 +12,7 @@ class CourseContent extends Model
 {
     use BelongsToBranch, HasPublicId;
 
-    protected $fillable = ['branch_id', 'teacher_assignment_id', 'title', 'content', 'content_type', 'resource_url', 'available_from', 'due_on', 'estimated_minutes', 'disable_response', 'published_at', 'created_by'];
+    protected $fillable = ['branch_id', 'teacher_assignment_id', 'title', 'content', 'content_type', 'resource_url', 'attachment_path', 'attachment_name', 'attachment_mime', 'attachment_size', 'available_from', 'due_on', 'estimated_minutes', 'disable_response', 'published_at', 'created_by'];
 
     protected function casts(): array
     {

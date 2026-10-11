@@ -26,6 +26,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -206,12 +207,15 @@ class CollaborationController extends Controller
             'content' => ['nullable', 'string', 'max:10000'],
             'content_type' => ['required', Rule::in(['lesson', 'homework', 'assignment', 'assessment', 'document', 'link', 'video', 'announcement', 'other'])],
             'resource_url' => ['nullable', 'url', 'max:2000'],
+            'attachment' => ['nullable', 'file', 'mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,txt,jpg,jpeg,png', 'max:20480'],
             'available_from' => ['nullable', 'date'],
             'due_on' => ['nullable', 'date'],
             'estimated_minutes' => ['nullable', 'integer', 'between:0,1440'],
             'disable_response' => ['nullable', 'boolean'],
         ]);
         $this->ensureAgendaDates($data);
+        $attachment = $this->storeCourseAttachment($request);
+        unset($data['attachment']);
         $assignment = $this->authorizedAssignment($request->user(), (int) $data['teacher_assignment_id']);
         if (! $assignment->is_active) {
             throw ValidationException::withMessages(['teacher_assignment_id' => 'Select an active subject assignment. Inactive assignments cannot receive new agenda items.']);
@@ -233,6 +237,9 @@ class CollaborationController extends Controller
             'created_by' => $request->user()->id,
             'disable_response' => $request->boolean('disable_response', true),
         ];
+        if ($attachment) {
+            $common += $attachment;
+        }
         $contents = DB::transaction(fn () => $targets->map(fn (TeacherAssignment $target) => CourseContent::create($common + ['teacher_assignment_id' => $target->id])));
         $contents->each(function (CourseContent $content) use ($audit): void {
             $assignment = $content->assignment;
@@ -256,15 +263,21 @@ class CollaborationController extends Controller
             'content' => ['nullable', 'string', 'max:10000'],
             'content_type' => ['required', Rule::in(['lesson', 'homework', 'assignment', 'assessment', 'document', 'link', 'video', 'announcement', 'other'])],
             'resource_url' => ['nullable', 'url', 'max:2000'],
+            'attachment' => ['nullable', 'file', 'mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,txt,jpg,jpeg,png', 'max:20480'],
             'available_from' => ['nullable', 'date'],
             'due_on' => ['nullable', 'date'],
             'estimated_minutes' => ['nullable', 'integer', 'between:0,1440'],
             'disable_response' => ['nullable', 'boolean'],
         ]);
         $this->ensureAgendaDates($data);
+        $attachment = $this->storeCourseAttachment($request);
+        unset($data['attachment']);
         $assignment = $this->authorizedAssignment($request->user(), (int) $data['teacher_assignment_id']);
         $wasPublished = $courseContent->published_at !== null;
-        $courseContent->update(collect($data)->except('teacher_assignment_id')->all() + ['teacher_assignment_id' => $assignment->id, 'disable_response' => $request->boolean('disable_response', true), 'published_at' => $wasPublished || $request->boolean('publish_now') ? ($courseContent->published_at ?? now()) : null]);
+        if ($attachment && $courseContent->attachment_path) {
+            Storage::disk('local')->delete($courseContent->attachment_path);
+        }
+        $courseContent->update(collect($data)->except('teacher_assignment_id')->all() + ['teacher_assignment_id' => $assignment->id, 'disable_response' => $request->boolean('disable_response', true), 'published_at' => $wasPublished || $request->boolean('publish_now') ? ($courseContent->published_at ?? now()) : null] + ($attachment ?: []));
         if (! $wasPublished && $courseContent->published_at) {
             $this->notifyCourseAudience($assignment, $courseContent->title, 'A new '.$courseContent->content_type.' was published for '.$assignment->subject?->name.'.');
         }
@@ -290,6 +303,8 @@ class CollaborationController extends Controller
             'description' => ['nullable', 'string', 'max:5000'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'meeting_platform' => ['nullable', Rule::in(['zoom', 'google_meet', 'teams', 'other'])],
+            'meeting_url' => ['nullable', 'url', 'max:2000'],
         ]);
         $event = SchoolEvent::create($this->audienceData($request) + $data + ['created_by' => $request->user()->id]);
         $audit->log('school_event.created', $event, [], $event->only(['title', 'audience', 'starts_at', 'ends_at']));
@@ -302,7 +317,7 @@ class CollaborationController extends Controller
         $data = $request->validate([
             'student_registration_id' => ['required', 'integer', 'exists:student_registrations,id'],
             'teacher_assignment_id' => ['nullable', 'integer', 'exists:teacher_assignments,id'],
-            'category' => ['required', Rule::in(['participation', 'behavior', 'effort', 'homework', 'engagement', 'other'])],
+            'category' => ['required', Rule::in(['participation', 'behavior', 'effort', 'homework', 'engagement', 'incident', 'other'])],
             'rating' => ['nullable', 'integer', 'between:1,5'],
             'observed_on' => ['required', 'date', 'before_or_equal:today'],
             'note' => ['required', 'string', 'max:5000'],
@@ -405,6 +420,48 @@ class CollaborationController extends Controller
             ->each(function (Student $student) use ($title, $message): void {
                 $student->notify(new StudentPortalNotification($title, $message, route('student-portal.index')));
             });
+    }
+
+    private function storeCourseAttachment(Request $request): ?array
+    {
+        if (! $request->hasFile('attachment')) {
+            return null;
+        }
+
+        $file = $request->file('attachment');
+
+        return [
+            'attachment_path' => $file->store('course-content', 'local'),
+            'attachment_name' => $file->getClientOriginalName(),
+            'attachment_mime' => $file->getClientMimeType(),
+            'attachment_size' => $file->getSize(),
+        ];
+    }
+
+    public function downloadCourseContent(Request $request, CourseContent $courseContent)
+    {
+        $user = $request->user();
+        if ($user->student_id) {
+            $student = Student::query()->findOrFail($user->student_id);
+            $assignment = $courseContent->assignment;
+            $registrationQuery = $student->registrations()->where('status', 'active')->whereHas('academicYear', fn (Builder $years) => $years->where('status', 'open'))->where('academic_year_id', $assignment->academic_year_id)->where('grade_id', $assignment->grade_id);
+            if ($assignment->section_id) {
+                $registrationQuery->where('section_id', $assignment->section_id);
+            }
+            abort_unless($courseContent->published_at && $courseContent->published_at->isPast() && $registrationQuery->exists(), 403);
+        } else {
+            $this->authorizedAssignment($user, (int) $courseContent->teacher_assignment_id);
+        }
+        abort_unless($courseContent->attachment_path && Storage::disk('local')->exists($courseContent->attachment_path), 404);
+
+        $filename = $courseContent->attachment_name ?: basename($courseContent->attachment_path);
+        if (strtolower((string) $courseContent->attachment_mime) === 'application/pdf') {
+            return response()->file(Storage::disk('local')->path($courseContent->attachment_path), [
+                'Content-Disposition' => 'inline; filename="'.addslashes($filename).'"',
+            ]);
+        }
+
+        return Storage::disk('local')->download($courseContent->attachment_path, $filename);
     }
 
     /** @return array<string, mixed> */

@@ -8,6 +8,11 @@ use App\Http\Requests\StoreStudentRequest;
 use App\Models\AcademicYear;
 use App\Models\Grade;
 use App\Models\Student;
+use App\Models\ResponsiblePerson;
+use App\Models\StudentSubjectExemption;
+use App\Models\StudentSupportAssignment;
+use App\Models\Subject;
+use App\Models\TeacherAssignment;
 use App\Models\StudentRegistration;
 use App\Models\Teacher;
 use App\Models\Role;
@@ -91,9 +96,11 @@ class StudentsController extends Controller
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
-        return view('students.form', ['student' => new Student, 'registrations' => false]);
+        $responsiblePerson = $request->integer('responsible_person_id') ? ResponsiblePerson::query()->find($request->integer('responsible_person_id')) : null;
+
+        return view('students.form', ['student' => new Student, 'registrations' => false, 'responsiblePerson' => $responsiblePerson]);
     }
 
     public function store(StoreStudentRequest $request, StudentRegistrationService $registrations): RedirectResponse
@@ -101,9 +108,14 @@ class StudentsController extends Controller
         return DB::transaction(function () use ($request, $registrations): RedirectResponse {
             $data = $request->validated();
             $portalPassword = $data['password'];
+            $responsiblePersonId = $data['responsible_person_id'] ?? null;
             unset($data['password']);
+            unset($data['responsible_person_id']);
             $data['student_number'] = $data['student_number'] ?? 'STU-'.now()->format('Y').'-'.str_pad((string) ((Student::max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT);
             $student = Student::create($data);
+            if ($responsiblePersonId) {
+                ResponsiblePerson::query()->findOrFail($responsiblePersonId)->students()->syncWithoutDetaching([$student->id => ['relationship' => 'Parent / guardian', 'is_primary' => true]]);
+            }
             $portalUser = User::create([
                 'name' => $student->full_name,
                 'email' => $student->email,
@@ -168,7 +180,55 @@ class StudentsController extends Controller
         }
         $student->load($relations);
 
-        return view('students.show', compact('student', 'canViewFinancials', 'canViewAttendance', 'canViewDiscipline', 'canViewMedical', 'canViewGrades', 'canViewExamAbsences', 'canViewPerformance'));
+        $activeRegistration = $student->registrations->firstWhere('status', 'active') ?? $student->registrations->first();
+        $subjects = $activeRegistration
+            ? Subject::query()->where('is_active', true)->whereHas('assignments', fn ($assignments) => $assignments
+                ->where('academic_year_id', $activeRegistration->academic_year_id)
+                ->where('grade_id', $activeRegistration->grade_id)
+                ->where(fn ($sections) => $sections->whereNull('section_id')->orWhere('section_id', $activeRegistration->section_id)))->orderBy('name')->get()
+            : collect();
+        $student->load(['supportAssignments.user', 'subjectExemptions.subject']);
+        $supportUsers = User::query()->where('is_active', true)->whereNull('student_id')->orderBy('name')->get();
+
+        return view('students.show', compact('student', 'canViewFinancials', 'canViewAttendance', 'canViewDiscipline', 'canViewMedical', 'canViewGrades', 'canViewExamAbsences', 'canViewPerformance', 'subjects', 'supportUsers'));
+    }
+
+    public function storeSupportAssignment(Request $request, Student $student): RedirectResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'role' => ['required', 'string', 'max:100'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'assigned_on' => ['nullable', 'date'],
+        ]);
+        StudentSupportAssignment::create($data + ['student_id' => $student->id, 'status' => 'active']);
+
+        return redirect()->route('students.show', [$student, 'tab' => 'general'])->with('success', 'Student support professional assigned.');
+    }
+
+    public function storeSubjectExemption(Request $request, Student $student): RedirectResponse
+    {
+        $data = $request->validate([
+            'student_registration_id' => ['required', 'integer', 'exists:student_registrations,id'],
+            'subject_id' => ['required', 'integer', 'exists:subjects,id'],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+        $registration = StudentRegistration::query()->whereKey($data['student_registration_id'])->where('student_id', $student->id)->firstOrFail();
+        abort_unless(TeacherAssignment::query()->where('academic_year_id', $registration->academic_year_id)->where('grade_id', $registration->grade_id)->where('subject_id', $data['subject_id'])->where(fn ($sections) => $sections->whereNull('section_id')->orWhere('section_id', $registration->section_id))->exists(), 422, 'The subject is not assigned to this student class.');
+        StudentSubjectExemption::updateOrCreate(
+            ['student_id' => $student->id, 'student_registration_id' => $registration->id, 'subject_id' => $data['subject_id']],
+            ['reason' => $data['reason'] ?? null, 'approved_by' => $request->user()->id, 'created_by' => $request->user()->id],
+        );
+
+        return redirect()->route('students.show', [$student, 'tab' => 'subjects'])->with('success', 'Subject exemption saved.');
+    }
+
+    public function destroySubjectExemption(Student $student, StudentSubjectExemption $exemption): RedirectResponse
+    {
+        abort_unless($exemption->student_id === $student->id, 404);
+        $exemption->delete();
+
+        return redirect()->route('students.show', [$student, 'tab' => 'subjects'])->with('success', 'Subject exemption removed.');
     }
 
     public function edit(Student $student): View
@@ -181,6 +241,7 @@ class StudentsController extends Controller
         $data = $request->validated();
         $password = $data['password'] ?? null;
         unset($data['password']);
+        unset($data['responsible_person_id']);
         $student->update($data);
         if ($student->portalUser) {
             $attributes = ['name' => $student->full_name, 'email' => $student->email];

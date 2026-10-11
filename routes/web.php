@@ -76,6 +76,7 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     Route::post('/messages/read-all', [MessagesController::class, 'markAllRead'])->middleware('permission:messages.view')->name('messages.read-all');
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
     Route::get('/student-portal', [StudentPortalController::class, 'index'])->name('student-portal.index');
+    Route::get('/student-portal/course-content/{courseContent}/download', [CollaborationController::class, 'downloadCourseContent'])->name('student-portal.course-content.download');
     Route::get('/workspaces/{workspace}', WorkspaceController::class)
         ->where('workspace', 'students|teachers|academic|operations')
         ->middleware('permission:dashboard.view')
@@ -100,6 +101,9 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/students/section-changes', [StudentDossierController::class, 'sectionChanges'])->name('students.section-changes');
         Route::post('/students/section-changes', [StudentDossierController::class, 'updateSections'])->name('students.section-changes.update');
         Route::post('/students/{student}/photo', [StudentsController::class, 'updatePhoto'])->name('students.photo.update');
+        Route::post('/students/{student}/support', [StudentsController::class, 'storeSupportAssignment'])->name('students.support.store');
+        Route::post('/students/{student}/subject-exemptions', [StudentsController::class, 'storeSubjectExemption'])->name('students.subject-exemptions.store');
+        Route::delete('/students/{student}/subject-exemptions/{exemption}', [StudentsController::class, 'destroySubjectExemption'])->name('students.subject-exemptions.destroy');
         Route::get('/students/{student}/registrations/{registration}/edit', [StudentRegistrationsController::class, 'edit'])->name('students.register.edit');
         Route::put('/students/{student}/registrations/{registration}', [StudentRegistrationsController::class, 'update'])->name('students.register.update');
     });
@@ -261,6 +265,7 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         ->name('collaboration.section');
     Route::post('/collaboration/announcements', [CollaborationController::class, 'storeAnnouncement'])->middleware('permission:collaboration.manage')->name('collaboration.announcements.store');
     Route::post('/collaboration/course-content', [CollaborationController::class, 'storeCourseContent'])->middleware('permission:collaboration.manage')->name('collaboration.course-content.store');
+    Route::get('/collaboration/course-content/{courseContent}/download', [CollaborationController::class, 'downloadCourseContent'])->name('collaboration.course-content.download');
     Route::put('/collaboration/course-content/{courseContent}', [CollaborationController::class, 'updateCourseContent'])->middleware('permission:collaboration.manage')->name('collaboration.course-content.update');
     Route::delete('/collaboration/course-content/{courseContent}', [CollaborationController::class, 'destroyCourseContent'])->middleware('permission:collaboration.manage')->name('collaboration.course-content.destroy');
     Route::post('/collaboration/events', [CollaborationController::class, 'storeEvent'])->middleware('permission:collaboration.manage')->name('collaboration.events.store');

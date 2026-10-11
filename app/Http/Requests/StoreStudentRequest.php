@@ -41,9 +41,17 @@ class StoreStudentRequest extends FormRequest
                 'nullable', 'confirmed', Password::min(12)->mixedCase()->numbers(),
             ],
             'address' => ['nullable', 'string', 'max:2000'],
+            'area' => ['nullable', 'string', 'max:120'],
+            'street' => ['nullable', 'string', 'max:150'],
+            'area_number' => ['nullable', 'string', 'max:30'],
+            'street_number' => ['nullable', 'string', 'max:30'],
+            'building_name' => ['nullable', 'string', 'max:150'],
+            'building_number' => ['nullable', 'string', 'max:30'],
+            'apartment' => ['nullable', 'string', 'max:30'],
             'enrollment_date' => ['nullable', 'date'],
             'previous_school' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:3000'],
+            'responsible_person_id' => ['nullable', 'integer', 'exists:responsible_persons,id'],
         ];
     }
 }

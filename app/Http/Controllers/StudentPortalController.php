@@ -9,6 +9,7 @@ use App\Models\CourseContent;
 use App\Models\SchoolAnnouncement;
 use App\Models\Student;
 use App\Models\StudentRegistration;
+use App\Models\SchoolEvent;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -108,6 +109,21 @@ class StudentPortalController extends Controller
             ->take(30)
             ->get();
 
+        $events = SchoolEvent::query()
+            ->where('starts_at', '>=', now()->startOfDay())
+            ->when($registrations->isEmpty(), fn (Builder $query) => $query->whereRaw('1 = 0'))
+            ->where(fn (Builder $query) => $query->whereIn('audience', ['all', 'students'])
+                ->orWhere(function (Builder $scoped) use ($registrations): void {
+                    $scoped->whereIn('audience', ['grade', 'section'])->where(function (Builder $matches) use ($registrations): void {
+                        foreach ($registrations as $registration) {
+                            $matches->orWhere(function (Builder $scope) use ($registration): void {
+                                $scope->where('grade_id', $registration->grade_id)->where(fn (Builder $audience) => $audience->where('audience', 'grade')->orWhere(fn (Builder $section) => $section->where('audience', 'section')->where('section_id', $registration->section_id)));
+                            });
+                        }
+                    });
+                }))
+            ->orderBy('starts_at')->take(20)->get();
+
         $publishedGrades = $student->gradeEntries()
             ->with('assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.assignment.grade', 'assessment.assignment.section', 'assessment.subject', 'assessment.term', 'assignment.teacher', 'assignment.grade', 'assignment.section')
             ->where('status', 'published')
@@ -117,6 +133,6 @@ class StudentPortalController extends Controller
 
         $notifications = $student->notifications()->latest()->take(20)->get();
 
-        return view('student-portal.index', compact('student', 'registrations', 'contents', 'assessments', 'publishedGrades', 'notifications', 'announcements'));
+        return view('student-portal.index', compact('student', 'registrations', 'contents', 'assessments', 'publishedGrades', 'notifications', 'announcements', 'events'));
     }
 }
