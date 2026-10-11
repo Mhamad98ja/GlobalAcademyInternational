@@ -3,7 +3,6 @@
 @section('content')
 <div class="page-header">
     <div><h1 class="page-title">Student attendance</h1><p class="page-subtitle">Record daily or period attendance for an active class roster.</p></div>
-    @if(auth()->user()->hasPermission('reports.view'))<a class="btn btn-secondary" href="{{ route('reports.school', ['report' => 'student_attendance', 'module' => 'students'] + $filters) }}">Attendance report</a>@endif
 </div>
 
 <section class="panel">
@@ -49,12 +48,12 @@
         </div>
         <div class="table-wrap">
             <table class="data-table">
-                <thead><tr><th><label class="flex items-center gap-2"><input type="checkbox" data-attendance-select-all checked> Select</label></th><th>Student</th><th>Class</th><th>Status</th><th>Note</th></tr></thead>
+                <thead><tr><th>Student</th><th>Class</th><th>Status</th><th>Note</th></tr></thead>
                 <tbody>
                     @forelse ($registrations as $registration)
                         @php($record = $existing->get($registration->id))
                         <tr>
-                            <td><input type="hidden" name="entries[{{ $loop->index }}][registration_id]" value="{{ $registration->id }}"><input type="hidden" name="entries[{{ $loop->index }}][selected]" value="0"><input type="checkbox" name="entries[{{ $loop->index }}][selected]" value="1" data-attendance-student checked aria-label="Include {{ $registration->student?->full_name }}"></td><td><a class="link font-medium" href="{{ route('students.show', $registration->student) }}">{{ $registration->student?->full_name }}</a><div class="text-xs text-slate-500">{{ $registration->student?->student_number }}</div></td>
+                            <td><input type="hidden" name="entries[{{ $loop->index }}][registration_id]" value="{{ $registration->id }}"><a class="link font-medium" href="{{ route('students.show', $registration->student) }}">{{ $registration->student?->full_name }}</a><div class="text-xs text-slate-500">{{ $registration->student?->student_number }}</div></td>
                             <td>{{ $registration->grade?->name }} {{ $registration->section?->name }}</td>
                             <td>
                                 <select name="entries[{{ $loop->index }}][status]">
@@ -66,7 +65,7 @@
                             <td><input name="entries[{{ $loop->index }}][notes]" value="{{ $record?->notes }}" placeholder="Optional note"></td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="empty">Choose an academic year and class to load active students.</td></tr>
+                        <tr><td colspan="4" class="empty">Choose an academic year and class to load active students.</td></tr>
                     @endforelse
                 </tbody>
             </table>
