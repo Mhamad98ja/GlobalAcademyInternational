@@ -64,7 +64,6 @@
                 ['label' => 'Student Lists', 'items' => [
                     ['route' => 'reports.index', 'params' => ['report' => 'student_information'], 'label' => 'Student Directory', 'icon' => 'reports', 'permission' => 'reports.view'],
                     ['route' => 'reports.index', 'params' => ['report' => 'students'], 'label' => 'Registration List', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.index', 'params' => ['report' => 'class_sections'], 'label' => 'Class List', 'icon' => 'reports', 'permission' => 'reports.view'],
                 ]],
                 ['label' => 'School Records', 'items' => [
                     ['route' => 'reports.school', 'params' => ['report' => 'student_attendance'], 'label' => 'Student Attendance', 'icon' => 'reports', 'permission' => 'reports.view'],
@@ -74,10 +73,7 @@
                     ['route' => 'reports.school', 'params' => ['report' => 'exam_absences'], 'label' => 'Exam Absences', 'icon' => 'reports', 'permission' => 'reports.view'],
                     ['route' => 'reports.school', 'params' => ['report' => 'substitutions'], 'label' => 'Teacher Substitutions', 'icon' => 'reports', 'permission' => 'reports.view'],
                     ['route' => 'reports.school', 'params' => ['report' => 'teacher_workload'], 'label' => 'Teacher Workload', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'timetable'], 'label' => 'Timetable', 'icon' => 'reports', 'permission' => 'reports.view'],
                     ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Grade Results', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'academic_years'], 'label' => 'Academic Years and Terms', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'class_sections'], 'label' => 'Classes and Sections', 'icon' => 'reports', 'permission' => 'reports.view'],
                 ]],
             ],
         ],

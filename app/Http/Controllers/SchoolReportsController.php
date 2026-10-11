@@ -28,6 +28,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SchoolReportsController extends Controller
 {
+    private const HIDDEN_REPORTS = ['timetable', 'academic_years', 'class_sections'];
+
     private const REPORTS = [
         'student_attendance' => 'Student attendance',
         'teacher_attendance' => 'Teacher attendance',
@@ -120,7 +122,7 @@ class SchoolReportsController extends Controller
     {
         return [
             'report' => $report,
-            'reports' => array_filter(self::REPORTS, fn ($key) => match ($key) {
+            'reports' => array_filter(self::REPORTS, fn ($key) => ! in_array($key, self::HIDDEN_REPORTS, true) && match ($key) {
                 'medical_records' => auth()->user()->hasPermission('medical.view'),
                 'incidents' => auth()->user()->hasPermission('discipline.view'),
                 default => true,

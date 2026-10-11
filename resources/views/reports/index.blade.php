@@ -25,7 +25,6 @@
                 <label class="form-label" for="report">Report type</label>
                 <select id="report" name="report" data-report-type-select>
                     <option value="student_information" @selected($report === 'student_information')>Student general information</option>
-                    <option value="class_sections" @selected($report === 'class_sections')>Students by class and section</option>
                     <option value="students" @selected($report === 'students')>Student registrations</option>
                     @if ($canViewOperationalReports)<option value="stock" @selected($report === 'stock')>Stock on hand</option>@endif
                     @if ($canViewFinancials)<option value="invoices" @selected($report === 'invoices')>Invoices</option>@endif
