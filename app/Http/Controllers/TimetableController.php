@@ -39,7 +39,7 @@ class TimetableController extends Controller
             ->when($gradeId, fn ($query) => $query->where('grade_id', $gradeId))
             ->when($sectionId, fn ($query) => $query->where('section_id', $sectionId))
             ->get()
-            ->groupBy(fn (TimetableEntry $entry) => $entry->period_number.'-'.$entry->day_of_week);
+            ->groupBy(fn (TimetableEntry $entry) => $entry->period_number.'-'.strtolower((string) $entry->day_of_week));
         $assignments = TeacherAssignment::query()->with('teacher', 'subject', 'grade', 'section')
             ->where('academic_year_id', $yearId)->where('is_active', true)
             ->when($gradeId, fn ($query) => $query->where('grade_id', $gradeId))
@@ -103,11 +103,11 @@ class TimetableController extends Controller
             ->where('academic_year_id', $data['academic_year_id'])
             ->get();
         $classEntries = $entries->where('grade_id', $data['grade_id'])->where('section_id', $data['section_id']);
-        $occupiedClass = $classEntries->mapWithKeys(fn (TimetableEntry $entry) => [$entry->day_of_week.'-'.$entry->period_number => true])->all();
-        $occupiedTeachers = $entries->mapWithKeys(fn (TimetableEntry $entry) => [$entry->teacher_id.'-'.$entry->day_of_week.'-'.$entry->period_number => true])->all();
+        $occupiedClass = $classEntries->mapWithKeys(fn (TimetableEntry $entry) => [strtolower((string) $entry->day_of_week).'-'.$entry->period_number => true])->all();
+        $occupiedTeachers = $entries->mapWithKeys(fn (TimetableEntry $entry) => [$entry->teacher_id.'-'.strtolower((string) $entry->day_of_week).'-'.$entry->period_number => true])->all();
         $assignmentCounts = $entries->groupBy('teacher_assignment_id')->map->count()->all();
         $teacherCounts = $entries->groupBy('teacher_id')->map->count()->all();
-        $classDayLoads = $classEntries->groupBy('day_of_week')->map->count()->all();
+        $classDayLoads = $classEntries->groupBy(fn (TimetableEntry $entry) => strtolower((string) $entry->day_of_week))->map->count()->all();
         $assignmentDayLoads = [];
         $created = 0;
         $unscheduled = [];

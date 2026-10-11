@@ -172,6 +172,32 @@ class SchoolOperationsTest extends TestCase
         $this->assertDatabaseCount('timetable_entries', 2);
     }
 
+    public function test_timetable_displays_legacy_capitalized_day_entries_in_the_correct_slot(): void
+    {
+        $administrator = $this->administrator();
+        [$year, $grade, $section] = $this->classRegistration($administrator);
+        $teacher = Teacher::create(['first_name' => 'Nour', 'last_name' => 'Legacy', 'is_active' => true]);
+        $subject = Subject::create(['name' => 'History']);
+        $assignment = TeacherAssignment::create(['academic_year_id' => $year->id, 'teacher_id' => $teacher->id, 'subject_id' => $subject->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'is_active' => true]);
+        $entry = TimetableEntry::create([
+            'academic_year_id' => $year->id,
+            'teacher_assignment_id' => $assignment->id,
+            'teacher_id' => $teacher->id,
+            'subject_id' => $subject->id,
+            'grade_id' => $grade->id,
+            'section_id' => $section->id,
+            'day_of_week' => 'Monday',
+            'period_number' => 1,
+        ]);
+        TimetablePeriod::create(['academic_year_id' => $year->id, 'period_number' => 1, 'label' => 'Period 1', 'kind' => 'lesson']);
+
+        $this->actingAs($administrator)->get(route('timetable.index', [
+            'academic_year_id' => $year->id,
+            'grade_id' => $grade->id,
+            'section_id' => $section->id,
+        ]))->assertOk()->assertSee('data-existing-entry-id="'.$entry->public_id.'"', false);
+    }
+
     public function test_timetable_generator_distributes_assignment_lessons_for_the_selected_class(): void
     {
         $administrator = $this->administrator();
