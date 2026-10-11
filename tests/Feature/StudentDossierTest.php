@@ -95,6 +95,40 @@ class StudentDossierTest extends TestCase
         $this->assertDatabaseHas('responsible_person_student', ['student_id' => $registration->student_id]);
     }
 
+    public function test_parent_form_can_create_multiple_linked_student_portal_profiles(): void
+    {
+        [$user] = $this->dossierData();
+        Role::firstOrCreate(['name' => 'student'], ['label' => 'Student']);
+
+        $this->actingAs($user)->post(route('responsible.store'), [
+            'full_name' => 'Family Dossier',
+            'type' => 'mother',
+            'children' => [
+                ['first_name' => 'First', 'last_name' => 'Child', 'email' => 'first.child@example.test', 'password' => 'FirstChild1234!', 'password_confirmation' => 'FirstChild1234!'],
+                ['first_name' => 'Second', 'last_name' => 'Child', 'email' => 'second.child@example.test', 'password' => 'SecondChild1234!', 'password_confirmation' => 'SecondChild1234!'],
+            ],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $parent = ResponsiblePerson::query()->where('full_name', 'Family Dossier')->firstOrFail();
+        $this->assertCount(2, $parent->students);
+        $this->assertDatabaseHas('users', ['email' => 'first.child@example.test']);
+        $this->assertDatabaseHas('users', ['email' => 'second.child@example.test']);
+    }
+
+    public function test_student_attendance_report_can_filter_by_selected_individual_students(): void
+    {
+        [$user, $year, $grade, $sectionA, , $registration] = $this->dossierData();
+        $other = Student::create(['student_number' => 'DOS-002', 'first_name' => 'Other', 'last_name' => 'Dossier']);
+        $otherRegistration = StudentRegistration::create(['student_id' => $other->id, 'academic_year_id' => $year->id, 'grade_id' => $grade->id, 'section_id' => $sectionA->id, 'status' => 'active', 'registered_on' => '2030-09-01', 'created_by' => $user->id]);
+        StudentAttendance::create(['student_id' => $registration->student_id, 'student_registration_id' => $registration->id, 'academic_year_id' => $year->id, 'grade_id' => $grade->id, 'section_id' => $sectionA->id, 'attendance_date' => '2030-09-10', 'status' => 'absent', 'recorded_by' => $user->id]);
+        StudentAttendance::create(['student_id' => $other->id, 'student_registration_id' => $otherRegistration->id, 'academic_year_id' => $year->id, 'grade_id' => $grade->id, 'section_id' => $sectionA->id, 'attendance_date' => '2030-09-10', 'status' => 'present', 'recorded_by' => $user->id]);
+
+        $this->actingAs($user)->get(route('reports.school', ['report' => 'student_attendance', 'student_ids' => [$registration->student_id]]))
+            ->assertOk()
+            ->assertViewHas('rows', fn ($rows): bool => $rows->count() === 1 && $rows->first()[1] === 'Maya Dossier')
+            ->assertSee('Individual students');
+    }
+
     public function test_student_dashboard_uses_the_selected_year_and_daily_absences(): void
     {
         [$user, $year, , , , $registration] = $this->dossierData();

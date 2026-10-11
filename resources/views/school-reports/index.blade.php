@@ -31,11 +31,12 @@
                     <option value="{{ $term->id }}" @selected(($filters['academic_term_id'] ?? null) == $term->id)>{{ $term->academicYear?->name }} &middot; {{ $term->name }}</option>
                 @endforeach
             </select></div>@endif
-            @if(in_array('student_id', $reportFilters, true))<div><label class="form-label">Student</label><select aria-label="Student" name="student_id"><option value="">All students</option>
+            @if(in_array('student_id', $reportFilters, true) && $report !== 'student_attendance')<div><label class="form-label">Student</label><select aria-label="Student" name="student_id"><option value="">All students</option>
                 @foreach ($students as $student)
                     <option value="{{ $student->id }}" @selected(($filters['student_id'] ?? null) == $student->id)>{{ $student->full_name }}</option>
                 @endforeach
             </select></div>@endif
+            @if($report === 'student_attendance')<fieldset class="rounded-lg border border-slate-200 p-3 md:col-span-2 xl:col-span-5"><legend class="px-1 text-sm font-semibold text-slate-700">Individual students</legend><p class="mb-2 text-xs text-slate-500">Leave all unchecked for the complete class report, or select one or more students.</p><div class="grid max-h-44 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">@foreach($students as $student)<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="student_ids[]" value="{{ $student->id }}" @checked(in_array($student->id, $filters['student_ids'] ?? [], true))><span>{{ $student->full_name }}</span></label>@endforeach</div></fieldset>@endif
             @if(in_array('teacher_id', $reportFilters, true))<div><label class="form-label">Teacher</label><select aria-label="Teacher" name="teacher_id"><option value="">All teachers</option>
                 @foreach ($teachers as $teacher)
                     <option value="{{ $teacher->id }}" @selected(($filters['teacher_id'] ?? null) == $teacher->id)>{{ $teacher->full_name }}</option>

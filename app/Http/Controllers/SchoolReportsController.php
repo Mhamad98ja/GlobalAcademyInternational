@@ -78,6 +78,8 @@ class SchoolReportsController extends Controller
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
             'academic_term_id' => ['nullable', 'integer', 'exists:academic_terms,id'],
             'student_id' => ['nullable', 'integer', 'exists:students,id'],
+            'student_ids' => ['nullable', 'array'],
+            'student_ids.*' => ['required', 'integer', 'distinct', 'exists:students,id'],
             'teacher_id' => ['nullable', 'integer', 'exists:teachers,id'],
             'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
@@ -124,7 +126,7 @@ class SchoolReportsController extends Controller
                 default => true,
             }, ARRAY_FILTER_USE_KEY),
             'reportFilters' => match ($report) {
-                'student_attendance' => ['academic_year_id', 'student_id', 'grade_id', 'section_id', 'date_from', 'date_to', 'status'],
+                'student_attendance' => ['academic_year_id', 'student_id', 'student_ids', 'grade_id', 'section_id', 'date_from', 'date_to', 'status'],
                 'incidents' => ['academic_year_id', 'student_id', 'grade_id', 'section_id', 'date_from', 'date_to', 'status'],
                 'exam_absences' => ['academic_year_id', 'academic_term_id', 'student_id', 'grade_id', 'section_id', 'subject_id', 'date_from', 'date_to', 'status'],
                 'grades' => ['academic_year_id', 'academic_term_id', 'student_id', 'teacher_id', 'grade_id', 'section_id', 'subject_id', 'date_from', 'date_to', 'status'],
@@ -140,7 +142,13 @@ class SchoolReportsController extends Controller
             'rows' => $rows,
             'years' => AcademicYear::query()->orderByDesc('starts_on')->get(),
             'terms' => AcademicTerm::query()->with('academicYear')->when($filters['academic_year_id'] ?? null, fn ($query, $id) => $query->where('academic_year_id', $id))->orderByDesc('starts_on')->get(),
-            'students' => Student::query()->orderBy('first_name')->orderBy('last_name')->get(),
+            'students' => Student::query()
+                ->when($report === 'student_attendance', fn ($query) => $query->whereHas('registrations', fn ($registrations) => $registrations
+                    ->where('status', 'active')
+                    ->when($filters['academic_year_id'] ?? null, fn ($query, $id) => $query->where('academic_year_id', $id))
+                    ->when($filters['grade_id'] ?? null, fn ($query, $id) => $query->where('grade_id', $id))
+                    ->when($filters['section_id'] ?? null, fn ($query, $id) => $query->where('section_id', $id))))
+                ->orderBy('first_name')->orderBy('last_name')->get(),
             'teachers' => Teacher::query()->where('is_active', true)->orderBy('first_name')->get(),
             'grades' => Grade::query()->with('sections')->orderBy('sort_order')->get(),
             'subjects' => Subject::query()->orderBy('name')->get(),
@@ -153,6 +161,7 @@ class SchoolReportsController extends Controller
         $records = StudentAttendance::query()->with('student', 'grade', 'section')
             ->when($filters['academic_year_id'] ?? null, fn ($query, $id) => $query->where('academic_year_id', $id))
             ->when($filters['student_id'] ?? null, fn ($query, $id) => $query->where('student_id', $id))
+            ->when($filters['student_ids'] ?? [], fn ($query, array $ids) => $query->whereIn('student_id', $ids))
             ->when($filters['grade_id'] ?? null, fn ($query, $id) => $query->where('grade_id', $id))
             ->when($filters['section_id'] ?? null, fn ($query, $id) => $query->where('section_id', $id))
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))

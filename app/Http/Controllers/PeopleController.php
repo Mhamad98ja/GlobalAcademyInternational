@@ -7,6 +7,8 @@ namespace App\Http\Controllers;
 use App\Models\ResponsiblePerson;
 use App\Models\StudentReferenceEntry;
 use App\Models\Student;
+use App\Models\Role;
+use App\Models\User;
 use App\Models\Teacher;
 use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -116,20 +119,19 @@ class PeopleController extends Controller
     {
         $data = $this->validatedResponsible($request);
         $studentIds = $data['student_ids'] ?? [];
+        $children = $data['children'] ?? [];
         unset($data['student_ids']);
+        unset($data['children']);
 
-        $person = DB::transaction(function () use ($data, $studentIds): ResponsiblePerson {
+        $person = DB::transaction(function () use ($data, $studentIds, $children): ResponsiblePerson {
             $person = ResponsiblePerson::create($data);
             $this->syncStudents($person, $studentIds);
+            $this->createLinkedStudents($person, $children);
 
             return $person;
         });
 
-        if ($request->boolean('add_student')) {
-            return redirect()->route('students.create', ['responsible_person_id' => $person->id])->with('success', 'Parent saved. Add the student profile below; you can return and add more students later.');
-        }
-
-        return back()->with('success', 'Responsible person and student links saved.');
+        return back()->with('success', 'Parent and linked student profiles saved.');
     }
 
     public function editResponsible(ResponsiblePerson $responsiblePerson): View
@@ -154,11 +156,14 @@ class PeopleController extends Controller
     {
         $data = $this->validatedResponsible($request);
         $studentIds = $data['student_ids'] ?? [];
+        $children = $data['children'] ?? [];
         unset($data['student_ids']);
+        unset($data['children']);
 
-        DB::transaction(function () use ($responsiblePerson, $data, $studentIds): void {
+        DB::transaction(function () use ($responsiblePerson, $data, $studentIds, $children): void {
             $responsiblePerson->update($data);
             $this->syncStudents($responsiblePerson, $studentIds);
+            $this->createLinkedStudents($responsiblePerson, $children);
         });
 
         return redirect()->route('responsible.index')->with('success', 'Responsible person updated.');
@@ -212,6 +217,16 @@ class PeopleController extends Controller
             'notes' => ['nullable', 'string', 'max:3000'],
             'student_ids' => ['nullable', 'array'],
             'student_ids.*' => ['integer', 'distinct', 'exists:students,id'],
+            'children' => ['nullable', 'array'],
+            'children.*.student_number' => ['nullable', 'string', 'max:50', 'distinct', 'unique:students,student_number'],
+            'children.*.first_name' => ['required', 'string', 'max:100'],
+            'children.*.middle_name' => ['nullable', 'string', 'max:100'],
+            'children.*.last_name' => ['required', 'string', 'max:100'],
+            'children.*.gender' => ['nullable', Rule::in(['male', 'female'])],
+            'children.*.date_of_birth' => ['nullable', 'date', 'before:today'],
+            'children.*.phone' => ['nullable', 'string', 'max:30'],
+            'children.*.email' => ['required', 'email', 'max:255', 'distinct', 'unique:students,email', 'unique:users,email'],
+            'children.*.password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()],
         ]);
 
         foreach (['is_alumni', 'is_deceased', 'is_second_marriage'] as $field) {
@@ -259,6 +274,37 @@ class PeopleController extends Controller
         $person->students()->sync(collect($studentIds)->mapWithKeys(fn ($studentId) => [
             $studentId => ['relationship' => $relationship, 'is_primary' => false],
         ])->all());
+    }
+
+    private function createLinkedStudents(ResponsiblePerson $person, array $children): void
+    {
+        $studentRole = Role::query()->where('name', 'student')->firstOrFail();
+        $relationship = str($person->type)->headline()->toString();
+
+        foreach ($children as $child) {
+            $student = Student::create([
+                'student_number' => ($child['student_number'] ?? null) ?: 'STU-'.now()->format('Y').'-'.str_pad((string) ((Student::max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT),
+                'first_name' => $child['first_name'],
+                'middle_name' => $child['middle_name'] ?? null,
+                'last_name' => $child['last_name'],
+                'gender' => $child['gender'] ?? null,
+                'date_of_birth' => $child['date_of_birth'] ?? null,
+                'phone' => $child['phone'] ?? null,
+                'email' => $child['email'],
+            ]);
+            $portalUser = User::create([
+                'name' => $student->full_name,
+                'email' => $student->email,
+                'password' => $child['password'],
+                'student_id' => $student->id,
+                'is_active' => true,
+            ]);
+            $portalUser->roles()->sync([$studentRole->id]);
+            if ($student->branch_id !== null) {
+                $portalUser->branches()->sync([(int) $student->branch_id => ['is_default' => true, 'is_branch_administrator' => false]]);
+            }
+            $person->students()->syncWithoutDetaching([$student->id => ['relationship' => $relationship, 'is_primary' => true]]);
+        }
     }
 
     private function studentsForPicker(array $studentIds)

@@ -16,12 +16,6 @@
         <div><label class="form-label">Email</label><input type="email" name="email" value="{{ old('email', $person->email) }}"></div>
         <div><label class="form-label">Blood type</label><select name="blood_type"><option value="">Select blood type</option>@foreach($referenceOptions['bloodTypes'] as $bloodType)<option value="{{ $bloodType }}" @selected(old('blood_type', $person->blood_type) === $bloodType)>{{ $bloodType }}</option>@endforeach</select></div>
         <div><label class="form-label">Religion / community</label><input name="religion" value="{{ old('religion', $person->religion) }}"></div>
-        <div><label class="form-label">Family type</label><select name="family_type"><option value="">Select family type</option>@foreach($referenceOptions['familyTypes'] as $familyType)<option value="{{ $familyType }}" @selected(old('family_type', $person->family_type) === $familyType)>{{ $familyType }}</option>@endforeach</select></div>
-        <div><label class="form-label">Occupation</label><input name="occupation" value="{{ old('occupation', $person->occupation) }}"></div>
-        <div><label class="form-label">Occupation details</label><input name="occupation_details" value="{{ old('occupation_details', $person->occupation_details) }}"></div>
-        <div><label class="form-label">Register number</label><input name="register_number" value="{{ old('register_number', $person->register_number) }}"></div>
-        <div><label class="form-label">District</label><select name="district"><option value="">Select district</option>@foreach($referenceOptions['districts'] as $district)<option value="{{ $district }}" @selected(old('district', $person->district) === $district)>{{ $district }}</option>@endforeach</select></div>
-        <div><label class="form-label">Town</label><select name="town"><option value="">Select town</option>@foreach($referenceOptions['towns'] as $town)<option value="{{ $town }}" @selected(old('town', $person->town) === $town)>{{ $town }}</option>@endforeach</select></div>
         <div><label class="form-label">Nationality</label><input name="nationality" value="{{ old('nationality', $person->nationality) }}"></div>
         <div><label class="form-label">Second nationality</label><input name="secondary_nationality" value="{{ old('secondary_nationality', $person->secondary_nationality) }}"></div>
         <div><label class="form-label">Employment status</label><input name="employment_status" value="{{ old('employment_status', $person->employment_status) }}"></div>
@@ -32,6 +26,25 @@
         <div class="md:col-span-2"><label class="form-label">Home address</label><div class="form-grid"><input name="area" placeholder="Area" value="{{ old('area', $person->area) }}"><input name="street" placeholder="Street" value="{{ old('street', $person->street) }}"><input name="area_number" placeholder="Area number (text)" value="{{ old('area_number', $person->area_number) }}"><input name="street_number" placeholder="Street number (text)" value="{{ old('street_number', $person->street_number) }}"><input name="building_name" placeholder="Building name" value="{{ old('building_name', $person->building_name) }}"><input name="building_number" placeholder="Building number" value="{{ old('building_number', $person->building_number) }}"><input name="apartment" placeholder="Apartment" value="{{ old('apartment', $person->apartment) }}"><textarea name="address" rows="2" placeholder="Additional address details">{{ old('address', $person->address) }}</textarea></div></div>
         <div class="md:col-span-2"><label class="form-label">Work address</label><textarea name="work_address" rows="2">{{ old('work_address', $person->work_address) }}</textarea></div>
     </div></section>
-    <section><h2 class="panel-title">Linked students</h2><div class="mt-4"><x-student-multi-select :students="$selectedStudents" /><p class="mt-1 text-xs text-slate-500">Search for and select every student connected to this parent or guardian.</p></div></section>
+    <section id="family-students"><div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="panel-title">Student profiles</h2><p class="mt-1 text-xs text-slate-500">Create one or more student portal profiles and link them to this parent. Each student receives their own login.</p></div><button type="button" class="btn btn-secondary" data-add-family-student>Add student</button></div><div class="mt-4 grid gap-4" data-family-student-list></div><template data-family-student-template><article class="rounded-lg border border-slate-200 bg-slate-50 p-4"><div class="mb-3 flex items-center justify-between gap-3"><strong>New student</strong><button type="button" class="text-sm font-medium text-rose-700" data-remove-family-student>Remove</button></div><div class="form-grid"><input name="children[__INDEX__][student_number]" placeholder="Student number"><input name="children[__INDEX__][first_name]" required placeholder="First name"><input name="children[__INDEX__][middle_name]" placeholder="Middle name"><input name="children[__INDEX__][last_name]" required placeholder="Last name"><select name="children[__INDEX__][gender]"><option value="">Gender</option><option value="male">Male</option><option value="female">Female</option></select><input type="date" name="children[__INDEX__][date_of_birth]" aria-label="Date of birth"><input name="children[__INDEX__][phone]" placeholder="Phone"><input type="email" name="children[__INDEX__][email]" required placeholder="Student email"><input type="password" name="children[__INDEX__][password]" required minlength="12" placeholder="Portal password"><input type="password" name="children[__INDEX__][password_confirmation]" required minlength="12" placeholder="Confirm password"></div></article></template></section>
+    <section><h2 class="panel-title">Link existing students</h2><div class="mt-4"><x-student-multi-select :students="$selectedStudents" /><p class="mt-1 text-xs text-slate-500">Use this only for an existing student profile. New students should be added above so they cannot exist without a parent.</p></div></section>
     <section><label class="form-label">Internal notes</label><textarea name="notes" rows="3">{{ old('notes', $person->notes) }}</textarea></section>
 </div>
+<script>
+(() => {
+    const list = document.querySelector('[data-family-student-list]');
+    const template = document.querySelector('[data-family-student-template]');
+    const add = document.querySelector('[data-add-family-student]');
+    if (!list || !template || !add) return;
+    let index = 0;
+    const addStudent = () => {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = template.innerHTML.replaceAll('__INDEX__', String(index++));
+        const card = wrapper.firstElementChild;
+        card.querySelector('[data-remove-family-student]')?.addEventListener('click', () => card.remove());
+        list.append(card);
+        card.querySelector('input')?.focus();
+    };
+    add.addEventListener('click', addStudent);
+})();
+</script>
