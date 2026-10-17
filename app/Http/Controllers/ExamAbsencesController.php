@@ -26,13 +26,14 @@ class ExamAbsencesController extends Controller
             'is_excused' => ['nullable', 'boolean'],
             'status' => ['nullable', Rule::in(['recorded', 'makeup_scheduled', 'completed', 'waived'])],
         ]);
-        $absences = ExamAbsence::query()->with('student', 'assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.subject')
+        $absences = ExamAbsence::query()->with('student', 'registration.subjectExemptions', 'assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.subject')
             ->when($filters['assessment_id'] ?? null, fn ($query, $id) => $query->where('assessment_id', $id))
             ->when($filters['student_id'] ?? null, fn ($query, $id) => $query->where('student_id', $id))
             ->when($filters['academic_year_id'] ?? null, fn ($query, $id) => $query->where('academic_year_id', $id))
             ->when(array_key_exists('is_excused', $filters), fn ($query) => $query->where('is_excused', $filters['is_excused']))
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->latest('absence_date')->paginate(25)->withQueryString();
+        $absences->setCollection($absences->getCollection()->reject(fn ($entry) => $entry->registration?->subjectExemptions->contains('subject_id', $entry->subject_id ?? $entry->assessment?->subject_id ?? $entry->assessment?->assignment?->subject_id) ?? false));
 
         return view('exam-absences.index', [
             'absences' => $absences,
@@ -65,6 +66,10 @@ class ExamAbsencesController extends Controller
             && ($assessment->section_id === null || $assessment->section_id === $registration->section_id);
         if (! $validAssessment) {
             throw ValidationException::withMessages(['assessment_id' => 'The selected assessment does not apply to this student registration.']);
+        }
+        $subjectId = $assessment->subject_id ?: $assessment->assignment?->subject_id;
+        if ($subjectId && $registration->subjectExemptions()->where('subject_id', $subjectId)->exists()) {
+            throw ValidationException::withMessages(['assessment_id' => 'This student is exempt from the assessment subject.']);
         }
         if ($data['makeup_required'] ?? false) {
             if (empty($data['makeup_exam_date'])) {

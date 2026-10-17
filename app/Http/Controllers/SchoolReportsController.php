@@ -13,13 +13,14 @@ use App\Models\MedicalRecord;
 use App\Models\Student;
 use App\Models\StudentAttendance;
 use App\Models\StudentIncident;
+use App\Models\StudentPerformanceEvaluation;
 use App\Models\StudentRegistration;
 use App\Models\Subject;
 use App\Models\Teacher;
+use App\Models\TeacherAssignment;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherSubstitution;
 use App\Models\TimetableEntry;
-use App\Services\WorkloadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -28,12 +29,16 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SchoolReportsController extends Controller
 {
-    private const HIDDEN_REPORTS = ['timetable', 'academic_years', 'class_sections'];
+    // Grade entry and evaluation results live in Teaching & Collaboration.
+    // Keep the backend report type available for old links, but do not expose
+    // it from the central Reports directory.
+    private const HIDDEN_REPORTS = ['timetable', 'academic_years', 'class_sections', 'grades'];
 
     private const REPORTS = [
         'student_attendance' => 'Student attendance',
         'teacher_attendance' => 'Teacher attendance',
         'incidents' => 'Student incidents and actions',
+        'student_observations' => 'Student observations',
         'medical_records' => 'Medical records',
         'exam_absences' => 'Exam absences',
         'substitutions' => 'Teacher substitutions',
@@ -44,23 +49,23 @@ class SchoolReportsController extends Controller
         'class_sections' => 'Classes and sections',
     ];
 
-    public function index(Request $request, WorkloadService $workload): View
+    public function index(Request $request): View
     {
-        [$report, $filters, $headings, $rows] = $this->data($request, $workload);
+        [$report, $filters, $headings, $rows] = $this->data($request);
 
         return view('school-reports.index', $this->viewData($report, $filters, $headings, $rows));
     }
 
-    public function print(Request $request, WorkloadService $workload): View
+    public function print(Request $request): View
     {
-        [$report, $filters, $headings, $rows] = $this->data($request, $workload);
+        [$report, $filters, $headings, $rows] = $this->data($request);
 
         return view('school-reports.print', $this->viewData($report, $filters, $headings, $rows));
     }
 
-    public function csv(Request $request, WorkloadService $workload): StreamedResponse
+    public function csv(Request $request): StreamedResponse
     {
-        [$report, , $headings, $rows] = $this->data($request, $workload);
+        [$report, , $headings, $rows] = $this->data($request);
 
         return response()->streamDownload(function () use ($headings, $rows): void {
             $stream = fopen('php://output', 'wb');
@@ -73,7 +78,7 @@ class SchoolReportsController extends Controller
     }
 
     /** @return array{0:string,1:array<string,mixed>,2:list<string>,3:Collection<int,array<int,string|int|float|null>>} */
-    private function data(Request $request, WorkloadService $workload): array
+    private function data(Request $request): array
     {
         $filters = $request->validate([
             'report' => ['nullable', Rule::in(array_keys(self::REPORTS))],
@@ -93,21 +98,26 @@ class SchoolReportsController extends Controller
             'search' => ['nullable', 'string', 'max:120'],
         ]);
         $report = $filters['report'] ?? 'student_attendance';
-        if ($report === 'medical_records') {
-            abort_unless($request->user()->hasPermission('medical.view'), 403);
-        }
-        if ($report === 'incidents') {
-            abort_unless($request->user()->hasPermission('discipline.view'), 403);
-        }
+        $reportPermission = match ($report) {
+            'medical_records' => 'reports.medical.view',
+            'incidents' => 'reports.discipline.view',
+            'student_observations' => 'reports.observations.view',
+            'exam_absences' => 'exam-absences.view',
+            'substitutions' => 'substitutions.view',
+            'grades' => 'grades.view',
+            default => 'reports.view',
+        };
+        abort_unless($request->user()->hasPermission($reportPermission), 403);
 
         [$headings, $rows] = match ($report) {
             'student_attendance' => $this->studentAttendance($filters),
             'teacher_attendance' => $this->teacherAttendance($filters),
             'incidents' => $this->incidents($filters),
+            'student_observations' => $this->studentObservations($filters),
             'medical_records' => $this->medicalRecords($filters),
             'exam_absences' => $this->examAbsences($filters),
             'substitutions' => $this->substitutions($filters),
-            'teacher_workload' => $this->teacherWorkload($filters, $workload),
+            'teacher_workload' => $this->teacherWorkload($filters),
             'timetable' => $this->timetable($filters),
             'grades' => $this->grades($filters),
             'academic_years' => $this->academicYears($filters),
@@ -123,19 +133,23 @@ class SchoolReportsController extends Controller
         return [
             'report' => $report,
             'reports' => array_filter(self::REPORTS, fn ($key) => ! in_array($key, self::HIDDEN_REPORTS, true) && match ($key) {
-                'medical_records' => auth()->user()->hasPermission('medical.view'),
-                'incidents' => auth()->user()->hasPermission('discipline.view'),
+                'medical_records' => auth()->user()->hasPermission('reports.medical.view'),
+                'incidents' => auth()->user()->hasPermission('reports.discipline.view'),
+                'student_observations' => auth()->user()->hasPermission('reports.observations.view'),
+                'exam_absences' => auth()->user()->hasPermission('exam-absences.view'),
+                'substitutions' => auth()->user()->hasPermission('substitutions.view'),
+                'grades' => auth()->user()->hasPermission('grades.view'),
                 default => true,
             }, ARRAY_FILTER_USE_KEY),
             'reportFilters' => match ($report) {
                 'student_attendance' => ['academic_year_id', 'student_id', 'student_ids', 'grade_id', 'section_id', 'date_from', 'date_to', 'status'],
-                'incidents' => ['academic_year_id', 'student_id', 'grade_id', 'section_id', 'date_from', 'date_to', 'status'],
+                'incidents', 'student_observations' => ['academic_year_id', 'student_id', 'teacher_id', 'grade_id', 'section_id', 'date_from', 'date_to', 'status'],
                 'exam_absences' => ['academic_year_id', 'academic_term_id', 'student_id', 'grade_id', 'section_id', 'subject_id', 'date_from', 'date_to', 'status'],
                 'grades' => ['academic_year_id', 'academic_term_id', 'student_id', 'teacher_id', 'grade_id', 'section_id', 'subject_id', 'date_from', 'date_to', 'status'],
                 'class_sections' => ['academic_year_id', 'student_id', 'grade_id', 'section_id', 'status'],
                 'academic_years' => ['academic_year_id'],
                 'medical_records' => ['student_id', 'teacher_id', 'date_from', 'date_to', 'status'],
-                'teacher_workload' => ['academic_year_id', 'teacher_id'],
+                'teacher_workload' => ['academic_year_id', 'teacher_id', 'date_from', 'date_to'],
                 'timetable' => ['academic_year_id', 'teacher_id', 'grade_id', 'section_id', 'subject_id'],
                 default => ['teacher_id', 'date_from', 'date_to', 'status'],
             },
@@ -145,7 +159,7 @@ class SchoolReportsController extends Controller
             'years' => AcademicYear::query()->orderByDesc('starts_on')->get(),
             'terms' => AcademicTerm::query()->with('academicYear')->when($filters['academic_year_id'] ?? null, fn ($query, $id) => $query->where('academic_year_id', $id))->orderByDesc('starts_on')->get(),
             'students' => Student::query()
-                ->when($report === 'student_attendance', fn ($query) => $query->whereHas('registrations', fn ($registrations) => $registrations
+                ->when(in_array($report, ['student_attendance', 'incidents', 'student_observations'], true), fn ($query) => $query->whereHas('registrations', fn ($registrations) => $registrations
                     ->where('status', 'active')
                     ->when($filters['academic_year_id'] ?? null, fn ($query, $id) => $query->where('academic_year_id', $id))
                     ->when($filters['grade_id'] ?? null, fn ($query, $id) => $query->where('grade_id', $id))
@@ -205,6 +219,23 @@ class SchoolReportsController extends Controller
     }
 
     /** @return array{0:list<string>,1:Collection<int,array<int,string|int|float|null>>} */
+    private function studentObservations(array $filters): array
+    {
+        $records = StudentPerformanceEvaluation::query()->with('student', 'registration.grade', 'registration.section', 'assignment.subject', 'teacher')
+            ->when($filters['academic_year_id'] ?? null, fn ($query, $id) => $query->whereHas('registration', fn ($registration) => $registration->where('academic_year_id', $id)))
+            ->when($filters['student_id'] ?? null, fn ($query, $id) => $query->where('student_id', $id))
+            ->when($filters['teacher_id'] ?? null, fn ($query, $id) => $query->where('teacher_id', $id))
+            ->when($filters['grade_id'] ?? null, fn ($query, $id) => $query->whereHas('registration', fn ($registration) => $registration->where('grade_id', $id)))
+            ->when($filters['section_id'] ?? null, fn ($query, $id) => $query->whereHas('registration', fn ($registration) => $registration->where('section_id', $id)))
+            ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->when($filters['date_from'] ?? null, fn ($query, $date) => $query->whereDate('observed_on', '>=', $date))
+            ->when($filters['date_to'] ?? null, fn ($query, $date) => $query->whereDate('observed_on', '<=', $date))
+            ->latest('observed_on')->limit(1000)->get();
+
+        return [['Date', 'Student', 'Class', 'Subject', 'Teacher', 'Category', 'Rating', 'Status', 'Observation'], $records->map(fn ($record) => [$record->observed_on?->format('Y-m-d'), $record->student?->full_name, trim(($record->registration?->grade?->name ?? '').' '.($record->registration?->section?->name ?? '')), $record->assignment?->subject?->name ?? 'General', $record->teacher?->full_name, str($record->category)->headline(), $record->rating ? $record->rating.'/5' : null, str($record->status)->headline(), $record->note])];
+    }
+
+    /** @return array{0:list<string>,1:Collection<int,array<int,string|int|float|null>>} */
     private function medicalRecords(array $filters): array
     {
         $records = MedicalRecord::query()->with('student', 'teacher')
@@ -221,7 +252,7 @@ class SchoolReportsController extends Controller
     /** @return array{0:list<string>,1:Collection<int,array<int,string|int|float|null>>} */
     private function examAbsences(array $filters): array
     {
-        $records = ExamAbsence::query()->with('student', 'assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.subject')
+        $records = ExamAbsence::query()->with('student', 'registration.subjectExemptions', 'assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.subject')
             ->when($filters['academic_term_id'] ?? null, fn ($query, $id) => $query->where('academic_term_id', $id))
             ->when($filters['grade_id'] ?? null, fn ($query, $id) => $query->where('grade_id', $id))
             ->when($filters['section_id'] ?? null, fn ($query, $id) => $query->where('section_id', $id))
@@ -231,7 +262,8 @@ class SchoolReportsController extends Controller
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($filters['date_from'] ?? null, fn ($query, $date) => $query->whereDate('absence_date', '>=', $date))
             ->when($filters['date_to'] ?? null, fn ($query, $date) => $query->whereDate('absence_date', '<=', $date))
-            ->latest('absence_date')->limit(1000)->get();
+            ->latest('absence_date')->limit(1000)->get()
+            ->reject(fn ($entry) => $entry->registration?->subjectExemptions->contains('subject_id', $entry->subject_id ?? $entry->assessment?->subject_id ?? $entry->assessment?->assignment?->subject_id) ?? false);
 
         return [['Date', 'Student', 'Assessment', 'Subject', 'Excused', 'Makeup required', 'Makeup date', 'Status'], $records->map(fn ($record) => [$record->absence_date?->format('Y-m-d'), $record->student?->full_name, $record->assessment?->name, $record->assessment?->subject?->name, $record->is_excused ? 'Yes' : 'No', $record->makeup_required ? 'Yes' : 'No', $record->makeup_exam_date?->format('Y-m-d'), str($record->status)->headline()])];
     }
@@ -250,17 +282,42 @@ class SchoolReportsController extends Controller
     }
 
     /** @return array{0:list<string>,1:Collection<int,array<int,string|int|float|null>>} */
-    private function teacherWorkload(array $filters, WorkloadService $workload): array
+    private function teacherWorkload(array $filters): array
     {
         $yearId = (int) ($filters['academic_year_id'] ?? AcademicYear::query()->where('status', 'open')->value('id'));
+        $dateFrom = $filters['date_from'] ?? now()->startOfWeek()->toDateString();
+        $dateTo = $filters['date_to'] ?? now()->endOfWeek()->toDateString();
         $teachers = Teacher::query()->where('is_active', true)->when($filters['teacher_id'] ?? null, fn ($query, $id) => $query->whereKey($id))->orderBy('first_name')->get();
-        $rows = $yearId ? $teachers->map(function (Teacher $teacher) use ($workload, $yearId): array {
-            $summary = $workload->summary($teacher, $yearId);
+        if (! $yearId) {
+            return [['Teacher', 'Planned periods / week', 'Timetabled periods / week', 'Extra cover periods', 'Total periods taken', 'Difference from plan'], collect()];
+        }
 
-            return [$teacher->full_name, $summary['weekly_periods'], $summary['daily_periods'], $summary['free_periods'], $summary['substitution_count']];
-        }) : collect();
+        $planned = TeacherAssignment::query()
+            ->where('academic_year_id', $yearId)
+            ->where('is_active', true)
+            ->get()
+            ->groupBy('teacher_id');
+        $timetabled = TimetableEntry::query()
+            ->where('academic_year_id', $yearId)
+            ->get()
+            ->groupBy('teacher_id');
+        $extraCover = TeacherSubstitution::query()
+            ->with('entry')
+            ->whereIn('status', ['assigned', 'completed'])
+            ->whereBetween('substitution_date', [$dateFrom, $dateTo])
+            ->whereHas('entry', fn ($entries) => $entries->where('academic_year_id', $yearId))
+            ->get()
+            ->groupBy('substitute_teacher_id');
+        $rows = $teachers->map(function (Teacher $teacher) use ($planned, $timetabled, $extraCover): array {
+            $plannedPeriods = (int) $planned->get($teacher->id, collect())->sum('required_periods_per_week');
+            $timetabledPeriods = $timetabled->get($teacher->id, collect())->count();
+            $extraPeriods = $extraCover->get($teacher->id, collect())->count();
+            $totalPeriods = $timetabledPeriods + $extraPeriods;
 
-        return [['Teacher', 'Teaching periods / week', 'Teaching periods today', 'Free periods today', 'Substitutions this week'], $rows];
+            return [$teacher->full_name, $plannedPeriods, $timetabledPeriods, $extraPeriods, $totalPeriods, $totalPeriods - $plannedPeriods];
+        });
+
+        return [['Teacher', 'Planned periods / week', 'Timetabled periods / week', 'Extra cover periods', 'Total periods taken', 'Difference from plan'], $rows];
     }
 
     /** @return array{0:list<string>,1:Collection<int,array<int,string|int|float|null>>} */
@@ -280,7 +337,8 @@ class SchoolReportsController extends Controller
     /** @return array{0:list<string>,1:Collection<int,array<int,string|int|float|null>>} */
     private function grades(array $filters): array
     {
-        $records = GradeEntry::query()->with('student', 'assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.subject', 'teacher')
+        $records = GradeEntry::query()->with('student', 'registration.subjectExemptions', 'assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.subject', 'teacher')
+            ->whereIn('status', ['published', 'locked'])
             ->when($filters['academic_term_id'] ?? null, fn ($query, $id) => $query->whereHas('assessment', fn ($assessment) => $assessment->where('academic_term_id', $id)))
             ->when($filters['grade_id'] ?? null, fn ($query, $id) => $query->whereHas('registration', fn ($registration) => $registration->where('grade_id', $id)))
             ->when($filters['section_id'] ?? null, fn ($query, $id) => $query->whereHas('registration', fn ($registration) => $registration->where('section_id', $id)))
@@ -291,7 +349,8 @@ class SchoolReportsController extends Controller
             ->when($filters['academic_year_id'] ?? null, fn ($query, $id) => $query->whereHas('assessment', fn ($assessments) => $assessments->where('academic_year_id', $id)))
             ->when($filters['subject_id'] ?? null, fn ($query, $id) => $query->whereHas('assessment', fn ($assessments) => $assessments->where('subject_id', $id)))
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
-            ->latest()->limit(1000)->get();
+            ->latest()->limit(1000)->get()
+            ->reject(fn ($entry) => $entry->registration?->subjectExemptions->contains('subject_id', $entry->assessment?->subject_id ?? $entry->assessment?->assignment?->subject_id) ?? false);
 
         return [['Student', 'Assessment', 'Subject', 'Teacher', 'Score', 'Maximum score', 'Status', 'Locked'], $records->map(fn ($entry) => [$entry->student?->full_name, $entry->assessment?->name, $entry->assessment?->subject?->name, $entry->teacher?->full_name, $entry->score, $entry->assessment?->maximum_score, str($entry->status)->headline(), $entry->is_locked ? 'Yes' : 'No'])];
     }

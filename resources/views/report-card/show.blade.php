@@ -10,7 +10,6 @@
 
 @section('content')
 <section class="dars-report-card-page">
-    <div class="dars-breadcrumb"><a href="{{ route('report-card.show', ['report' => 'report-card']) }}">Reports</a><span>&gt;</span><strong>{{ $definition['title'] ?? $report }}</strong></div>
     @if(!empty($definition['home']))
         <div class="dars-report-home">@foreach($reportGroups as $groupTitle => $groupReports)<section class="dars-report-home-group" aria-labelledby="report-group-{{ $loop->index }}"><h1 id="report-group-{{ $loop->index }}">{{ $groupTitle }}</h1><div class="dars-report-home-list">@foreach($groupReports as $groupReport)@continue($groupReport === 'report-card')@if(isset($definitions[$groupReport]))<a href="{{ route('report-card.show', ['report' => $groupReport]) }}"><span aria-hidden="true">[]</span>{{ $definitions[$groupReport]['title'] }}</a>@endif@endforeach</div></section>@endforeach</div>
     @else
@@ -22,6 +21,7 @@
                 @else
                     <label class="dars-report-card-field {{ $field['type'] === 'search' ? 'is-search' : '' }} {{ $field['label'] === '' ? 'is-blank-label' : '' }}">@if($field['label'] !== '')<span>{{ $field['label'] }}</span>@endif
                         @if($field['type'] === 'year')<select name="academic_year_id">@foreach($years as $yearOption)<option value="{{ $yearOption->id }}" @selected((string) $valueFor($field) === (string) $yearOption->id || (!$valueFor($field) && $loop->first))>{{ $yearOption->name }}</option>@endforeach</select>
+                        @elseif($field['type'] === 'term')<select name="academic_term_id"><option value=""></option>@foreach($terms as $termOption)<option value="{{ $termOption->id }}" @selected((string) $valueFor($field) === (string) $termOption->id)>{{ $termOption->name }}</option>@endforeach</select>
                         @elseif($field['type'] === 'grade')<select name="grade_id"><option value=""></option>@foreach($grades as $gradeOption)<option value="{{ $gradeOption->id }}" @selected((string) $valueFor($field) === (string) $gradeOption->id)>{{ $gradeOption->name }}</option>@endforeach</select>
                         @elseif($field['type'] === 'section')<select name="section_id"><option value=""></option>@foreach($grades as $gradeOption)@foreach($gradeOption->sections as $sectionOption)<option value="{{ $sectionOption->id }}" @selected((string) $valueFor($field) === (string) $sectionOption->id)>{{ $sectionOption->name }}</option>@endforeach@endforeach</select>
                         @elseif($field['type'] === 'select')<select name="{{ $field['name'] }}"><option value=""></option>@foreach($field['options'] ?? [] as $optionValue => $optionLabel)<option value="{{ $optionValue }}" @selected((string) $valueFor($field) === (string) $optionValue)>{{ $optionLabel }}</option>@endforeach</select>
@@ -32,6 +32,24 @@
             @endforeach
             <button type="submit" class="dars-report-card-submit">{{ $definition['button'] ?? 'Search' }}</button>
         </form>
+        @if($reportKey === 'report-card')
+            @if($reportCard)
+                <section class="dars-report-card-official">
+                    <header><div><h1>Official report card</h1><p>{{ $reportCard['student']->full_name }} · {{ $reportCard['student']->student_number }}</p></div><div><strong>{{ $reportCard['student']->registrations->first()?->grade?->name ?? '' }}</strong><span>{{ $terms->firstWhere('id', $reportCard['termId'])?->name ?? '' }}</span></div></header>
+                    <table><thead><tr><th>Subject</th><th>Evaluation</th><th>Type</th><th>Grade</th><th>Average</th><th>Status</th></tr></thead><tbody>
+                        @forelse($reportCard['subjects'] as $subject)
+                            @foreach($subject['entries'] as $entry)
+                                <tr><td>{{ $subject['name'] }}</td><td>{{ $entry->assessment?->name }}</td><td>{{ str($entry->assessment?->type)->headline() }}</td><td>{{ rtrim(rtrim(number_format((float) $entry->score, 2), '0'), '.') }} / {{ rtrim(rtrim(number_format((float) $entry->assessment?->maximum_score, 2), '0'), '.') }}</td><td>{{ number_format($subject['average'], 2) }}%</td><td>{{ $entry->status === 'locked' ? 'Locked' : 'Published' }}</td></tr>
+                            @endforeach
+                        @empty
+                            <tr><td colspan="6">No official grades are published for this student and academic term.</td></tr>
+                        @endforelse
+                    </tbody></table>
+                </section>
+            @else
+                <div class="dars-report-card-empty">Select an academic year, academic term, class, and student to generate the official report card.</div>
+            @endif
+        @endif
         @if(!empty($definition['viewer']) || !empty($definition['loading']) || !empty($definition['empty']))
             <div class="dars-report-card-viewer"><div class="dars-report-card-viewer-toolbar" aria-label="Report viewer toolbar"><span>Previous | <input aria-label="Page number" value="" readonly> of 0 | Next</span><span>Refresh <select aria-label="Zoom"><option>100%</option></select> Print</span></div>@if(!empty($definition['loading']))<div class="dars-report-card-loading"><strong>Loading...</strong><span>Cancel</span></div>@elseif(!empty($definition['empty']))<div class="dars-report-card-empty">{{ $definition['empty'] }}</div>@else<div class="dars-report-card-viewer-blank"></div>@endif</div>
         @endif

@@ -63,6 +63,11 @@ class Assessment extends Model
         return $this->hasMany(GradeEntry::class);
     }
 
+    public function modificationRequests()
+    {
+        return $this->hasMany(AssessmentModificationRequest::class);
+    }
+
     public function examAbsences()
     {
         return $this->hasMany(ExamAbsence::class);

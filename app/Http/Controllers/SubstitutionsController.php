@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Teacher;
+use App\Models\TeacherAttendance;
 use App\Models\TeacherSubstitution;
+use App\Models\AcademicYear;
+use App\Models\TimetableEntry;
 use App\Services\AuditService;
 use App\Services\SubstitutionService;
 use App\Services\WorkloadService;
@@ -18,20 +21,54 @@ use Illuminate\View\View;
 
 class SubstitutionsController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, SubstitutionService $substitutionService): View
     {
         $filters = $request->validate([
             'substitution_date' => ['nullable', 'date'],
             'status' => ['nullable', Rule::in(['pending', 'recommended', 'assigned', 'completed', 'cancelled'])],
         ]);
         $date = $filters['substitution_date'] ?? today()->toDateString();
+        $absentTeachers = TeacherAttendance::query()->with('teacher')->whereDate('attendance_date', $date)->whereIn('status', TeacherAttendance::ABSENCE_STATUSES)->get()->sortBy('teacher.first_name')->values();
+        $activeAcademicYearId = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->value('id');
+        $dayOfWeek = strtolower(Carbon::parse($date)->englishDayOfWeek);
+        $absentLessons = TimetableEntry::query()
+            ->with('subject', 'grade', 'section')
+            ->whereIn('teacher_id', $absentTeachers->pluck('teacher_id'))
+            ->where('day_of_week', $dayOfWeek)
+            ->when($activeAcademicYearId, fn ($query) => $query->where('academic_year_id', $activeAcademicYearId))
+            ->orderBy('period_number')
+            ->get()
+            ->groupBy('teacher_id');
+        $allSubstitutions = $this->substitutionsForDate($date);
+        foreach ($absentTeachers as $attendance) {
+            $lessonIds = $absentLessons->get($attendance->teacher_id, collect())->pluck('id');
+            $coveredLessonIds = $allSubstitutions->where('absent_teacher_id', $attendance->teacher_id)->pluck('timetable_entry_id');
+            if ($lessonIds->diff($coveredLessonIds)->isNotEmpty()) {
+                $substitutionService->syncForAttendance($attendance);
+            }
+        }
+        if ($absentTeachers->isNotEmpty()) {
+            $allSubstitutions = $this->substitutionsForDate($date);
+        }
 
         return view('substitutions.index', [
-            'substitutions' => TeacherSubstitution::query()->with('entry.subject', 'entry.grade', 'entry.section', 'absentTeacher', 'substituteTeacher')->whereDate('substitution_date', $date)->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))->orderBy('id')->get(),
+            'substitutions' => $allSubstitutions->when($filters['status'] ?? null, fn ($rows, $status) => $rows->where('status', $status))->values(),
+            'coverageByEntry' => $allSubstitutions->keyBy('timetable_entry_id'),
+            'absentTeachers' => $absentTeachers,
+            'absentLessons' => $absentLessons,
             'teachers' => Teacher::query()->where('is_active', true)->orderBy('first_name')->get(),
             'date' => $date,
             'filters' => $filters,
         ]);
+    }
+
+    private function substitutionsForDate(string $date)
+    {
+        return TeacherSubstitution::query()
+            ->with('entry.subject', 'entry.grade', 'entry.section', 'absentTeacher', 'substituteTeacher')
+            ->whereDate('substitution_date', $date)
+            ->orderBy('id')
+            ->get();
     }
 
     public function assign(Request $request, TeacherSubstitution $teacherSubstitution, WorkloadService $workload, AuditService $audit): RedirectResponse

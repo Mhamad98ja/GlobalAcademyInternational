@@ -31,11 +31,7 @@
                     <option value="{{ $term->id }}" @selected(($filters['academic_term_id'] ?? null) == $term->id)>{{ $term->academicYear?->name }} &middot; {{ $term->name }}</option>
                 @endforeach
             </select></div>@endif
-            @if(in_array('student_id', $reportFilters, true) && $report !== 'student_attendance')<div><label class="form-label">Student</label><select aria-label="Student" name="student_id"><option value="">All students</option>
-                @foreach ($students as $student)
-                    <option value="{{ $student->id }}" @selected(($filters['student_id'] ?? null) == $student->id)>{{ $student->full_name }}</option>
-                @endforeach
-            </select></div>@endif
+            @if(in_array('student_id', $reportFilters, true) && $report !== 'student_attendance')<div><label class="form-label">Student</label><x-student-picker name="student_id" :academic-year-id="$filters['academic_year_id'] ?? null" :grade-id="$filters['grade_id'] ?? null" :section-id="$filters['section_id'] ?? null" :selected-id="$filters['student_id'] ?? null" :selected-label="$students->firstWhere('id', $filters['student_id'] ?? null)?->full_name" placeholder="Type student name or number" /></div>@endif
             @if($report === 'student_attendance')<fieldset class="rounded-lg border border-slate-200 p-3 md:col-span-2 xl:col-span-5"><legend class="px-1 text-sm font-semibold text-slate-700">Individual students</legend><p class="mb-2 text-xs text-slate-500">Leave all unchecked for the complete class report, or select one or more students.</p><div class="grid max-h-44 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">@foreach($students as $student)<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="student_ids[]" value="{{ $student->id }}" @checked(in_array($student->id, $filters['student_ids'] ?? [], true))><span>{{ $student->full_name }}</span></label>@endforeach</div></fieldset>@endif
             @if(in_array('teacher_id', $reportFilters, true))<div><label class="form-label">Teacher</label><select aria-label="Teacher" name="teacher_id"><option value="">All teachers</option>
                 @foreach ($teachers as $teacher)
@@ -59,11 +55,12 @@
                     <option value="{{ $subject->id }}" @selected(($filters['subject_id'] ?? null) == $subject->id)>{{ $subject->name }}</option>
                 @endforeach
             </select></div>@endif
-            @if(in_array('date_from', $reportFilters, true))<div><label class="form-label">From date</label><input aria-label="From date" type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}"></div>@endif
-            @if(in_array('date_to', $reportFilters, true))<div><label class="form-label">To date</label><input aria-label="To date" type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}"></div>@endif
+            @if(in_array('date_from', $reportFilters, true))<div><label class="form-label">From date</label><input aria-label="From date" type="date" name="date_from" value="{{ $filters['date_from'] ?? ($report === 'teacher_workload' ? now()->startOfWeek()->toDateString() : '') }}"></div>@endif
+            @if(in_array('date_to', $reportFilters, true))<div><label class="form-label">To date</label><input aria-label="To date" type="date" name="date_to" value="{{ $filters['date_to'] ?? ($report === 'teacher_workload' ? now()->endOfWeek()->toDateString() : '') }}"></div>@endif
             @if(in_array('status', $reportFilters, true))<div><label class="form-label">Status</label><input aria-label="Status" name="status" value="{{ $filters['status'] ?? '' }}" placeholder="Status"></div>@endif<button class="btn btn-secondary">Run report</button><a class="btn btn-secondary" href="{{ route('reports.school', ['report' => $report, 'module' => request('module')]) }}">Reset</a>
         </form>
     </div>
+    @if($report === 'teacher_workload')<div class="grid gap-3 border-b border-slate-200 p-5 text-sm text-slate-600 md:grid-cols-3"><div><strong class="block text-slate-900">Normal periods</strong>Weekly periods in the active timetable.</div><div><strong class="block text-slate-900">Extra periods</strong>Assigned or completed temporary coverage during the selected dates.</div><div><strong class="block text-slate-900">Total taken</strong>Normal timetable periods plus extra coverage periods.</div></div>@endif
     <p class="px-5 py-3 text-sm text-slate-500">{{ $rows->count() }} records shown.@if($rows->count() === 1000) Results are limited to 1,000 records; narrow the filters for a complete print or export.@endif</p><div class="table-wrap"><table class="data-table"><thead><tr>
         @foreach ($headings as $heading)
             <th>{{ $heading }}</th>

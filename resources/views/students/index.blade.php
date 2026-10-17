@@ -2,7 +2,7 @@
 
 @section('content')
 <section class="dars-student-search-page" aria-label="Student search">
-    <div class="dars-breadcrumb"><span>Students</span><span>&gt;</span><strong>Student Search</strong></div><span class="sr-only">Student search</span>
+    <span class="sr-only">Student search</span>
     <form method="GET" class="dars-student-search-filters">
         <label>Academic year<select name="academic_year_id"><option value="">All years</option>@foreach ($years as $year)<option value="{{ $year->id }}" @selected(request('academic_year_id') == $year->id)>{{ $year->name }}</option>@endforeach</select></label>
         <label>Code<input name="code" value="{{ request('code') }}" placeholder="Code"></label><label>Last name<input name="last_name" value="{{ request('last_name') }}" placeholder="Enter last name"></label><label>First name<input name="first_name" value="{{ request('first_name') }}" placeholder="Enter first name"></label>

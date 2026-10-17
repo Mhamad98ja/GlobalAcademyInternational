@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\HasPublicId;
 use App\Services\BranchContext;
+use App\Support\PermissionCatalog;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -120,14 +121,24 @@ class User extends Authenticatable
             return true;
         }
 
-        $directPermission = $this->permissions()->where('permissions.name', $permission)->first();
-        if ($directPermission) {
-            return (bool) $directPermission->pivot->allowed;
+        $candidates = PermissionCatalog::candidates($permission);
+        $directPermissions = $this->permissions()
+            ->whereIn('permissions.name', $candidates)
+            ->get()
+            ->keyBy('name');
+        foreach ($candidates as $candidate) {
+            if ($directPermissions->has($candidate)) {
+                return (bool) $directPermissions->get($candidate)->pivot->allowed;
+            }
         }
 
-        return $this->roles()->where(function ($query) use ($permission): void {
+        if (str_starts_with($permission, 'student-portal.') && $this->student_id && $this->hasRole('student')) {
+            return true;
+        }
+
+        return $this->roles()->where(function ($query) use ($candidates): void {
             $query->where('name', 'super-administrator')
-                ->orWhereHas('permissions', fn ($permissions) => $permissions->where('name', $permission));
+                ->orWhereHas('permissions', fn ($permissions) => $permissions->whereIn('name', $candidates));
         })->exists();
     }
 
@@ -170,6 +181,7 @@ class User extends Authenticatable
     public function canViewFinancials(): bool
     {
         return $this->isControllerAdministrator()
+            || $this->hasPermission('finance.view')
             || $this->hasPermission('invoices.view')
             || $this->hasPermission('payments.view')
             || $this->hasPermission('purchases.manage');

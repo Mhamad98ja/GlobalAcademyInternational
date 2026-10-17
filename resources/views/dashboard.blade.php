@@ -4,56 +4,89 @@
 @php
     $dashboardUser = auth()->user();
     $salutation = now()->hour < 12 ? 'Good morning' : (now()->hour < 18 ? 'Good afternoon' : 'Good evening');
-    $dashboardFirstName = str(preg_replace('/^(dr|mr|mrs|ms)\\.?\\s+/i', '', $dashboardUser->name))->before(' ');
-    $modules = [
-        ['workspace' => 'students', 'title' => 'Student Profile', 'description' => 'Search student records, registrations, family details, attendance, and documents.', 'action' => 'Open student records', 'icon' => 'students', 'tone' => 'blue', 'visible' => $dashboardUser->hasPermission('students.view')],
-        ['workspace' => 'academic', 'title' => 'Academic & Report Card', 'description' => 'Manage assessments, report cards, grades, subjects, and academic reports.', 'action' => 'Open academics', 'icon' => 'academic', 'tone' => 'indigo', 'visible' => $dashboardUser->hasPermission('grades.enter') || $dashboardUser->hasPermission('reports.view')],
-        ['workspace' => 'operations', 'title' => 'Administration & Operations', 'description' => 'Handle users, books, inventory, suppliers, payments, transfers, and daily operations.', 'action' => 'Open administration', 'icon' => 'operations', 'tone' => 'amber', 'visible' => $dashboardUser->hasPermission('admin.manage') || $dashboardUser->hasPermission('books.view')],
-        ['workspace' => 'teachers', 'title' => 'Online Collaboration', 'description' => 'Coordinate teachers, course work, messages, events, and student follow-up.', 'action' => 'Open collaboration', 'icon' => 'responsible', 'tone' => 'emerald', 'visible' => $dashboardUser->hasPermission('collaboration.view')],
+    $dashboardFirstName = str(preg_replace('/^(dr|mr|mrs|ms)\.?\s+/i', '', $dashboardUser->name))->before(' ');
+    $quickActions = [
+        ['label' => 'Find a student', 'description' => 'Open a student profile or registration record.', 'route' => 'students.index', 'permission' => 'students.view', 'icon' => 'students', 'tone' => 'blue'],
+        ['label' => 'Record attendance', 'description' => 'Capture today\'s student attendance by class.', 'route' => 'attendance.students', 'permission' => 'attendance.student.view', 'icon' => 'reports', 'tone' => 'gold'],
+        ['label' => 'Open evaluations', 'description' => 'Review grades for the active academic term.', 'route' => 'collaboration.index', 'params' => ['section' => 'evaluation-dashboard'], 'permission' => 'evaluation.dashboard.view', 'icon' => 'academic', 'tone' => 'mint'],
+        ['label' => 'Generate report cards', 'description' => 'Prepare official annual or partial report cards.', 'route' => 'admin.report-cards', 'permission' => 'report-card.view', 'icon' => 'reports', 'tone' => 'sky'],
     ];
-    $quickLinks = [
-        ['label' => 'Find a student', 'description' => 'Search profiles and registrations', 'route' => 'students.index', 'permission' => 'students.view', 'icon' => 'students'],
-        ['label' => 'View reports', 'description' => 'Academic and operational reporting', 'route' => 'reports.index', 'permission' => 'reports.view', 'icon' => 'reports'],
-        ['label' => 'Open calendar', 'description' => 'School events and key dates', 'route' => 'collaboration.index', 'params' => ['section' => 'calendar'], 'permission' => 'collaboration.view', 'icon' => 'academic'],
-        ['label' => 'Manage users', 'description' => 'Roles, access, and configuration', 'route' => 'admin.users', 'permission' => 'admin.manage', 'icon' => 'administration'],
+    $workspaceLinks = [
+        ['label' => 'Student Profile', 'description' => 'Students, registrations, families', 'workspace' => 'students', 'permission' => 'students.view', 'icon' => 'students'],
+        ['label' => 'Report Card', 'description' => 'Academic records and reports', 'workspace' => 'academic', 'permission' => 'reports.view', 'icon' => 'reports'],
+        ['label' => 'Administration', 'description' => 'People, finance, and operations', 'workspace' => 'operations', 'permission' => 'admin.manage', 'icon' => 'administration'],
+        ['label' => 'Online Collaboration', 'description' => 'Agenda, evaluations, and messages', 'workspace' => 'teachers', 'permission' => 'collaboration.view', 'icon' => 'responsible'],
     ];
 @endphp
-<section class="sbm-dashboard" aria-label="Global Academy International dashboard">
-    <header class="sbm-dashboard-intro">
+
+<section class="campus-dashboard" aria-label="Global Academy International dashboard">
+    <header class="campus-welcome">
         <div>
-            <p class="sbm-dashboard-date">{{ now()->format('l, F j, Y') }}</p>
-            <h1>{{ $salutation }}, {{ $dashboardFirstName }}.</h1>
-            <p>Choose a workspace to continue managing your school day.</p>
+            <p class="campus-welcome-date">{{ now()->format('l, F j, Y') }}</p>
+            <h1>{{ $salutation }}, {{ $dashboardFirstName }}</h1>
+            <p>Here is what is happening at Global Academy International today.</p>
         </div>
-        <a class="btn btn-primary sbm-dashboard-primary" href="{{ route('students.index') }}"><x-nav-icon name="students" /> Find a student</a>
+        @if($activeAcademicYear)
+            <div class="campus-year-card"><span>Active academic year</span><strong>{{ $activeAcademicYear->name }}</strong></div>
+        @endif
     </header>
 
-    <div class="sbm-dashboard-layout">
-        <section class="sbm-workspace-region" aria-labelledby="workspaces-title">
-            <div class="sbm-section-heading"><div><p>WORKSPACES</p><h2 id="workspaces-title">Your school at a glance</h2></div><span>{{ collect($modules)->where('visible', true)->count() }} available</span></div>
-            <div class="sbm-workspace-grid">
-                @foreach ($modules as $module)
-                    @if ($module['visible'])
-                        @php($target = match ($module['workspace']) { 'teachers' => route('collaboration.index'), 'operations' => $dashboardUser->hasPermission('admin.manage') ? route('admin.users') : route('workspaces.show', 'operations'), default => route('workspaces.show', $module['workspace']) })
-                        <a class="sbm-workspace-card sbm-workspace-{{ $module['tone'] }}" href="{{ $target }}">
-                            <span class="sbm-workspace-icon"><x-nav-icon :name="$module['icon']" /></span>
-                            <span class="sbm-workspace-content"><strong>{{ $module['title'] }}</strong><span>{{ $module['description'] }}</span><em>{{ $module['action'] }} <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5l5 5-5 5" /></svg></em></span>
-                        </a>
-                    @endif
-                @endforeach
+    <nav class="campus-workspace-strip" aria-label="Core workspaces">
+        @foreach($workspaceLinks as $workspaceLink)
+            @if($dashboardUser->hasPermission($workspaceLink['permission']))
+                <a href="{{ route('workspaces.show', $workspaceLink['workspace']) }}"><span class="campus-workspace-icon"><x-nav-icon :name="$workspaceLink['icon']" /></span><span><strong>{{ $workspaceLink['label'] }}</strong><small>{{ $workspaceLink['description'] }}</small></span><b aria-hidden="true">→</b></a>
+            @endif
+        @endforeach
+    </nav>
+
+    <section class="campus-action-grid" aria-label="Quick actions">
+        @foreach($quickActions as $action)
+            @if($dashboardUser->hasPermission($action['permission']))
+                <a class="campus-action campus-action-{{ $action['tone'] }}" href="{{ route($action['route'], $action['params'] ?? []) }}">
+                    <span class="campus-action-icon"><x-nav-icon :name="$action['icon']" /></span>
+                    <span><strong>{{ $action['label'] }}</strong><small>{{ $action['description'] }}</small></span>
+                    <span class="campus-action-arrow" aria-hidden="true">→</span>
+                </a>
+            @endif
+        @endforeach
+    </section>
+
+    <section class="campus-stat-grid" aria-label="School summary">
+        <article class="campus-stat"><span class="campus-stat-icon campus-stat-icon-blue"><x-nav-icon name="students" /></span><span><small>Active students</small><strong>{{ number_format($activeStudents) }}</strong><em>Current registrations</em></span></article>
+        <article class="campus-stat"><span class="campus-stat-icon campus-stat-icon-gold"><x-nav-icon name="books" /></span><span><small>Books in stock</small><strong>{{ number_format($stock) }}</strong><em>{{ number_format($lowStock->count()) }} need attention</em></span></article>
+        <article class="campus-stat"><span class="campus-stat-icon campus-stat-icon-mint"><x-nav-icon name="distribution" /></span><span><small>Today's distributions</small><strong>{{ number_format($todayDistributions) }}</strong><em>Recorded in this branch</em></span></article>
+        @if($canViewFinancials)
+            <article class="campus-stat"><span class="campus-stat-icon campus-stat-icon-sky"><x-nav-icon name="payments" /></span><span><small>Collected today</small><strong>{{ number_format((float) ($collected ?? 0), 2) }}</strong><em>{{ number_format((float) ($outstanding ?? 0), 2) }} outstanding</em></span></article>
+        @endif
+    </section>
+
+    <div class="campus-content-grid">
+        <section class="campus-panel campus-panel-large">
+            <header class="campus-panel-header"><div><h2>Stock and operations</h2><p>Items that may need attention in the current school year.</p></div>@if($dashboardUser->hasPermission('operations.view'))<a href="{{ route('operations.index') }}" class="campus-panel-link">Open operations</a>@endif</header>
+            <div class="campus-list">
+                @forelse($lowStock as $book)
+                    <div class="campus-list-row"><span class="campus-list-marker campus-list-marker-gold"></span><span><strong>{{ $book->title }}</strong><small>{{ $book->branch_quantity }} available · minimum {{ $book->minimum_stock }}</small></span><span class="campus-row-status">Low stock</span></div>
+                @empty
+                    <div class="campus-empty"><strong>Everything is stocked</strong><span>No low-stock books are currently flagged.</span></div>
+                @endforelse
             </div>
         </section>
 
-        <aside class="sbm-dashboard-side" aria-label="Quick access">
-            <section class="sbm-side-panel"><div class="sbm-section-heading"><div><p>QUICK ACCESS</p><h2>Useful shortcuts</h2></div></div><div class="sbm-quick-links">
-                @foreach($quickLinks as $link)
-                    @if($dashboardUser->hasPermission($link['permission']))
-                        <a href="{{ route($link['route'], $link['params'] ?? []) }}"><span><x-nav-icon :name="$link['icon']" /></span><span><strong>{{ $link['label'] }}</strong><small>{{ $link['description'] }}</small></span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4l6 6-6 6" /></svg></a>
-                    @endif
-                @endforeach
-            </div></section>
-            <section class="sbm-day-panel"><p>READY WHEN YOU ARE</p><h2>Keep your school moving forward.</h2><span>Global Academy International brings daily student, academic, and operational work into one focused workspace.</span></section>
-        </aside>
+        <section class="campus-panel">
+            <header class="campus-panel-header"><div><h2>Recent activity</h2><p>Latest recorded school operations.</p></div></header>
+            <div class="campus-list">
+                @forelse($recentActivity as $activity)
+                    <div class="campus-list-row"><span class="campus-list-marker campus-list-marker-blue"></span><span><strong>{{ $activity->book?->title ?? 'Inventory activity' }}</strong><small>{{ str($activity->type)->headline() }} · {{ $activity->user?->name ?? 'System' }}</small></span><time>{{ $activity->created_at?->format('d M') }}</time></div>
+                @empty
+                    <div class="campus-empty"><strong>No recent activity</strong><span>New stock activity will appear here.</span></div>
+                @endforelse
+            </div>
+        </section>
     </div>
+
+    <section class="campus-next-step">
+        <div><span class="campus-next-step-icon"><x-nav-icon name="academic" /></span><span><strong>Keep the school day moving</strong><small>Use the left navigation to move between students, teaching, attendance, reports, and administration without losing your place.</small></span></div>
+        @if($dashboardUser->hasPermission('reports.view'))<a href="{{ route('reports.index') }}" class="btn btn-primary">Open report centre</a>@endif
+    </section>
 </section>
 @endsection

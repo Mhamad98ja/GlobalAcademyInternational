@@ -1,17 +1,73 @@
 @php($evaluationPage = $evaluationPage ?? request('section'))
 <section class="dars-evaluation-page">
     <div class="dars-evaluation-actions">
-        <form method="GET" action="{{ route('collaboration.section', ['section' => 'evaluation-dashboard']) }}" class="dars-evaluation-assignment-picker"><select aria-label="Choose class subject"><option>Choose class subject</option>@foreach($assignments as $assignment)<option>{{ $assignment->grade?->name }}{{ $assignment->section ? ' / '.$assignment->section->name : '' }} · {{ $assignment->subject?->name }}</option>@endforeach</select></form>
-        <nav class="dars-evaluation-action-links" aria-label="Evaluation tools"><a class="is-active" href="{{ route('collaboration.section', ['section' => 'evaluation-dashboard']) }}">Evaluation</a><a href="{{ route('grades.index', ['view' => 'grade-book']) }}">Grade Book</a><a class="is-muted" href="{{ route('collaboration.section', ['section' => 'evaluation-dashboard']) }}">Dashboard</a><a class="dars-evaluation-add" href="{{ route('grades.index', ['view' => 'evaluations', 'add' => 1]) }}#assessment-create">+ Add new</a></nav>
+        <form method="GET" action="{{ route('collaboration.section', ['section' => 'evaluation-dashboard']) }}" class="dars-evaluation-assignment-picker">
+            <input type="hidden" name="section" value="evaluation-dashboard">
+            <select name="teacher_assignment_id" aria-label="Choose class subject" onchange="this.form.submit()">
+                <option value="">All assigned subjects</option>
+                @foreach($assignments as $assignment)
+                    <option value="{{ $assignment->id }}" @selected($evaluationAssignmentId === $assignment->id)>{{ $assignment->grade?->name }}{{ $assignment->section ? ' / '.$assignment->section->name : '' }} · {{ $assignment->subject?->name }}</option>
+                @endforeach
+            </select>
+        </form>
+        <nav class="dars-evaluation-action-links" aria-label="Evaluation tools">
+            <a href="{{ route('grades.index', ['view' => 'evaluations']) }}">Evaluation</a>
+            <a class="{{ $evaluationPage === 'evaluation-dashboard' ? 'is-active' : '' }}" href="{{ route('collaboration.section', ['section' => 'evaluation-dashboard']) }}">Dashboard</a>
+            @if($activeAcademicTerm)<a class="dars-evaluation-add" href="{{ route('grades.assessments.create') }}">+ New evaluation</a>@else<span class="dars-evaluation-context">Configure an active academic term</span>@endif
+            <a class="{{ $evaluationPage === 'modification-requests' ? 'is-active' : '' }}" href="{{ route('collaboration.section', ['section' => 'modification-requests']) }}">Modification request</a>
+        </nav>
     </div>
     @if($evaluationPage === 'modification-requests')
-        <section class="dars-evaluation-requests">
-            <form method="GET" action="{{ route('collaboration.section', ['section' => 'modification-requests']) }}"><label>Class<select name="grade_id"><option value="">All classes</option>@foreach($assignments as $assignment)<option value="{{ $assignment->grade_id }}" @selected(request('grade_id') == $assignment->grade_id)>{{ $assignment->grade?->name }}{{ $assignment->section ? ' / '.$assignment->section->name : '' }}</option>@endforeach</select></label><label>Column<select name="assessment_column"><option value="">All columns</option>@foreach(['1 - Cntr1', '2 - Cntr2', '3 - Cntr3', 'Final'] as $column)<option value="{{ $column }}" @selected(request('assessment_column') === $column)>{{ $column }}</option>@endforeach</select></label><label>Status<select name="review_status"><option value="">All statuses</option>@foreach(['submitted' => 'Submitted', 'approved' => 'Approved', 'rejected' => 'Rejected', 'draft' => 'Draft'] as $value => $label)<option value="{{ $value }}" @selected(request('review_status') === $value)>{{ $label }}</option>@endforeach</select></label><button class="dars-evaluation-secondary">Filter</button></form>
-            @if($assessmentRequests->isNotEmpty())
-                <div class="table-wrap"><table class="dars-evaluation-table"><thead><tr><th>Evaluation</th><th>Class / subject</th><th>Column</th><th>Submitted</th><th>Status</th><th>Feedback</th>@if(auth()->user()->hasPermission('academic_year.manage'))<th>Decision</th>@endif</tr></thead><tbody>@foreach($assessmentRequests as $requestItem)<tr><td><strong>{{ $requestItem->name }}</strong><small>{{ str($requestItem->type)->headline() }}</small></td><td>{{ $requestItem->assignment?->grade?->name }}{{ $requestItem->assignment?->section ? ' / '.$requestItem->assignment?->section->name : '' }} · {{ $requestItem->assignment?->subject?->name }}</td><td>{{ $requestItem->assessment_column ?: '—' }}</td><td>{{ $requestItem->created_at?->format('d/m/Y H:i') }}</td><td><span class="dars-evaluation-status {{ $requestItem->review_status }}">{{ str($requestItem->review_status)->headline() }}</span></td><td>{{ $requestItem->rejection_reason ?: '—' }}</td>@if(auth()->user()->hasPermission('academic_year.manage'))<td>@if($requestItem->review_status === 'submitted')<div class="flex flex-wrap gap-2"><form method="POST" action="{{ route('school-academic.assessments.approve', $requestItem) }}">@csrf<button class="dars-evaluation-primary" type="submit">Approve</button></form><form method="POST" action="{{ route('school-academic.assessments.reject', $requestItem) }}" class="flex flex-wrap gap-2"><input name="rejection_reason" required placeholder="Reason for return"><button class="dars-evaluation-secondary" type="submit">Return</button></form></div>@else<span class="text-xs text-slate-500">No action needed</span>@endif</td>@endif</tr>@endforeach</tbody></table></div>
-            @else<div class="dars-evaluation-request-empty"><strong>No request found</strong></div>@endif
-        </section>
+        @include('collaboration.dars-evaluation-modification-requests')
     @else
-        <section class="dars-evaluation-dashboard-empty"></section>
+        <section class="dars-evaluation-dashboard">
+            <header class="dars-evaluation-dashboard-header">
+                <div><strong>Evaluation overview</strong><span>Each square represents an evaluation, grouped by academic term and assessment type.</span></div>
+                <span>{{ $evaluationAssignments->count() }} assigned subject{{ $evaluationAssignments->count() === 1 ? '' : 's' }}</span>
+            </header>
+            <div class="dars-evaluation-dashboard-scroll">
+                <table class="dars-evaluation-grid" aria-label="Subject evaluation dashboard">
+                    <thead>
+                        <tr>
+                            <th rowspan="2" scope="col">Subject / class</th>
+                            @foreach($evaluationColumns as $column)
+                                <th colspan="{{ $evaluationTypes->count() }}" scope="colgroup">{{ $column['label'] }}</th>
+                            @endforeach
+                        </tr>
+                        <tr>
+                            @foreach($evaluationColumns as $column)
+                                @foreach($evaluationTypes as $type)
+                                    <th scope="col">{{ $type['label'] }}</th>
+                                @endforeach
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($evaluationAssignments as $assignment)
+                            <tr>
+                                <th scope="row" class="dars-evaluation-subject"><strong>{{ $assignment->subject?->name ?: 'Unassigned subject' }}</strong><small>{{ $assignment->grade?->name }}{{ $assignment->section ? ' / '.$assignment->section->name : '' }} · {{ $assignment->teacher?->full_name ?: 'No teacher' }}</small></th>
+                                @foreach($evaluationColumns as $column)
+                                    @foreach($evaluationTypes as $type)
+                                        @php($cellItems = $evaluationDashboardAssessments->filter(fn (array $item): bool => $item['teacher_assignment_id'] === $assignment->id && $item['column_key'] === $column['key'] && $item['type_key'] === $type['key']))
+                                        <td class="dars-evaluation-cell">
+                                            @forelse($cellItems as $item)
+                                                <a class="dars-evaluation-tile dars-evaluation-tile-{{ $item['type_key'] }}" data-evaluation-tile href="{{ route('grades.index', ['view' => 'grade-book', 'teacher_assignment_id' => $assignment->id, 'assessment_id' => $item['id']]) }}" title="{{ $item['name'] }} · {{ $item['term_label'] }} · {{ $item['status_label'] }}{{ $item['assessment_date'] ? ' · '.$item['assessment_date'] : '' }}" aria-label="{{ $item['name'] }} · {{ $item['term_label'] }}">
+                                                    <span aria-hidden="true"></span><span class="sr-only">{{ $item['name'] }} · {{ $item['term_label'] }}</span>
+                                                </a>
+                                            @empty
+                                                <span class="dars-evaluation-cell-empty" aria-hidden="true">—</span>
+                                            @endforelse
+                                        </td>
+                                    @endforeach
+                                @endforeach
+                            </tr>
+                        @empty
+                            <tr><td colspan="{{ 1 + ($evaluationColumns->count() * $evaluationTypes->count()) }}" class="dars-evaluation-grid-empty">No subject assignments are available for this dashboard.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            <div class="dars-evaluation-dashboard-legend"><span><i class="dars-evaluation-tile dars-evaluation-tile-project"><b></b></i> Project</span><span><i class="dars-evaluation-tile dars-evaluation-tile-quiz"><b></b></i> Quiz</span><span>Open a square to view its grade book.</span></div>
+        </section>
     @endif
 </section>

@@ -9,6 +9,7 @@ use App\Models\TeacherAssignment;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherSubstitution;
 use App\Models\TimetableEntry;
+use App\Models\AcademicYear;
 use Carbon\Carbon;
 
 final class SubstitutionService
@@ -22,9 +23,11 @@ final class SubstitutionService
         }
 
         $date = Carbon::parse($attendance->attendance_date);
+        $activeAcademicYearId = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->value('id');
         $entries = TimetableEntry::query()
             ->where('teacher_id', $attendance->teacher_id)
             ->where('day_of_week', strtolower($date->englishDayOfWeek))
+            ->when($activeAcademicYearId, fn ($query) => $query->where('academic_year_id', $activeAcademicYearId))
             ->get();
 
         foreach ($entries as $entry) {
@@ -40,6 +43,21 @@ final class SubstitutionService
             );
             $this->audit->log('teacher_substitution.recommended', $substitution, [], $substitution->recommendation_details ?? []);
         }
+    }
+
+    public function syncForAttendance(TeacherAttendance $attendance): void
+    {
+        if ($attendance->isAbsent()) {
+            $this->createForAbsence($attendance);
+
+            return;
+        }
+
+        TeacherSubstitution::query()
+            ->whereDate('substitution_date', $attendance->attendance_date)
+            ->where('absent_teacher_id', $attendance->teacher_id)
+            ->whereIn('status', ['pending', 'recommended'])
+            ->update(['status' => 'cancelled']);
     }
 
     /** @return array{teacher:?Teacher,details:array<string,mixed>} */

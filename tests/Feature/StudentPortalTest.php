@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\AcademicYear;
+use App\Models\AcademicTerm;
 use App\Models\Assessment;
 use App\Models\CourseContent;
 use App\Models\Grade;
@@ -15,12 +16,14 @@ use App\Models\SchoolLevel;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentRegistration;
+use App\Models\StudentSubjectExemption;
 use App\Models\Subject;
 use App\Models\Teacher;
 use App\Models\TeacherAssignment;
 use App\Models\User;
 use App\Notifications\StudentPortalNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class StudentPortalTest extends TestCase
@@ -31,6 +34,7 @@ class StudentPortalTest extends TestCase
     private function portalData(): array
     {
         $year = AcademicYear::create(['name' => '2031-2032', 'starts_on' => '2031-09-01', 'ends_on' => '2032-06-30', 'status' => 'open']);
+        $term = AcademicTerm::create(['academic_year_id' => $year->id, 'name' => 'First term', 'starts_on' => '2031-09-01', 'ends_on' => '2031-12-31', 'status' => 'open', 'sort_order' => 1]);
         $level = SchoolLevel::create(['name' => 'Portal level']);
         $grade = Grade::create(['school_level_id' => $level->id, 'name' => 'Portal Grade']);
         $section = Section::create(['grade_id' => $grade->id, 'name' => 'A']);
@@ -43,7 +47,7 @@ class StudentPortalTest extends TestCase
         $studentUser = User::factory()->create(['name' => 'Portal Student', 'student_id' => $student->id, 'is_active' => true]);
         $studentUser->roles()->attach($studentRole);
 
-        return compact('year', 'grade', 'section', 'subject', 'teacher', 'assignment', 'student', 'registration', 'studentUser');
+        return compact('year', 'term', 'grade', 'section', 'subject', 'teacher', 'assignment', 'student', 'registration', 'studentUser');
     }
 
     public function test_student_portal_shows_only_published_course_work_assessments_and_grades(): void
@@ -69,6 +73,33 @@ class StudentPortalTest extends TestCase
         $user = User::factory()->create(['is_active' => true]);
 
         $this->actingAs($user)->get(route('student-portal.index'))->assertForbidden();
+    }
+
+    public function test_subject_exemption_hides_subject_work_and_attachment_but_can_be_removed(): void
+    {
+        Storage::fake('local');
+        $data = $this->portalData();
+        Storage::disk('local')->put('course-content/exempt-guide.pdf', 'guide');
+        $content = CourseContent::create([
+            'teacher_assignment_id' => $data['assignment']->id,
+            'title' => 'Exempt mathematics homework',
+            'content_type' => 'document',
+            'published_at' => now(),
+            'attachment_path' => 'course-content/exempt-guide.pdf',
+            'attachment_name' => 'exempt-guide.pdf',
+            'attachment_mime' => 'application/pdf',
+        ]);
+        $assessment = Assessment::create(['academic_year_id' => $data['year']->id, 'subject_id' => $data['subject']->id, 'grade_id' => $data['grade']->id, 'section_id' => $data['section']->id, 'name' => 'Exempt mathematics quiz', 'type' => 'quiz', 'maximum_score' => 10, 'status' => 'open']);
+        GradeEntry::create(['teacher_id' => $data['teacher']->id, 'teacher_assignment_id' => $data['assignment']->id, 'student_id' => $data['student']->id, 'student_registration_id' => $data['registration']->id, 'assessment_id' => $assessment->id, 'score' => 8.5, 'status' => 'published', 'recorded_by' => $data['studentUser']->id]);
+        $data['student']->notify(new StudentPortalNotification('Exempt subject notice', 'Subject-specific reminder', route('student-portal.index'), $data['subject']->id, $data['registration']->id));
+        $exemption = StudentSubjectExemption::create(['student_id' => $data['student']->id, 'student_registration_id' => $data['registration']->id, 'subject_id' => $data['subject']->id]);
+
+        $this->actingAs($data['studentUser'])->get(route('student-portal.index'))
+            ->assertOk()->assertDontSee('Exempt mathematics homework')->assertDontSee('Exempt mathematics quiz')->assertDontSee('8.50 / 10.00')->assertDontSee('Exempt subject notice');
+        $this->get(route('student-portal.course-content.download', $content))->assertForbidden();
+
+        $exemption->delete();
+        $this->get(route('student-portal.index'))->assertOk()->assertSee('Exempt mathematics homework')->assertSee('Exempt mathematics quiz')->assertSee('Exempt subject notice');
     }
 
     public function test_creating_a_student_creates_a_portal_login_account(): void
@@ -110,8 +141,8 @@ class StudentPortalTest extends TestCase
 
         $this->actingAs($teacherUser)->post(route('grades.assessments.store'), [
             'teacher_assignment_id' => $data['assignment']->id,
+            'academic_term_id' => $data['term']->id,
             'name' => 'October monthly test',
-            'assessment_column' => '1 - Cntr1',
             'type' => 'monthly_test',
             'maximum_score' => 20,
             'weight' => 0.5,
@@ -121,6 +152,6 @@ class StudentPortalTest extends TestCase
             'per_question' => true,
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('assessments', ['name' => 'October monthly test', 'teacher_assignment_id' => $data['assignment']->id, 'assessment_column' => '1 - Cntr1', 'maximum_score' => 20, 'weight' => '0.500', 'subject_id' => $data['subject']->id, 'grade_id' => $data['grade']->id, 'section_id' => $data['section']->id, 'notes' => 'Bring the revision sheet.', 'online_quiz' => true, 'per_question' => true]);
+        $this->assertDatabaseHas('assessments', ['name' => 'October monthly test', 'teacher_assignment_id' => $data['assignment']->id, 'assessment_column' => null, 'maximum_score' => 20, 'weight' => '0.500', 'subject_id' => $data['subject']->id, 'grade_id' => $data['grade']->id, 'section_id' => $data['section']->id, 'notes' => 'Bring the revision sheet.', 'online_quiz' => true, 'per_question' => true]);
     }
 }

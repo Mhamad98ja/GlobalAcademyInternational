@@ -59,6 +59,11 @@ class StudentRegistration extends Model
         return $this->hasMany(GradeEntry::class);
     }
 
+    public function subjectExemptions()
+    {
+        return $this->hasMany(StudentSubjectExemption::class);
+    }
+
     public function performanceEvaluations()
     {
         return $this->hasMany(StudentPerformanceEvaluation::class);

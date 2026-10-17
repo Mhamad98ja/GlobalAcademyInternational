@@ -67,7 +67,7 @@ Route::middleware('guest')->group(function () use ($authThrottle): void {
 Route::post('/logout', [AuthController::class, 'destroy'])->middleware('auth')->name('logout');
 
 Route::middleware(['auth', 'branch'])->group(function (): void {
-    Route::post('/branches/current', [BranchesController::class, 'select'])->name('branches.select');
+    Route::post('/branches/current', [BranchesController::class, 'select'])->middleware('permission:branches.switch')->name('branches.select');
     Route::get('/notifications', [NotificationsController::class, 'index'])->name('notifications.index');
     Route::post('/notifications/{notification}/read', [NotificationsController::class, 'read'])->name('notifications.read');
     Route::get('/messages', [MessagesController::class, 'index'])->middleware('permission:messages.view')->name('messages.index');
@@ -75,64 +75,68 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     Route::post('/messages/{recipient}/read', [MessagesController::class, 'markRead'])->middleware('permission:messages.view')->name('messages.read');
     Route::post('/messages/read-all', [MessagesController::class, 'markAllRead'])->middleware('permission:messages.view')->name('messages.read-all');
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
-    Route::get('/student-portal', [StudentPortalController::class, 'index'])->name('student-portal.index');
-    Route::get('/student-portal/course-content/{courseContent}/download', [CollaborationController::class, 'downloadCourseContent'])->name('student-portal.course-content.download');
+    Route::get('/student-portal', [StudentPortalController::class, 'index'])->middleware('permission:student-portal.view')->name('student-portal.index');
+    Route::get('/student-portal/course-content/{courseContent}/download', [CollaborationController::class, 'downloadCourseContent'])->middleware('permission:student-portal.course-content.download')->name('student-portal.course-content.download');
     Route::get('/workspaces/{workspace}', WorkspaceController::class)
         ->where('workspace', 'students|teachers|academic|operations')
-        ->middleware('permission:dashboard.view')
+        ->middleware('permission:workspaces.view')
         ->name('workspaces.show');
-    Route::get('/finance', [OperationsController::class, 'index'])->name('finance.index');
-    Route::get('/operations', [OperationsController::class, 'index'])->middleware('permission:dashboard.view')->name('operations.index');
+    Route::get('/finance', [OperationsController::class, 'index'])->middleware('permission:finance.view')->name('finance.index');
+    Route::get('/operations', [OperationsController::class, 'index'])->middleware('permission:operations.view')->name('operations.index');
     Route::middleware('permission:class-lists.manage')->group(function (): void {
         Route::get('/class-book-lists/{classBookList}/edit', [ClassBookListsController::class, 'edit'])->name('class-lists.edit');
         Route::put('/class-book-lists/{classBookList}', [ClassBookListsController::class, 'update'])->name('class-lists.update');
     });
     Route::middleware('permission:reports.view')->group(function (): void {
-        Route::get('/reports/print', [ReportsController::class, 'print'])->name('reports.print');
-        Route::get('/report-card/reports/{report}', [ReportCardController::class, 'show'])->name('report-card.show');
+        Route::get('/reports/print', [ReportsController::class, 'print'])->middleware('permission:reports.print')->name('reports.print');
+        Route::get('/report-card/reports/{report}', [ReportCardController::class, 'show'])->middleware('permission:report-card.view')->name('report-card.show');
     });
+    Route::get('/admin/report-cards', [ReportCardController::class, 'index'])->middleware('permission:report-card.view')->name('admin.report-cards');
+    Route::get('/admin/report-cards/generate', [ReportCardController::class, 'index'])->middleware('permission:report-card.generate')->name('admin.report-cards.generate');
+    Route::get('/admin/report-cards/print', [ReportCardController::class, 'print'])->middleware('permission:report-card.print')->name('admin.report-cards.print');
     Route::middleware('permission:admin.manage')->group(function (): void {
-        Route::get('/admin/dars/{page}', [DarsAdministrationController::class, 'show'])->name('admin.dars.show');
-        Route::get('/admin/users/{user}/edit', [AdministrationController::class, 'editUser'])->name('admin.users.edit');
-        Route::put('/admin/users/{user}', [AdministrationController::class, 'updateUser'])->name('admin.users.update');
-        Route::get('/admin/users/{user}/photo', [AdministrationController::class, 'userPhoto'])->name('admin.users.photo');
+        Route::get('/admin/dars/{page}', [DarsAdministrationController::class, 'show'])->middleware(['permission:admin.dars.view', 'can:manage-branches'])->name('admin.dars.show');
     });
     Route::middleware('permission:students.manage')->group(function (): void {
         Route::get('/students/section-changes', [StudentDossierController::class, 'sectionChanges'])->name('students.section-changes');
         Route::post('/students/section-changes', [StudentDossierController::class, 'updateSections'])->name('students.section-changes.update');
-        Route::post('/students/{student}/photo', [StudentsController::class, 'updatePhoto'])->name('students.photo.update');
-        Route::post('/students/{student}/support', [StudentsController::class, 'storeSupportAssignment'])->name('students.support.store');
-        Route::post('/students/{student}/subject-exemptions', [StudentsController::class, 'storeSubjectExemption'])->name('students.subject-exemptions.store');
-        Route::delete('/students/{student}/subject-exemptions/{exemption}', [StudentsController::class, 'destroySubjectExemption'])->name('students.subject-exemptions.destroy');
-        Route::get('/students/{student}/registrations/{registration}/edit', [StudentRegistrationsController::class, 'edit'])->name('students.register.edit');
-        Route::put('/students/{student}/registrations/{registration}', [StudentRegistrationsController::class, 'update'])->name('students.register.update');
+        Route::post('/students/{student}/photo', [StudentsController::class, 'updatePhoto'])->middleware('permission:students.photo.manage')->name('students.photo.update');
+        Route::post('/students/{student}/support', [StudentsController::class, 'storeSupportAssignment'])->middleware('permission:students.support.manage')->name('students.support.store');
+        Route::post('/students/{student}/subject-exemptions', [StudentsController::class, 'storeSubjectExemption'])->middleware('permission:students.exemptions.manage')->name('students.subject-exemptions.store');
+        Route::delete('/students/{student}/subject-exemptions/{exemption}', [StudentsController::class, 'destroySubjectExemption'])->middleware('permission:students.exemptions.manage')->name('students.subject-exemptions.destroy');
+        Route::get('/students/{student}/registrations/{registration}/edit', [StudentRegistrationsController::class, 'edit'])->middleware('permission:students.registrations.manage')->name('students.register.edit');
+        Route::put('/students/{student}/registrations/{registration}', [StudentRegistrationsController::class, 'update'])->middleware('permission:students.registrations.manage')->name('students.register.update');
     });
     Route::middleware('permission:students.manage')->group(function (): void {
-        Route::get('/students/create', [StudentsController::class, 'create'])->name('students.create');
-        Route::post('/students', [StudentsController::class, 'store'])->name('students.store');
-        Route::get('/students/{student}/edit', [StudentsController::class, 'edit'])->name('students.edit');
-        Route::put('/students/{student}', [StudentsController::class, 'update'])->name('students.update');
+        Route::get('/students/create', [StudentsController::class, 'create'])->middleware('permission:students.create')->name('students.create');
+        Route::post('/students', [StudentsController::class, 'store'])->middleware('permission:students.create')->name('students.store');
+        Route::get('/students/{student}/edit', [StudentsController::class, 'edit'])->middleware('permission:students.edit')->name('students.edit');
+        Route::put('/students/{student}', [StudentsController::class, 'update'])->middleware('permission:students.edit')->name('students.update');
         Route::get('/students/{student}/leave', [StudentsController::class, 'leaveForm'])->name('students.leave.create');
         Route::post('/students/{student}/leave', [StudentsController::class, 'leave'])->name('students.leave.store');
-        Route::delete('/students/{student}', [StudentsController::class, 'destroy'])->name('students.destroy');
-        Route::get('/students/{student}/register', [StudentsController::class, 'registerForm'])->name('students.register.create');
-        Route::post('/students/{student}/register', [StudentsController::class, 'register'])->name('students.register.store');
+        Route::delete('/students/{student}', [StudentsController::class, 'destroy'])->middleware('permission:students.delete')->name('students.destroy');
+        Route::get('/students/{student}/register', [StudentsController::class, 'registerForm'])->middleware('permission:students.registrations.manage')->name('students.register.create');
+        Route::post('/students/{student}/register', [StudentsController::class, 'register'])->middleware('permission:students.registrations.manage')->name('students.register.store');
     });
     Route::middleware('permission:reports.view')->group(function (): void {
-        Route::get('/students/attestations', [StudentDossierController::class, 'attestations'])->name('students.attestations');
-        Route::get('/students/attestations/print', [StudentDossierController::class, 'printAttestations'])->name('students.attestations.print');
-        Route::get('/students/reports/{report}', [StudentDossierController::class, 'report'])->where('report', 'class-list|statistical|labels|catalog|registration|dynamic')->name('students.reports.show');
+        Route::get('/students/attestations', [StudentDossierController::class, 'attestations'])->middleware('permission:students.attestations.view')->name('students.attestations');
+        Route::get('/students/attestations/print', [StudentDossierController::class, 'printAttestations'])->middleware('permission:students.attestations.print')->name('students.attestations.print');
+        Route::get('/students/reports/{report}', [StudentDossierController::class, 'report'])->middleware('permission:students.reports.view')->where('report', 'class-list|statistical|labels|catalog|registration|dynamic')->name('students.reports.show');
     });
+    Route::get('/students/search', [StudentsController::class, 'search'])->middleware('permission:students.search')->name('students.search');
     Route::middleware('permission:students.view')->group(function (): void {
         Route::get('/students/dashboard', [StudentDossierController::class, 'dashboard'])->name('students.dashboard');
+        Route::get('/students/observations', [StudentDossierController::class, 'observations'])->middleware('permission:students.observations.view')->name('students.observations');
         Route::get('/students/tools/{section}', [StudentDossierController::class, 'tools'])->where('section', 'file|references')->name('students.tools');
-        Route::get('/students/references/{reference}/create', [StudentDossierController::class, 'referenceCreate'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.create');
-        Route::get('/students/references/{reference}/{entry}/edit', [StudentDossierController::class, 'referenceEdit'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.edit');
+        Route::get('/students/references/{reference}/create', [StudentDossierController::class, 'referenceCreate'])->middleware('can:manage-branches')->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.create');
+        Route::get('/students/references/{reference}/{entry}/edit', [StudentDossierController::class, 'referenceEdit'])->middleware('can:manage-branches')->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.edit');
         Route::get('/students/references/{reference}', [StudentDossierController::class, 'reference'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.show');
-        Route::post('/students/references/codes/categories', [StudentDossierController::class, 'referenceCategoryStore'])->name('students.references.categories.store');
-        Route::post('/students/references/{reference}', [StudentDossierController::class, 'referenceStore'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.store');
-        Route::put('/students/references/{reference}/{entry}', [StudentDossierController::class, 'referenceUpdate'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.update');
-        Route::delete('/students/references/{reference}/{entry}', [StudentDossierController::class, 'referenceDestroy'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.destroy');
+        Route::middleware('can:manage-branches')->group(function (): void {
+            Route::post('/students/references/codes/categories', [StudentDossierController::class, 'referenceCategoryStore'])->name('students.references.categories.store');
+            Route::post('/students/references/{reference}', [StudentDossierController::class, 'referenceStore'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.store');
+            Route::put('/students/references/{reference}/{entry}', [StudentDossierController::class, 'referenceUpdate'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.update');
+            Route::delete('/students/references/{reference}/{entry}', [StudentDossierController::class, 'referenceDestroy'])->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.destroy');
+        });
         Route::get('/students/families', [StudentDossierController::class, 'families'])->name('students.families');
         Route::get('/students/photos', [StudentDossierController::class, 'photos'])->name('students.photos');
         Route::get('/students', [StudentsController::class, 'index'])->name('students.index');
@@ -143,11 +147,11 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     });
     Route::get('/books', [BooksController::class, 'index'])->middleware('permission:books.view')->name('books.index');
     Route::middleware('permission:books.manage')->group(function (): void {
-        Route::get('/books/create', [BooksController::class, 'create'])->name('books.create');
-        Route::post('/books', [BooksController::class, 'store'])->name('books.store');
-        Route::get('/books/{book}/edit', [BooksController::class, 'edit'])->name('books.edit');
-        Route::put('/books/{book}', [BooksController::class, 'update'])->name('books.update');
-        Route::delete('/books/{book}', [BooksController::class, 'destroy'])->name('books.destroy');
+        Route::get('/books/create', [BooksController::class, 'create'])->middleware('permission:books.create')->name('books.create');
+        Route::post('/books', [BooksController::class, 'store'])->middleware('permission:books.create')->name('books.store');
+        Route::get('/books/{book}/edit', [BooksController::class, 'edit'])->middleware('permission:books.edit')->name('books.edit');
+        Route::put('/books/{book}', [BooksController::class, 'update'])->middleware('permission:books.edit')->name('books.update');
+        Route::delete('/books/{book}', [BooksController::class, 'destroy'])->middleware('permission:books.delete')->name('books.destroy');
     });
     Route::get('/books/{book}', [BooksController::class, 'show'])->middleware('permission:books.view')->name('books.show');
     Route::resource('suppliers', SuppliersController::class)->except(['show'])->middleware('permission:suppliers.manage');
@@ -164,21 +168,21 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::post('/purchases/{purchase}/receive-outstanding', [PurchasesController::class, 'receiveOutstanding'])->name('purchases.receive-outstanding');
     });
     Route::middleware('permission:distributions.create')->group(function (): void {
-        Route::get('/distributions', [DistributionController::class, 'index'])->name('distributions.index');
+        Route::get('/distributions', [DistributionController::class, 'index'])->middleware('permission:distributions.view')->name('distributions.index');
         Route::get('/distributions/create', [DistributionController::class, 'create'])->name('distributions.create');
         Route::post('/distributions', [DistributionController::class, 'store'])->name('distributions.store');
-        Route::get('/distributions/{distribution}/print', [DistributionController::class, 'print'])->name('distributions.print');
-        Route::get('/distributions/{distribution}', [DistributionController::class, 'show'])->name('distributions.show');
+        Route::get('/distributions/{distribution}/print', [DistributionController::class, 'print'])->middleware('permission:distributions.print')->name('distributions.print');
+        Route::get('/distributions/{distribution}', [DistributionController::class, 'show'])->middleware('permission:distributions.view')->name('distributions.show');
     });
     Route::middleware('permission:invoices.view')->group(function (): void {
         Route::get('/invoices', [InvoicesController::class, 'index'])->name('invoices.index');
         Route::get('/invoices/{invoice}', [InvoicesController::class, 'show'])->name('invoices.show');
-        Route::get('/invoices/{invoice}/print', [InvoicesController::class, 'print'])->name('invoices.print');
+        Route::get('/invoices/{invoice}/print', [InvoicesController::class, 'print'])->middleware('permission:invoices.print')->name('invoices.print');
     });
     Route::post('/invoices/{invoice}/cancel', [InvoicesController::class, 'cancel'])->middleware('permission:invoices.cancel', 'can:cancel,invoice')->name('invoices.cancel');
     Route::middleware('permission:payments.view')->group(function (): void {
         Route::get('/payments', [PaymentsController::class, 'index'])->name('payments.index');
-        Route::get('/payments/{payment}/receipt', [PaymentsController::class, 'receipt'])->name('payments.receipt');
+        Route::get('/payments/{payment}/receipt', [PaymentsController::class, 'receipt'])->middleware('permission:payments.receipt')->name('payments.receipt');
     });
     Route::post('/invoices/{invoice}/payments', [PaymentsController::class, 'store'])->middleware('permission:payments.create')->name('payments.store');
     Route::post('/payments/{payment}/reverse', [PaymentsController::class, 'reverse'])->middleware('permission:payments.reverse')->name('payments.reverse');
@@ -187,158 +191,168 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/inventory/adjustments', [InventoryController::class, 'adjustments'])->name('inventory.adjustments');
     });
     Route::post('/inventory/adjustments', [InventoryController::class, 'storeAdjustment'])->middleware('permission:inventory.adjust')->name('inventory.adjustments.store');
-    Route::middleware('permission:returns.manage')->group(function (): void {
+    Route::middleware('permission:returns.view')->group(function (): void {
         Route::get('/returns', [ReturnsController::class, 'index'])->name('returns.index');
-        Route::get('/returns/invoices/{invoice}', [ReturnsController::class, 'invoiceItems'])->name('returns.form');
-        Route::post('/returns/invoices/{invoice}', [ReturnsController::class, 'store'])->name('returns.store');
         Route::get('/returns/{return}', [ReturnsController::class, 'show'])->name('returns.show');
+        Route::get('/returns/invoices/{invoice}', [ReturnsController::class, 'invoiceItems'])->middleware('permission:returns.create')->name('returns.form');
+        Route::post('/returns/invoices/{invoice}', [ReturnsController::class, 'store'])->middleware('permission:returns.create')->name('returns.store');
     });
     Route::middleware('permission:academic.manage')->group(function (): void {
         Route::get('/academic', [AcademicController::class, 'index'])->name('academic.index');
-        Route::post('/academic/years', [AcademicController::class, 'storeYear'])->name('academic.years.store');
-        Route::put('/academic/years/{academicYear}', [AcademicController::class, 'updateYear'])->name('academic.years.update');
-        Route::post('/academic/levels', [AcademicController::class, 'storeLevel'])->name('academic.levels.store');
-        Route::put('/academic/levels/{schoolLevel}', [AcademicController::class, 'updateLevel'])->name('academic.levels.update');
-        Route::post('/academic/grades', [AcademicController::class, 'storeGrade'])->name('academic.grades.store');
-        Route::put('/academic/grades/{grade}', [AcademicController::class, 'updateGrade'])->name('academic.grades.update');
-        Route::post('/academic/sections', [AcademicController::class, 'storeSection'])->name('academic.sections.store');
-        Route::put('/academic/sections/{section}', [AcademicController::class, 'updateSection'])->name('academic.sections.update');
+        Route::post('/academic/years', fn () => abort(403, 'Use References > Codes to manage academic structure.'))->name('academic.years.store');
+        Route::put('/academic/years/{academicYear}', fn () => abort(403, 'Use References > Codes to manage academic structure.'))->name('academic.years.update');
+        Route::post('/academic/levels', fn () => abort(403, 'Use References > Codes to manage academic structure.'))->name('academic.levels.store');
+        Route::put('/academic/levels/{schoolLevel}', fn () => abort(403, 'Use References > Codes to manage academic structure.'))->name('academic.levels.update');
+        Route::post('/academic/grades', fn () => abort(403, 'Use References > Codes to manage academic structure.'))->name('academic.grades.store');
+        Route::put('/academic/grades/{grade}', fn () => abort(403, 'Use References > Codes to manage academic structure.'))->name('academic.grades.update');
+        Route::post('/academic/sections', fn () => abort(403, 'Use References > Codes to manage academic structure.'))->name('academic.sections.store');
+        Route::put('/academic/sections/{section}', fn () => abort(403, 'Use References > Codes to manage academic structure.'))->name('academic.sections.update');
     });
     Route::middleware('permission:academic_year.manage')->group(function (): void {
-        Route::get('/academic/operations', [SchoolAcademicController::class, 'index'])->name('school-academic.index');
-        Route::get('/academic/operations/subjects', [SchoolAcademicController::class, 'subjects'])->name('school-academic.subjects');
-        Route::get('/academic/operations/terms', [SchoolAcademicController::class, 'terms'])->name('school-academic.terms');
-        Route::get('/academic/operations/teacher-assignments', [SchoolAcademicController::class, 'assignments'])->name('school-academic.assignments');
+        Route::get('/academic/operations', [SchoolAcademicController::class, 'index'])->middleware('permission:academic.view')->name('school-academic.index');
+        Route::get('/academic/operations/subjects', [SchoolAcademicController::class, 'subjects'])->middleware('permission:academic.subjects.view')->name('school-academic.subjects');
+        Route::get('/academic/operations/terms', [SchoolAcademicController::class, 'terms'])->middleware('permission:academic_year.view')->name('school-academic.terms');
+        Route::get('/academic/operations/teacher-assignments', [SchoolAcademicController::class, 'assignments'])->middleware('permission:academic.teacher-assignments.view')->name('school-academic.assignments');
         // Keep the old URL as a compatibility redirect; evaluations live in Online Collaboration.
         Route::get('/academic/operations/assessments', fn () => redirect()->route('collaboration.section', ['section' => 'modification-requests']))->name('school-academic.assessments');
-        Route::post('/academic/subjects', [SchoolAcademicController::class, 'storeSubject'])->name('school-academic.subjects.store');
-        Route::put('/academic/subjects/{subject}', [SchoolAcademicController::class, 'updateSubject'])->name('school-academic.subjects.update');
-        Route::post('/academic/terms', [SchoolAcademicController::class, 'storeTerm'])->name('school-academic.terms.store');
-        Route::put('/academic/terms/{term}', [SchoolAcademicController::class, 'updateTerm'])->name('school-academic.terms.update');
-        Route::post('/academic/assessments', [SchoolAcademicController::class, 'storeAssessment'])->name('school-academic.assessments.store');
-        Route::put('/academic/assessments/{assessment}', [SchoolAcademicController::class, 'updateAssessment'])->name('school-academic.assessments.update');
-        Route::post('/academic/assessments/{assessment}/approve', [SchoolAcademicController::class, 'approveAssessment'])->name('school-academic.assessments.approve');
-        Route::post('/academic/assessments/{assessment}/reject', [SchoolAcademicController::class, 'rejectAssessment'])->name('school-academic.assessments.reject');
-        Route::post('/academic/teacher-assignments', [SchoolAcademicController::class, 'storeAssignment'])->name('school-academic.assignments.store');
-        Route::put('/academic/teacher-assignments/{assignment}', [SchoolAcademicController::class, 'updateAssignment'])->name('school-academic.assignments.update');
+        Route::post('/academic/subjects', [SchoolAcademicController::class, 'storeSubject'])->middleware('permission:academic.subjects.manage')->name('school-academic.subjects.store');
+        Route::put('/academic/subjects/{subject}', [SchoolAcademicController::class, 'updateSubject'])->middleware('permission:academic.subjects.manage')->name('school-academic.subjects.update');
+        Route::post('/academic/terms', fn () => abort(403, 'Use References > Codes to manage terms.'))->name('school-academic.terms.store');
+        Route::put('/academic/terms/{term}', fn () => abort(403, 'Use References > Codes to manage terms.'))->name('school-academic.terms.update');
+        Route::post('/academic/assessments', [SchoolAcademicController::class, 'storeAssessment'])->middleware('permission:academic.assessments.manage')->name('school-academic.assessments.store');
+        Route::put('/academic/assessments/{assessment}', [SchoolAcademicController::class, 'updateAssessment'])->middleware('permission:academic.assessments.manage')->name('school-academic.assessments.update');
+        Route::post('/academic/assessments/{assessment}/approve', [SchoolAcademicController::class, 'approveAssessment'])->middleware('permission:academic.assessments.approve')->name('school-academic.assessments.approve');
+        Route::post('/academic/assessments/{assessment}/reject', [SchoolAcademicController::class, 'rejectAssessment'])->middleware('permission:academic.assessments.approve')->name('school-academic.assessments.reject');
+        Route::post('/academic/teacher-assignments', [SchoolAcademicController::class, 'storeAssignment'])->middleware('permission:academic.teacher-assignments.manage')->name('school-academic.assignments.store');
+        Route::put('/academic/teacher-assignments/{assignment}', [SchoolAcademicController::class, 'updateAssignment'])->middleware('permission:academic.teacher-assignments.manage')->name('school-academic.assignments.update');
     });
-    Route::middleware('permission:attendance.student.manage')->group(function (): void {
+    Route::middleware('permission:attendance.student.view')->group(function (): void {
         Route::get('/attendance/students', [AttendanceController::class, 'students'])->name('attendance.students');
-        Route::post('/attendance/students', [AttendanceController::class, 'saveStudents'])->name('attendance.students.save');
+        Route::post('/attendance/students', [AttendanceController::class, 'saveStudents'])->middleware('permission:attendance.student.manage')->name('attendance.students.save');
     });
-    Route::middleware('permission:attendance.teacher.manage')->group(function (): void {
+    Route::middleware('permission:attendance.teacher.view')->group(function (): void {
         Route::get('/attendance/teachers', [AttendanceController::class, 'teachers'])->name('attendance.teachers');
-        Route::post('/attendance/teachers', [AttendanceController::class, 'saveTeacher'])->name('attendance.teachers.save');
+        Route::post('/attendance/teachers', [AttendanceController::class, 'saveTeacher'])->middleware('permission:attendance.teacher.manage')->name('attendance.teachers.save');
     });
     Route::middleware('permission:discipline.view')->group(function (): void {
         Route::get('/discipline', [DisciplineController::class, 'index'])->name('discipline.index');
         Route::middleware('permission:discipline.create')->group(function (): void {
             Route::post('/discipline', [DisciplineController::class, 'store'])->name('discipline.store');
-            Route::post('/discipline/categories', [DisciplineController::class, 'storeCategory'])->name('discipline.categories.store');
-            Route::post('/discipline/types', [DisciplineController::class, 'storeType'])->name('discipline.types.store');
+            Route::post('/discipline/categories', [DisciplineController::class, 'storeCategory'])->middleware('permission:discipline.categories.manage')->name('discipline.categories.store');
+            Route::post('/discipline/types', [DisciplineController::class, 'storeType'])->middleware('permission:discipline.types.manage')->name('discipline.types.store');
         });
         Route::put('/discipline/{incident}', [DisciplineController::class, 'update'])->middleware('permission:discipline.edit')->name('discipline.update');
     });
     Route::middleware('permission:medical.view')->group(function (): void {
         Route::get('/medical-records', [MedicalRecordsController::class, 'index'])->name('medical.index');
-        Route::get('/medical-records/{medicalRecord}/download', [MedicalRecordsController::class, 'download'])->name('medical.download');
+        Route::get('/medical-records/{medicalRecord}/download', [MedicalRecordsController::class, 'download'])->middleware('permission:medical.download')->name('medical.download');
         Route::middleware('permission:medical.manage')->group(function (): void {
-            Route::post('/medical-records', [MedicalRecordsController::class, 'store'])->name('medical.store');
-            Route::put('/medical-records/{medicalRecord}', [MedicalRecordsController::class, 'update'])->name('medical.update');
+            Route::post('/medical-records', [MedicalRecordsController::class, 'store'])->middleware('permission:medical.create')->name('medical.store');
+            Route::put('/medical-records/{medicalRecord}', [MedicalRecordsController::class, 'update'])->middleware('permission:medical.edit')->name('medical.update');
         });
     });
-    Route::middleware('permission:academic_year.manage')->group(function (): void {
+    Route::middleware('permission:exam-absences.view')->group(function (): void {
         Route::get('/exam-absences', [ExamAbsencesController::class, 'index'])->name('exam-absences.index');
-        Route::post('/exam-absences', [ExamAbsencesController::class, 'store'])->name('exam-absences.store');
+        Route::post('/exam-absences', [ExamAbsencesController::class, 'store'])->middleware('permission:exam-absences.manage')->name('exam-absences.store');
     });
-    Route::middleware('permission:grades.enter')->group(function (): void {
+    Route::middleware('permission:grades.view')->group(function (): void {
         Route::get('/grades', [GradesController::class, 'index'])->name('grades.index');
-        Route::post('/grades/assessments', [GradesController::class, 'storeAssessment'])->name('grades.assessments.store');
-        Route::put('/grades/assessments/{assessment}', [GradesController::class, 'updateAssessment'])->name('grades.assessments.update');
-        Route::post('/grades', [GradesController::class, 'save'])->name('grades.save');
-        Route::post('/grades/{gradeEntry}/lock', [GradesController::class, 'lock'])->name('grades.lock');
+        Route::get('/grades/assessments/create', [GradesController::class, 'create'])->middleware('permission:grades.create')->name('grades.assessments.create');
+        Route::get('/grades/assessments/{assessment}/edit', [GradesController::class, 'edit'])->middleware('permission:grades.edit')->name('grades.assessments.edit');
+        Route::post('/grades/assessments', [GradesController::class, 'storeAssessment'])->middleware('permission:grades.create')->name('grades.assessments.store');
+        Route::put('/grades/assessments/{assessment}', [GradesController::class, 'updateAssessment'])->middleware('permission:grades.edit')->name('grades.assessments.update');
+        Route::post('/grades', [GradesController::class, 'save'])->middleware('permission:grades.save')->name('grades.save');
+        Route::post('/grades/{gradeEntry}/lock', [GradesController::class, 'lock'])->middleware('permission:grades.lock')->name('grades.lock');
+    Route::post('/collaboration/evaluation-modification-requests', [CollaborationController::class, 'storeModificationRequest'])->middleware('permission:evaluation.modification-requests.create')->name('collaboration.modification-requests.store');
+    Route::post('/collaboration/evaluation-modification-requests/{modificationRequest}/approve', [CollaborationController::class, 'approveModificationRequest'])->middleware('permission:evaluation.modification-requests.approve')->name('collaboration.modification-requests.approve');
+    Route::post('/collaboration/evaluation-modification-requests/{modificationRequest}/reject', [CollaborationController::class, 'rejectModificationRequest'])->middleware('permission:evaluation.modification-requests.reject')->name('collaboration.modification-requests.reject');
     });
     Route::get('/collaboration', [CollaborationController::class, 'index'])->middleware('permission:collaboration.view')->name('collaboration.index');
     Route::get('/collaboration/{section}', [CollaborationController::class, 'index'])
         ->where('section', 'course-content|messages|calendar|performance|performance-dashboard|evaluation-dashboard|evaluation-grades|grade-book|evaluations-list|student-failures|modification-requests|transcript-subject-choice|evaluation-statement|homework|homework-report|homework-totals|homework-comparison|skills-student|skills-approve|remarks-approve|item-remarks|class-remarks|principal-appreciations|remarks-entry|attendance-management|standards|report-card-receipt|icons|system-error-log|bulk-message|students|teachers')
         ->middleware('permission:collaboration.view')
         ->name('collaboration.section');
-    Route::post('/collaboration/announcements', [CollaborationController::class, 'storeAnnouncement'])->middleware('permission:collaboration.manage')->name('collaboration.announcements.store');
-    Route::post('/collaboration/course-content', [CollaborationController::class, 'storeCourseContent'])->middleware('permission:collaboration.manage')->name('collaboration.course-content.store');
-    Route::get('/collaboration/course-content/{courseContent}/download', [CollaborationController::class, 'downloadCourseContent'])->name('collaboration.course-content.download');
-    Route::put('/collaboration/course-content/{courseContent}', [CollaborationController::class, 'updateCourseContent'])->middleware('permission:collaboration.manage')->name('collaboration.course-content.update');
-    Route::delete('/collaboration/course-content/{courseContent}', [CollaborationController::class, 'destroyCourseContent'])->middleware('permission:collaboration.manage')->name('collaboration.course-content.destroy');
-    Route::post('/collaboration/events', [CollaborationController::class, 'storeEvent'])->middleware('permission:collaboration.manage')->name('collaboration.events.store');
-    Route::post('/collaboration/performance-evaluations', [CollaborationController::class, 'storePerformanceEvaluation'])->middleware('permission:performance.manage')->name('collaboration.performance.store');
+    Route::post('/collaboration/announcements', [CollaborationController::class, 'storeAnnouncement'])->middleware('permission:collaboration.announcements.manage')->name('collaboration.announcements.store');
+    Route::post('/collaboration/course-content', [CollaborationController::class, 'storeCourseContent'])->middleware('permission:collaboration.course-content.create')->name('collaboration.course-content.store');
+    Route::get('/collaboration/course-content/{courseContent}/download', [CollaborationController::class, 'downloadCourseContent'])->middleware('permission:collaboration.course-content.download')->name('collaboration.course-content.download');
+    Route::put('/collaboration/course-content/{courseContent}', [CollaborationController::class, 'updateCourseContent'])->middleware('permission:collaboration.course-content.edit')->name('collaboration.course-content.update');
+    Route::delete('/collaboration/course-content/{courseContent}', [CollaborationController::class, 'destroyCourseContent'])->middleware('permission:collaboration.course-content.delete')->name('collaboration.course-content.destroy');
+    Route::post('/collaboration/events', [CollaborationController::class, 'storeEvent'])->middleware('permission:collaboration.events.manage')->name('collaboration.events.store');
+    Route::post('/collaboration/performance-evaluations', [CollaborationController::class, 'storePerformanceEvaluation'])->middleware('permission:performance.create')->name('collaboration.performance.store');
     Route::middleware('permission:timetable.view')->group(function (): void {
         Route::get('/timetable', [TimetableController::class, 'index'])->name('timetable.index');
         Route::middleware('permission:timetable.manage')->group(function (): void {
-            Route::post('/timetable/periods', [TimetableController::class, 'storePeriod'])->name('timetable.periods.store');
-            Route::post('/timetable/generate', [TimetableController::class, 'generate'])->name('timetable.generate');
-            Route::post('/timetable/entries', [TimetableController::class, 'store'])->name('timetable.entries.store');
-            Route::put('/timetable/entries/{timetableEntry}', [TimetableController::class, 'update'])->name('timetable.entries.update');
-            Route::delete('/timetable/entries/{timetableEntry}', [TimetableController::class, 'destroy'])->name('timetable.entries.destroy');
+            Route::post('/timetable/periods', [TimetableController::class, 'storePeriod'])->middleware('permission:timetable.periods.manage')->name('timetable.periods.store');
+            Route::delete('/timetable/periods/{timetablePeriod}', [TimetableController::class, 'destroyPeriod'])->middleware('permission:timetable.periods.manage')->name('timetable.periods.destroy');
+            Route::post('/timetable/generate', [TimetableController::class, 'generate'])->middleware('permission:timetable.entries.create')->name('timetable.generate');
+            Route::post('/timetable/entries', [TimetableController::class, 'store'])->middleware('permission:timetable.entries.create')->name('timetable.entries.store');
+            Route::put('/timetable/entries/{timetableEntry}', [TimetableController::class, 'update'])->middleware('permission:timetable.entries.edit')->name('timetable.entries.update');
+            Route::delete('/timetable/entries/{timetableEntry}', [TimetableController::class, 'destroy'])->middleware('permission:timetable.entries.delete')->name('timetable.entries.destroy');
         });
     });
-    Route::middleware('permission:substitutions.manage')->group(function (): void {
+    Route::middleware('permission:substitutions.view')->group(function (): void {
         Route::get('/teacher-substitutions', [SubstitutionsController::class, 'index'])->name('substitutions.index');
-        Route::post('/teacher-substitutions/{teacherSubstitution}', [SubstitutionsController::class, 'assign'])->name('substitutions.assign');
-        Route::post('/teacher-substitutions/{teacherSubstitution}/recommend', [SubstitutionsController::class, 'recommend'])->name('substitutions.recommend');
+        Route::post('/teacher-substitutions/{teacherSubstitution}', [SubstitutionsController::class, 'assign'])->middleware('permission:substitutions.assign')->name('substitutions.assign');
+        Route::post('/teacher-substitutions/{teacherSubstitution}/recommend', [SubstitutionsController::class, 'recommend'])->middleware('permission:substitutions.recommend')->name('substitutions.recommend');
     });
-    Route::middleware('permission:people.manage')->group(function (): void {
+    Route::middleware('permission:people.view')->group(function (): void {
         Route::get('/teachers', [PeopleController::class, 'teachers'])->name('teachers.index');
-        Route::post('/teachers', [PeopleController::class, 'storeTeacher'])->name('teachers.store');
         Route::get('/teachers/{teacher}', [PeopleController::class, 'showTeacher'])->name('teachers.show');
         Route::get('/responsible-persons', [PeopleController::class, 'responsible'])->name('responsible.index');
         Route::get('/responsible-persons/students/search', [PeopleController::class, 'searchStudents'])->name('responsible.students.search');
-        Route::post('/responsible-persons', [PeopleController::class, 'storeResponsible'])->name('responsible.store');
-        Route::get('/responsible-persons/{responsiblePerson}/edit', [PeopleController::class, 'editResponsible'])->name('responsible.edit');
-        Route::put('/responsible-persons/{responsiblePerson}', [PeopleController::class, 'updateResponsible'])->name('responsible.update');
-        Route::delete('/responsible-persons/{responsiblePerson}', [PeopleController::class, 'destroyResponsible'])->name('responsible.destroy');
+        Route::post('/teachers', [PeopleController::class, 'storeTeacher'])->middleware('permission:people.manage')->name('teachers.store');
+        Route::post('/responsible-persons', [PeopleController::class, 'storeResponsible'])->middleware('permission:people.manage')->name('responsible.store');
+        Route::get('/responsible-persons/{responsiblePerson}/edit', [PeopleController::class, 'editResponsible'])->middleware('permission:people.manage')->name('responsible.edit');
+        Route::put('/responsible-persons/{responsiblePerson}', [PeopleController::class, 'updateResponsible'])->middleware('permission:people.manage')->name('responsible.update');
+        Route::delete('/responsible-persons/{responsiblePerson}', [PeopleController::class, 'destroyResponsible'])->middleware('permission:people.manage')->name('responsible.destroy');
     });
     Route::middleware('permission:class-lists.view')->group(function (): void {
         Route::get('/class-book-lists', [ClassBookListsController::class, 'index'])->name('class-lists.index');
-        Route::get('/class-book-lists/{classBookList}/print', [ClassBookListsController::class, 'print'])->name('class-lists.print');
+        Route::get('/class-book-lists/{classBookList}/print', [ClassBookListsController::class, 'print'])->middleware('permission:class-lists.print')->name('class-lists.print');
     });
     Route::middleware('permission:class-lists.manage')->group(function (): void {
-        Route::get('/class-book-lists/create', [ClassBookListsController::class, 'create'])->name('class-lists.create');
-        Route::post('/class-book-lists', [ClassBookListsController::class, 'store'])->name('class-lists.store');
+        Route::get('/class-book-lists/create', [ClassBookListsController::class, 'create'])->middleware('permission:class-lists.create')->name('class-lists.create');
+        Route::post('/class-book-lists', [ClassBookListsController::class, 'store'])->middleware('permission:class-lists.create')->name('class-lists.store');
     });
     Route::middleware('permission:reports.view')->group(function (): void {
         Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
-        Route::get('/reports/csv', [ReportsController::class, 'csv'])->name('reports.csv');
+        Route::get('/reports/csv', [ReportsController::class, 'csv'])->middleware('permission:reports.export')->name('reports.csv');
         Route::get('/reports/school', [SchoolReportsController::class, 'index'])->name('reports.school');
-        Route::get('/reports/school/print', [SchoolReportsController::class, 'print'])->name('reports.school.print');
+        Route::get('/reports/school/print', [SchoolReportsController::class, 'print'])->middleware('permission:reports.print')->name('reports.school.print');
         Route::get('/reports/school/csv', [SchoolReportsController::class, 'csv'])->middleware('permission:reports.export')->name('reports.school.csv');
     });
     Route::middleware('permission:admin.manage')->group(function (): void {
-        Route::get('/admin/users', [AdministrationController::class, 'users'])->name('admin.users');
-        Route::post('/admin/users', [AdministrationController::class, 'storeUser'])->name('admin.users.store');
-        Route::get('/admin/users/{user}/access', [AdministrationController::class, 'editUserAccess'])->name('admin.users.access.edit');
-        Route::put('/admin/users/{user}/access', [AdministrationController::class, 'updateUserAccess'])->name('admin.users.access.update');
-        Route::post('/admin/users/{user}/toggle', [AdministrationController::class, 'toggleUser'])->name('admin.users.toggle');
-        Route::delete('/admin/users/{user}', [AdministrationController::class, 'destroyUser'])->name('admin.users.destroy');
+        Route::get('/admin/users', [AdministrationController::class, 'users'])->middleware('permission:admin.users.view')->name('admin.users');
+        Route::post('/admin/users', [AdministrationController::class, 'storeUser'])->middleware('permission:admin.users.create')->name('admin.users.store');
+        Route::get('/admin/users/{user}/access', [AdministrationController::class, 'editUserAccess'])->middleware('permission:admin.users.access.view')->name('admin.users.access.edit');
+        Route::put('/admin/users/{user}/access', [AdministrationController::class, 'updateUserAccess'])->middleware('permission:admin.users.access.manage')->name('admin.users.access.update');
+        Route::get('/admin/users/{user}/edit', [AdministrationController::class, 'editUser'])->middleware('permission:admin.users.edit')->name('admin.users.edit');
+        Route::put('/admin/users/{user}', [AdministrationController::class, 'updateUser'])->middleware('permission:admin.users.edit')->name('admin.users.update');
+        Route::get('/admin/users/{user}/photo', [AdministrationController::class, 'userPhoto'])->middleware('permission:admin.users.view')->name('admin.users.photo');
+        Route::post('/admin/users/{user}/toggle', [AdministrationController::class, 'toggleUser'])->middleware('permission:admin.users.toggle')->name('admin.users.toggle');
+        Route::delete('/admin/users/{user}', [AdministrationController::class, 'destroyUser'])->middleware('permission:admin.users.delete')->name('admin.users.destroy');
         Route::post('/admin/users/{user}/controller-administrator', [AdministrationController::class, 'transferControllerAuthority'])->middleware('can:manage-branches')->name('admin.users.controller.transfer');
-        Route::get('/admin/audit', [AdministrationController::class, 'audit'])->name('admin.audit');
+        Route::get('/admin/audit', [AdministrationController::class, 'audit'])->middleware(['permission:admin.audit.view', 'can:manage-branches'])->name('admin.audit');
     });
     Route::middleware(['permission:admin.manage', 'can:manage-branches'])->group(function (): void {
         // Keep the legacy URL working, but manage access from each user row instead.
-        Route::get('/admin/roles', fn () => redirect()->route('admin.users'))->name('admin.roles');
-        Route::get('/admin/recycle-bin', [AdministrationController::class, 'recycleBin'])->name('admin.recycle');
-        Route::post('/admin/recycle-bin/{type}/{id}', [AdministrationController::class, 'restore'])->name('admin.recycle.restore');
-        Route::get('/admin/settings', [AdministrationController::class, 'settings'])->name('admin.settings');
-        Route::put('/admin/settings', [AdministrationController::class, 'saveSettings'])->name('admin.settings.update');
+        Route::get('/admin/roles', fn () => redirect()->route('admin.users'))->middleware('permission:admin.roles.view')->name('admin.roles');
+        Route::get('/admin/recycle-bin', [AdministrationController::class, 'recycleBin'])->middleware('permission:admin.recycle.view')->name('admin.recycle');
+        Route::post('/admin/recycle-bin/{type}/{id}', [AdministrationController::class, 'restore'])->middleware('permission:admin.recycle.restore')->name('admin.recycle.restore');
+        Route::get('/admin/settings', [AdministrationController::class, 'settings'])->middleware('permission:admin.settings.view')->name('admin.settings');
+        Route::put('/admin/settings', [AdministrationController::class, 'saveSettings'])->middleware('permission:admin.settings.manage')->name('admin.settings.update');
     });
-    Route::middleware(['permission:admin.manage', 'can:manage-branches'])->group(function (): void {
+    Route::middleware(['permission:admin.branches.view', 'can:manage-branches'])->group(function (): void {
         Route::get('/admin/branches', [BranchesController::class, 'index'])->name('branches.index');
-        Route::post('/admin/branches', [BranchesController::class, 'store'])->name('branches.store');
-        Route::put('/admin/branches/{branch}', [BranchesController::class, 'update'])->name('branches.update');
-        Route::delete('/admin/branches/{branch}', [BranchesController::class, 'destroy'])->name('branches.destroy');
+        Route::get('/admin/branches/users/search', [BranchesController::class, 'searchUsers'])->name('branches.users.search');
+        Route::post('/admin/branches', [BranchesController::class, 'store'])->middleware('permission:admin.branches.manage')->name('branches.store');
+        Route::put('/admin/branches/{branch}', [BranchesController::class, 'update'])->middleware('permission:admin.branches.manage')->name('branches.update');
+        Route::delete('/admin/branches/{branch}', [BranchesController::class, 'destroy'])->middleware('permission:admin.branches.manage')->name('branches.destroy');
     });
-    Route::middleware(['permission:admin.manage', 'can:manage-branches'])->group(function (): void {
+    Route::middleware(['permission:admin.imports.view', 'can:manage-branches'])->group(function (): void {
         Route::get('/admin/imports', [DataImportController::class, 'index'])->name('admin.imports');
-        Route::post('/admin/imports/students', [DataImportController::class, 'students'])->name('admin.imports.students');
-        Route::post('/admin/imports/books', [DataImportController::class, 'books'])->name('admin.imports.books');
+        Route::post('/admin/imports/students', [DataImportController::class, 'students'])->middleware('permission:admin.imports.manage')->name('admin.imports.students');
+        Route::post('/admin/imports/books', [DataImportController::class, 'books'])->middleware('permission:admin.imports.manage')->name('admin.imports.books');
     });
 
     /*

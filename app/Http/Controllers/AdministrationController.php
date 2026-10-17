@@ -35,20 +35,44 @@ class AdministrationController extends Controller
         $filters = $request->validate([
             'status' => ['nullable', Rule::in(['active', 'disabled', 'all'])],
             'role_id' => ['nullable', 'integer', 'exists:roles,id'],
+            'person_type' => ['nullable', Rule::in(['all', 'teachers', 'students', 'staff', 'parents'])],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'q' => ['nullable', 'string', 'max:120'],
         ]);
         $status = $filters['status'] ?? 'active';
+        $personType = $filters['person_type'] ?? 'all';
+        // Only the Controller Administrator can switch the directory scope.
+        // Branch administrators are always restricted to their active branch.
+        $selectedBranchId = $canManageBranchAssignments
+            ? ($filters['branch_id'] ?? null)
+            : $currentBranchId;
         $query = User::with('roles', 'branches', 'student')
-            ->when(! $canManageBranchAssignments, function ($users) use ($currentBranchId): void {
-                $users->where(function ($scopedUsers) use ($currentBranchId): void {
-                    $scopedUsers->whereHas('branches', fn ($assignedBranches) => $assignedBranches->whereKey($currentBranchId))
-                        ->orWhereHas('student', fn ($students) => $students->withoutGlobalScopes()->where('branch_id', $currentBranchId));
+            ->when($selectedBranchId !== null, function ($users) use ($selectedBranchId): void {
+                $users->where(function ($scopedUsers) use ($selectedBranchId): void {
+                    $scopedUsers->whereHas('branches', fn ($assignedBranches) => $assignedBranches->whereKey($selectedBranchId))
+                        ->orWhereHas('student', fn ($students) => $students->withoutGlobalScopes()->where('branch_id', $selectedBranchId));
                 });
             })
             ->when($status !== 'all', fn ($users) => $users->where('is_active', $status === 'active'))
             ->when($filters['role_id'] ?? null, fn ($users, $roleId) => $users->whereHas('roles', fn ($roles) => $roles->whereKey($roleId)))
+            ->when($personType === 'teachers', fn ($users) => $users->where(function ($people): void {
+                $people->whereNotNull('teacher_id')->orWhereHas('roles', fn ($roles) => $roles->where('name', 'teacher'));
+            }))
+            ->when($personType === 'students', fn ($users) => $users->where(function ($people): void {
+                $people->whereNotNull('student_id')->orWhereHas('roles', fn ($roles) => $roles->where('name', 'student'));
+            }))
+            ->when($personType === 'staff', fn ($users) => $users
+                ->whereNull('teacher_id')
+                ->whereNull('student_id')
+                ->whereDoesntHave('roles', fn ($roles) => $roles->whereIn('name', ['student', 'teacher'])))
+            ->when($personType === 'parents', fn ($users) => $users->whereRaw('1 = 0'))
             ->when($filters['q'] ?? null, fn ($users, $search) => $users->where(function ($names) use ($search): void {
                 $names->where('name', 'like', '%'.$search.'%')->orWhere('email', 'like', '%'.$search.'%')
+                    ->orWhereHas('teacher', fn ($teachers) => $teachers->where(function ($teacherSearch) use ($search): void {
+                        $teacherSearch->where('first_name', 'like', '%'.$search.'%')
+                            ->orWhere('last_name', 'like', '%'.$search.'%')
+                            ->orWhere('employee_number', 'like', '%'.$search.'%');
+                    }))
                     ->orWhereHas('student', fn ($students) => $students->withoutGlobalScopes()->where(function ($studentSearch) use ($search): void {
                         $studentSearch->where('student_number', 'like', '%'.$search.'%')
                             ->orWhere('first_name', 'like', '%'.$search.'%')
@@ -56,17 +80,40 @@ class AdministrationController extends Controller
                     }));
             }));
 
+        $parentStudentScope = function ($students) use ($selectedBranchId): void {
+            $students->withoutGlobalScopes()
+                ->when($selectedBranchId !== null, fn ($students) => $students->where('students.branch_id', $selectedBranchId));
+        };
+        $parents = ResponsiblePerson::query()
+            ->with(['students' => $parentStudentScope])
+            ->when($selectedBranchId !== null, fn ($people) => $people->where('branch_id', $selectedBranchId))
+            ->when($filters['q'] ?? null, fn ($people, $search) => $people->where(function ($matches) use ($search): void {
+                $matches->where('full_name', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.$search.'%')
+                    ->orWhere('phone', 'like', '%'.$search.'%')
+                    ->orWhere('parent_code', 'like', '%'.$search.'%')
+                    ->orWhereHas('students', fn ($students) => $students
+                        ->withoutGlobalScopes()
+                        ->when($selectedBranchId !== null, fn ($students) => $students->where('students.branch_id', $selectedBranchId))
+                        ->where(function ($studentSearch) use ($search): void {
+                            $studentSearch->where('student_number', 'like', '%'.$search.'%')
+                                ->orWhere('first_name', 'like', '%'.$search.'%')
+                                ->orWhere('last_name', 'like', '%'.$search.'%');
+                        }));
+            }))
+            ->orderBy('full_name')
+            ->paginate(20, ['*'], 'parents_page')
+            ->withQueryString();
+
         return view('admin.users', [
             'users' => $query->orderBy('name')->paginate(20)->withQueryString(),
-            'filters' => $filters + ['status' => $status],
+            'parents' => $parents,
+            'filters' => $filters + ['status' => $status, 'person_type' => $personType, 'branch_id' => $selectedBranchId],
             'roles' => Role::orderBy('label')->get(),
             'branches' => Branch::where('is_active', true)->orderBy('name')->get(),
             'canManageBranchAssignments' => $canManageBranchAssignments,
             'currentBranchId' => $currentBranchId,
             'teachers' => Teacher::where('is_active', true)->orderBy('first_name')->get(),
-            'students' => ($canManageBranchAssignments ? Student::withoutGlobalScopes() : Student::query())
-                ->with('branch', 'registrations.grade', 'registrations.section')
-                ->orderBy('first_name')->orderBy('last_name')->get(),
         ]);
     }
 
@@ -76,6 +123,9 @@ class AdministrationController extends Controller
         $currentBranchId = $branches->id();
         $canManageBranchAssignments = $actor->isControllerAdministrator();
         abort_unless($actor->canManageUsersInBranch($currentBranchId), 403);
+        if ($canManageBranchAssignments && $request->filled('branch_id') && ! $request->has('branch_ids')) {
+            $request->merge(['branch_ids' => [$request->input('branch_id')], 'default_branch_id' => $request->input('branch_id')]);
+        }
         $role = $canManageBranchAssignments ? Role::find($request->integer('role_id')) : Role::where('name', 'employee')->first();
         $roleName = $role?->name;
         $data = $request->validate([
@@ -83,9 +133,9 @@ class AdministrationController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', 'unique:users,whatsapp_number'],
             'teacher_id' => [Rule::requiredIf($roleName === 'teacher'), 'nullable', 'integer', 'exists:teachers,id', Rule::unique('users', 'teacher_id')],
-            'student_id' => [Rule::requiredIf($roleName === 'student'), 'nullable', 'integer', 'exists:students,id', Rule::unique('users', 'student_id')],
             'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()],
             'role_id' => [$canManageBranchAssignments ? 'required' : 'nullable', 'exists:roles,id'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'branch_ids' => [Rule::requiredIf($canManageBranchAssignments), 'array', 'min:1'],
             'branch_ids.*' => ['integer', 'exists:branches,id'],
             'default_branch_id' => [Rule::requiredIf($canManageBranchAssignments), 'nullable', 'integer', 'exists:branches,id'],
@@ -94,29 +144,34 @@ class AdministrationController extends Controller
             'branch_administrator_ids.*' => ['integer', 'exists:branches,id'],
         ]);
 
-        $this->ensureStudentBranchAssignment($roleName, $data, $canManageBranchAssignments);
-
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'whatsapp_number' => $data['whatsapp_number'] ?? null,
-            'teacher_id' => $data['teacher_id'] ?? null,
-            'student_id' => $data['student_id'] ?? null,
-            'password' => $data['password'],
-            'is_active' => true,
-            'has_all_branch_access' => false,
-        ]);
-        $roleId = $canManageBranchAssignments
-            ? (int) $data['role_id']
-            : (int) Role::where('name', 'employee')->value('id');
-        $user->roles()->sync([$roleId]);
-        $branchIds = $data['branch_ids'] ?? [];
-        $defaultBranchId = isset($data['default_branch_id']) ? (int) $data['default_branch_id'] : null;
-        if ($canManageBranchAssignments && ($branchIds !== [] || $user->hasRole('super-administrator'))) {
-            $this->syncBranches($user, $branchIds, $defaultBranchId, $data['branch_administrator_ids'] ?? []);
-        } elseif ($currentBranchId) {
-            $user->branches()->syncWithoutDetaching([$currentBranchId => ['is_default' => true, 'is_branch_administrator' => false]]);
+        if ($roleName === 'student') {
+            throw ValidationException::withMessages([
+                'role_id' => 'Student accounts must be created from the parent/guardian profile so every student is linked to a family record.',
+            ]);
         }
+
+        DB::transaction(function () use ($data, $canManageBranchAssignments, $currentBranchId): void {
+            $user = User::create([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'whatsapp_number' => $data['whatsapp_number'] ?? null,
+                'teacher_id' => $data['teacher_id'] ?? null,
+                'password' => $data['password'],
+                'is_active' => true,
+                'has_all_branch_access' => false,
+            ]);
+            $roleId = $canManageBranchAssignments
+                ? (int) $data['role_id']
+                : (int) Role::where('name', 'employee')->value('id');
+            $user->roles()->sync([$roleId]);
+            $branchIds = $data['branch_ids'] ?? [];
+            $defaultBranchId = isset($data['default_branch_id']) ? (int) $data['default_branch_id'] : null;
+            if ($canManageBranchAssignments && ($branchIds !== [] || $user->hasRole('super-administrator'))) {
+                $this->syncBranches($user, $branchIds, $defaultBranchId, $data['branch_administrator_ids'] ?? []);
+            } elseif ($currentBranchId) {
+                $user->branches()->syncWithoutDetaching([$currentBranchId => ['is_default' => true, 'is_branch_administrator' => false]]);
+            }
+        });
 
         return back()->with('success', 'User account created.');
     }
@@ -163,7 +218,20 @@ class AdministrationController extends Controller
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:max_width=3000,max_height=3000'],
             'remove_profile_photo' => ['nullable', 'boolean'],
         ]);
+        if ($roleName === 'student' && $user->student_id === null) {
+            throw ValidationException::withMessages([
+                'role_id' => 'Student accounts must be created from the parent/guardian profile so every student is linked to a family record.',
+            ]);
+        }
+        if ($roleName === 'student' && (int) ($data['student_id'] ?? 0) !== (int) $user->student_id) {
+            throw ValidationException::withMessages([
+                'student_id' => 'An existing student portal account cannot be moved to another student from Users and Access. Update it from the family profile instead.',
+            ]);
+        }
         $this->ensureStudentBranchAssignment($roleName, $data, $canManageBranchAssignments);
+        if ($canManageBranchAssignments) {
+            $this->ensureResponsibleBranchesRemain($user, $data['branch_administrator_ids'] ?? []);
+        }
 
         $attributes = [
             'name' => $data['name'],
@@ -176,7 +244,21 @@ class AdministrationController extends Controller
             $attributes['password'] = $data['password'];
         }
 
-        $user->update($attributes);
+        if ($canManageBranchAssignments && $user->is_controller_administrator && Role::whereKey($data['role_id'])->where('name', '!=', 'super-administrator')->exists()) {
+            abort(422, 'The Controller Administrator must remain a Branch Super Administrator.');
+        }
+        DB::transaction(function () use ($user, $attributes, $data, $canManageBranchAssignments): void {
+            $user->update($attributes);
+            if ($canManageBranchAssignments) {
+                $user->roles()->sync([(int) $data['role_id']]);
+                $this->syncBranches(
+                    $user,
+                    $data['branch_ids'] ?? [],
+                    isset($data['default_branch_id']) ? (int) $data['default_branch_id'] : null,
+                    $data['branch_administrator_ids'] ?? [],
+                );
+            }
+        });
         if ($request->hasFile('profile_photo')) {
             $oldPhoto = $user->profile_photo_path;
             $newPhoto = $request->file('profile_photo')->store('user-profile-photos/'.$user->public_id, 'public');
@@ -188,19 +270,6 @@ class AdministrationController extends Controller
             Storage::disk('public')->delete($user->profile_photo_path);
             $user->update(['profile_photo_path' => null]);
         }
-        if ($canManageBranchAssignments) {
-            if ($user->is_controller_administrator && Role::whereKey($data['role_id'])->where('name', '!=', 'super-administrator')->exists()) {
-                abort(422, 'The Controller Administrator must remain a Branch Super Administrator.');
-            }
-            $user->roles()->sync([(int) $data['role_id']]);
-            $this->syncBranches(
-                $user,
-                $data['branch_ids'] ?? [],
-                isset($data['default_branch_id']) ? (int) $data['default_branch_id'] : null,
-                $data['branch_administrator_ids'] ?? [],
-            );
-        }
-
         return redirect()->route('admin.users')->with('success', 'User account updated.');
     }
 
@@ -230,6 +299,9 @@ class AdministrationController extends Controller
         $this->ensureCanManageUser(auth()->user(), $user, $branches->id());
         abort_if($user->is(auth()->user()), 422, 'You cannot disable your own account.');
         abort_if($user->is_controller_administrator, 422, 'Transfer Controller Administrator authority before disabling this account.');
+        if ($user->is_active) {
+            abort_if($user->branches()->where('branches.is_active', true)->wherePivot('is_branch_administrator', true)->exists(), 422, 'Transfer this user’s Branch Super Administrator responsibility before disabling the account.');
+        }
         $user->update(['is_active' => ! $user->is_active]);
 
         return back()->with('success', 'User status updated.');
@@ -240,6 +312,7 @@ class AdministrationController extends Controller
         $this->ensureCanManageUser(auth()->user(), $user, $branches->id());
         abort_if($user->is(auth()->user()), 422, 'You cannot delete your own account.');
         abort_if($user->is_controller_administrator, 422, 'Transfer Controller Administrator authority before deleting this account.');
+        abort_if($user->branches()->where('branches.is_active', true)->wherePivot('is_branch_administrator', true)->exists(), 422, 'Transfer this user’s Branch Super Administrator responsibility before deleting the account.');
 
         if ($user->hasRole('super-administrator')) {
             $hasAnotherActiveAdministrator = User::query()
@@ -358,6 +431,7 @@ class AdministrationController extends Controller
 
     private function syncBranches(User $user, array $branchIds, ?int $defaultBranchId, array $branchAdministratorIds = []): void
     {
+        $this->ensureResponsibleBranchesRemain($user, $branchAdministratorIds);
         $branchIds = array_map('intval', $branchIds);
         $branchAdministratorIds = array_map('intval', $branchAdministratorIds);
         $defaultBranchId = $defaultBranchId === null ? null : (int) $defaultBranchId;
@@ -368,10 +442,12 @@ class AdministrationController extends Controller
             abort(422, 'A branch administrator must be assigned to that branch.');
         }
         if ($branchAdministratorIds !== [] && ! $user->hasRole('super-administrator')) {
-            abort(422, 'Only a Branch Super Administrator can be responsible for a branch.');
+            abort(422, 'Only a Branch Administrator can be responsible for a branch.');
         }
-        if ($user->hasRole('super-administrator') && ! $user->isControllerAdministrator() && $branchAdministratorIds === []) {
-            abort(422, 'A Branch Super Administrator must be responsible for at least one assigned branch.');
+        if ($defaultBranchId === null && $branchIds !== []) {
+            $existingDefault = $user->branches()->wherePivot('is_default', true)->value('branches.id');
+            $defaultBranchId = $existingDefault && in_array((int) $existingDefault, $branchIds, true)
+                ? (int) $existingDefault : $branchIds[0];
         }
 
         foreach ($branchAdministratorIds as $branchId) {
@@ -385,6 +461,18 @@ class AdministrationController extends Controller
             'is_default' => (int) $id === $defaultBranchId,
             'is_branch_administrator' => in_array((int) $id, $branchAdministratorIds, true),
         ]])->all());
+    }
+
+    private function ensureResponsibleBranchesRemain(User $user, array $branchAdministratorIds): void
+    {
+        $retained = array_map('intval', $branchAdministratorIds);
+        $currentlyResponsible = $user->branches()->where('branches.is_active', true)
+            ->wherePivot('is_branch_administrator', true)->pluck('branches.id')->map(fn ($id) => (int) $id)->all();
+        if (array_diff($currentlyResponsible, $retained) !== []) {
+            throw ValidationException::withMessages([
+                'branch_administrator_ids' => 'Assign another responsible Branch Super Administrator from the Branches page before removing this responsibility.',
+            ]);
+        }
     }
 
     private function ensureCanManageUser(User $actor, User $managedUser, ?int $branchId): void

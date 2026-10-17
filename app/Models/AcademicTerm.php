@@ -28,4 +28,24 @@ class AcademicTerm extends Model
     {
         return $this->hasMany(Assessment::class);
     }
+
+    public static function activeForYear(?int $academicYearId): ?self
+    {
+        if (! $academicYearId) {
+            return null;
+        }
+
+        $openTerms = static::query()
+            ->where('academic_year_id', $academicYearId)
+            ->where('status', 'open');
+
+        return (clone $openTerms)
+            ->whereDate('starts_on', '<=', today())
+            ->whereDate('ends_on', '>=', today())
+            ->orderBy('ends_on')
+            ->orderByDesc('sort_order')
+            ->orderByDesc('id')
+            ->first()
+            ?? $openTerms->orderBy('sort_order')->orderBy('starts_on')->orderBy('id')->first();
+    }
 }

@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\AcademicYear;
 use App\Models\Grade;
 use App\Models\TeacherAssignment;
+use App\Models\TeacherSubstitution;
 use App\Models\TimetableEntry;
 use App\Models\TimetablePeriod;
 use App\Services\AuditService;
@@ -14,13 +15,14 @@ use App\Services\TimetableService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class TimetableController extends Controller
 {
-    private const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+    private const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday'];
 
     public function index(Request $request): View
     {
@@ -34,6 +36,13 @@ class TimetableController extends Controller
         $gradeId = $filters['grade_id'] ?? $grades->first()?->id;
         $sectionId = $filters['section_id'] ?? $grades->firstWhere('id', $gradeId)?->sections->first()?->id;
         $periods = TimetablePeriod::query()->where('academic_year_id', $yearId)->orderBy('period_number')->get();
+        $periodLessonCounts = $periods->mapWithKeys(fn (TimetablePeriod $period) => [
+            $period->id => TimetableEntry::withoutGlobalScopes()
+                ->where('branch_id', $period->branch_id)
+                ->where('academic_year_id', $period->academic_year_id)
+                ->where('period_number', $period->period_number)
+                ->count(),
+        ]);
         $entries = TimetableEntry::query()->with('teacher', 'subject', 'assignment')
             ->where('academic_year_id', $yearId)
             ->when($gradeId, fn ($query) => $query->where('grade_id', $gradeId))
@@ -45,13 +54,31 @@ class TimetableController extends Controller
             ->when($gradeId, fn ($query) => $query->where('grade_id', $gradeId))
             ->when($sectionId, fn ($query) => $query->where(fn ($scoped) => $scoped->where('section_id', $sectionId)->orWhereNull('section_id')))
             ->get();
+        $classEntries = $gradeId && $sectionId
+            ? TimetableEntry::query()->where('academic_year_id', $yearId)->where('grade_id', $gradeId)->where('section_id', $sectionId)->get()
+            : collect();
+        $lessonPeriodNumbers = $periods->where('kind', 'lesson')->pluck('period_number')->all();
+        $generationSummary = [
+            'configured_assignments' => $assignments->filter(fn (TeacherAssignment $assignment) => $assignment->required_periods_per_week > 0)->count(),
+            'missing_lessons' => $assignments->sum(fn (TeacherAssignment $assignment) => max(
+                0,
+                (int) $assignment->required_periods_per_week - $classEntries->where('teacher_assignment_id', $assignment->id)->count()
+            )),
+            'open_slots' => max(0, count(self::DAYS) * count($lessonPeriodNumbers) - $classEntries
+                ->filter(fn (TimetableEntry $entry) => in_array(strtolower((string) $entry->day_of_week), self::DAYS, true)
+                    && in_array($entry->period_number, $lessonPeriodNumbers, true))
+                ->unique(fn (TimetableEntry $entry) => strtolower((string) $entry->day_of_week).'-'.$entry->period_number)
+                ->count()),
+        ];
 
         return view('timetable.index', [
             'years' => AcademicYear::query()->orderByDesc('starts_on')->get(),
             'grades' => $grades,
             'periods' => $periods,
+            'periodLessonCounts' => $periodLessonCounts,
             'entries' => $entries,
             'assignments' => $assignments,
+            'generationSummary' => $generationSummary,
             'filters' => $filters + ['academic_year_id' => $yearId, 'grade_id' => $gradeId, 'section_id' => $sectionId],
             'days' => self::DAYS,
         ]);
@@ -71,6 +98,37 @@ class TimetableController extends Controller
         $audit->log('timetable_period.saved', $period, [], $period->only(['academic_year_id', 'period_number', 'label', 'kind']));
 
         return back()->with('success', 'Timetable period saved.');
+    }
+
+    public function destroyPeriod(TimetablePeriod $timetablePeriod, AuditService $audit): RedirectResponse
+    {
+        $removed = DB::transaction(function () use ($timetablePeriod, $audit): int {
+            $period = TimetablePeriod::query()->whereKey($timetablePeriod->id)->lockForUpdate()->firstOrFail();
+            $entries = TimetableEntry::withoutGlobalScopes()
+                ->where('branch_id', $period->branch_id)
+                ->where('academic_year_id', $period->academic_year_id)
+                ->where('period_number', $period->period_number)
+                ->lockForUpdate()
+                ->get();
+
+            if (TeacherSubstitution::withoutGlobalScopes()->whereIn('timetable_entry_id', $entries->pluck('id'))->exists()) {
+                throw ValidationException::withMessages([
+                    'period' => 'This period has lessons with substitution records. Resolve those records before deleting the entire period.',
+                ]);
+            }
+
+            foreach ($entries as $entry) {
+                $audit->log('timetable_entry.deleted', $entry, $entry->only(['teacher_assignment_id', 'day_of_week', 'period_number']), []);
+                $entry->delete();
+            }
+
+            $audit->log('timetable_period.deleted', $period, $period->only(['academic_year_id', 'period_number', 'label', 'starts_at', 'ends_at', 'kind']), []);
+            $period->delete();
+
+            return $entries->count();
+        });
+
+        return back()->with('success', 'Timetable period and '.$removed.' scheduled lesson'.($removed === 1 ? '' : 's').' removed.');
     }
 
     public function generate(Request $request, TimetableService $timetable, AuditService $audit): RedirectResponse
@@ -105,9 +163,30 @@ class TimetableController extends Controller
         $classEntries = $entries->where('grade_id', $data['grade_id'])->where('section_id', $data['section_id']);
         $occupiedClass = $classEntries->mapWithKeys(fn (TimetableEntry $entry) => [strtolower((string) $entry->day_of_week).'-'.$entry->period_number => true])->all();
         $occupiedTeachers = $entries->mapWithKeys(fn (TimetableEntry $entry) => [$entry->teacher_id.'-'.strtolower((string) $entry->day_of_week).'-'.$entry->period_number => true])->all();
-        $assignmentCounts = $entries->groupBy('teacher_assignment_id')->map->count()->all();
+        $assignmentCounts = $classEntries->groupBy('teacher_assignment_id')->map->count()->all();
         $teacherCounts = $entries->groupBy('teacher_id')->map->count()->all();
         $classDayLoads = $classEntries->groupBy(fn (TimetableEntry $entry) => strtolower((string) $entry->day_of_week))->map->count()->all();
+        if ($assignments->isEmpty()) {
+            return back()->with('error', 'No weekly lessons are configured for this class. Set the required periods per week in Teacher Subject Assignments first.');
+        }
+        $missingLessons = $assignments->sum(fn (TeacherAssignment $assignment) => max(0,
+            (int) $assignment->required_periods_per_week - (int) ($assignmentCounts[$assignment->id] ?? 0)
+        ));
+        if ($missingLessons === 0) {
+            return back()->with('success', 'All required weekly lessons are already scheduled for this class.');
+        }
+        $hasOpenSlot = false;
+        foreach (self::DAYS as $day) {
+            foreach ($periods as $period) {
+                if (! isset($occupiedClass[$day.'-'.$period->period_number])) {
+                    $hasOpenSlot = true;
+                    break 2;
+                }
+            }
+        }
+        if (! $hasOpenSlot) {
+            return back()->with('error', 'No empty lesson periods remain for this class. Move or remove a lesson, or add more lesson periods.');
+        }
         $assignmentDayLoads = [];
         $created = 0;
         $unscheduled = [];
@@ -197,7 +276,7 @@ class TimetableController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        return back()->with('success', 'Timetable lesson moved.');
+        return back()->with('success', 'Timetable lesson updated.');
     }
 
     public function destroy(Request $request, TimetableEntry $timetableEntry, AuditService $audit): RedirectResponse|JsonResponse
@@ -220,7 +299,7 @@ class TimetableController extends Controller
             'day_of_week' => ['required', Rule::in(self::DAYS)],
             'period_number' => ['required', 'integer', 'min:1', 'max:30'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
-            'is_parallel' => ['nullable', 'boolean'],
+            'is_parallel' => ['prohibited'],
             'room' => ['nullable', 'string', 'max:100'],
         ]);
     }

@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\AcademicTerm;
 use App\Models\AcademicYear;
 use App\Models\Assessment;
+use App\Models\Branch;
 use App\Models\Grade;
 use App\Models\GradeEntry;
 use App\Models\Permission;
@@ -115,6 +116,59 @@ class StudentDossierTest extends TestCase
         $this->assertDatabaseHas('users', ['email' => 'second.child@example.test']);
     }
 
+    public function test_global_administrator_can_choose_a_family_branch_and_children_inherit_it(): void
+    {
+        [$controller, , , , , $mainRegistration] = $this->dossierData();
+        $main = Branch::where('code', 'MAIN')->firstOrFail();
+        $north = Branch::create(['code' => 'NORTH', 'name' => 'North Branch', 'is_active' => true]);
+        Role::firstOrCreate(['name' => 'student'], ['label' => 'Student']);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('responsible.index'))->assertOk()->assertSee('name="branch_id"', false)->assertSee('North Branch');
+        $this->post(route('responsible.store'), [
+            'branch_id' => $north->id,
+            'full_name' => 'Mixed Branch Family',
+            'type' => 'mother',
+            'student_ids' => [$mainRegistration->student_id],
+        ])->assertSessionHasErrors('student_ids');
+        $this->assertDatabaseMissing('responsible_persons', ['full_name' => 'Mixed Branch Family']);
+        $this->post(route('responsible.store'), [
+            'branch_id' => $north->id,
+            'full_name' => 'North Family',
+            'type' => 'mother',
+            'children' => [[
+                'first_name' => 'Noura', 'last_name' => 'North', 'email' => 'noura.north@example.test',
+                'password' => 'NorthChild1234!', 'password_confirmation' => 'NorthChild1234!',
+            ]],
+        ])->assertRedirect(route('responsible.index', ['branch_id' => $north->id]))->assertSessionHasNoErrors();
+
+        $parent = ResponsiblePerson::where('full_name', 'North Family')->firstOrFail();
+        $student = $parent->students()->withoutGlobalScopes()->firstOrFail();
+        $this->assertSame($north->id, $parent->branch_id);
+        $this->assertSame($north->id, $student->branch_id);
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $north->id, 'user_id' => $student->portalUser->id, 'is_default' => true]);
+        $this->get(route('responsible.index', ['branch_id' => $north->id]))->assertOk()->assertSee('North Family');
+        $this->get(route('responsible.index', ['branch_id' => $main->id]))->assertOk()->assertDontSee('North Family');
+        $this->get(route('responsible.index', ['branch_id' => $main->id, 'search' => 'North Family']))
+            ->assertOk()->assertSee('No parent or guardian record found in this branch.')->assertDontSee('<strong>North Family</strong>', false);
+    }
+
+    public function test_branch_staff_cannot_create_or_link_a_family_in_another_branch(): void
+    {
+        [$controller] = $this->dossierData();
+        $main = Branch::where('code', 'MAIN')->firstOrFail();
+        $north = Branch::create(['code' => 'NORTH', 'name' => 'North Branch', 'is_active' => true]);
+        $branchAdministrator = User::factory()->create(['is_active' => true]);
+        $branchAdministrator->roles()->sync([$controller->roles()->firstOrFail()->id]);
+        $branchAdministrator->branches()->attach([$main->id => ['is_default' => true, 'is_branch_administrator' => true]]);
+
+        $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $main->id])
+            ->post(route('responsible.store'), ['branch_id' => $north->id, 'full_name' => 'Wrong Branch', 'type' => 'father'])
+            ->assertSessionHasErrors('branch_id');
+        $this->assertDatabaseMissing('responsible_persons', ['full_name' => 'Wrong Branch']);
+        $this->get(route('responsible.index', ['branch_id' => $north->id]))->assertSessionHasErrors('branch_id');
+    }
+
     public function test_student_attendance_report_can_filter_by_selected_individual_students(): void
     {
         [$user, $year, $grade, $sectionA, , $registration] = $this->dossierData();
@@ -157,7 +211,7 @@ class StudentDossierTest extends TestCase
             }
         }
         $this->get(route('students.show', $registration->student))->assertOk()->assertSee('Personal details')->assertSee('View all records');
-        $this->get(route('academic.index', ['module' => 'students']))->assertSee('References')->assertSee('id="sections"', false);
+        $this->get(route('academic.index', ['module' => 'students']))->assertSee('School structure')->assertSee('id="sections"', false);
         $this->get(route('reports.index', ['module' => 'students', 'report' => 'class_sections']))->assertSee('name="module" value="students"', false);
     }
 
@@ -193,8 +247,11 @@ class StudentDossierTest extends TestCase
         $this->assertDatabaseHas('student_reference_entries', ['reference' => 'codes', 'category' => 'blood-type', 'code' => 'O+', 'value' => 'O+']);
 
         $gradeKey = rtrim(strtr(base64_encode('model|'.$grade->id), '+/', '-_'), '=');
+        $this->get(route('students.references.create', ['reference' => 'class-definition']))->assertForbidden();
+        $this->post(route('students.references.store', ['reference' => 'class-definition']), ['name' => 'Unauthorized grade'])->assertForbidden();
+        $this->put(route('students.references.update', ['reference' => 'class-definition', 'entry' => $gradeKey]), ['name' => 'Unauthorized grade'])->assertForbidden();
         $this->delete(route('students.references.destroy', ['reference' => 'class-definition', 'entry' => $gradeKey]))
-            ->assertSessionHasErrors('reference');
+            ->assertForbidden();
         $this->assertDatabaseHas('grades', ['id' => $grade->id]);
 
         $emptyLevel = SchoolLevel::create(['name' => 'Unused division']);
@@ -202,19 +259,19 @@ class StudentDossierTest extends TestCase
         $emptySection = Section::create(['grade_id' => $emptyGrade->id, 'name' => 'A']);
         $emptyLevelKey = rtrim(strtr(base64_encode('model|'.$emptyLevel->id), '+/', '-_'), '=');
         $this->delete(route('students.references.destroy', ['reference' => 'division', 'entry' => $emptyLevelKey]))
-            ->assertRedirect(route('students.references.show', ['reference' => 'division']));
-        $this->assertDatabaseMissing('school_levels', ['id' => $emptyLevel->id]);
-        $this->assertDatabaseMissing('grades', ['id' => $emptyGrade->id]);
-        $this->assertDatabaseMissing('sections', ['id' => $emptySection->id]);
+            ->assertForbidden();
+        $this->assertDatabaseHas('school_levels', ['id' => $emptyLevel->id]);
+        $this->assertDatabaseHas('grades', ['id' => $emptyGrade->id]);
+        $this->assertDatabaseHas('sections', ['id' => $emptySection->id]);
 
         $unusedSection = Section::create(['grade_id' => $grade->id, 'name' => 'Unused']);
         $sectionKey = rtrim(strtr(base64_encode('model|'.$unusedSection->id), '+/', '-_'), '=');
         $this->delete(route('students.references.destroy', ['reference' => 'classes', 'entry' => $sectionKey]))
-            ->assertRedirect(route('students.references.show', ['reference' => 'classes']));
-        $this->assertDatabaseMissing('sections', ['id' => $unusedSection->id]);
+            ->assertForbidden();
+        $this->assertDatabaseHas('sections', ['id' => $unusedSection->id]);
 
         $this->get(route('students.references.show', ['reference' => 'classes']))
-            ->assertOk()->assertSee('Delete')->assertSee($section->name);
+            ->assertOk()->assertDontSee('Delete')->assertSee($section->name);
     }
 
     public function test_custom_code_categories_can_be_opened_after_creation(): void
@@ -225,6 +282,68 @@ class StudentDossierTest extends TestCase
             ->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'Languages']));
         $this->get(route('students.references.show', ['reference' => 'codes', 'type' => 'Languages']))
             ->assertOk()->assertSee('Languages');
+    }
+
+    public function test_academic_structure_is_created_and_edited_from_code_types(): void
+    {
+        [$user] = $this->dossierData();
+        $this->actingAs($user);
+
+        $this->get(route('students.references.show', ['reference' => 'codes', 'type' => 'academic-year']))
+            ->assertOk()->assertSee('Academic Years')->assertSee('2030-2031')
+            ->assertDontSee('Districts')->assertDontSee('Family Type');
+        $this->get(route('students.references.create', ['reference' => 'codes', 'type' => 'academic-year']))
+            ->assertOk()->assertSee('Academic year name')->assertSee('Start date');
+
+        $this->post(route('students.references.store', ['reference' => 'codes']), [
+            'category' => 'academic-year', 'name' => '2032-2033', 'starts_on' => '2032-09-01', 'ends_on' => '2033-06-30', 'status' => 'draft',
+        ])->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'academic-year']));
+        $year = AcademicYear::query()->where('name', '2032-2033')->firstOrFail();
+        $yearKey = rtrim(strtr(base64_encode("structure|academic-year\x1f".$year->id), '+/', '-_'), '=');
+        $this->get(route('students.references.edit', ['reference' => 'codes', 'entry' => $yearKey]))->assertOk()->assertSee('2032-2033');
+        $this->put(route('students.references.update', ['reference' => 'codes', 'entry' => $yearKey]), [
+            'category' => 'academic-year', 'name' => '2032-2033', 'starts_on' => '2032-09-02', 'ends_on' => '2033-06-30', 'status' => 'draft',
+        ])->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'academic-year']));
+        $this->assertSame('2032-09-02', $year->fresh()->starts_on->toDateString());
+
+        $this->post(route('students.references.store', ['reference' => 'codes']), [
+            'category' => 'term-semester', 'academic_year_id' => $year->id, 'name' => 'Semester 1', 'type' => 'semester',
+            'starts_on' => '2032-09-02', 'ends_on' => '2033-01-31', 'status' => 'planned', 'sort_order' => 1,
+        ])->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'term-semester']));
+        $this->assertDatabaseHas('academic_terms', ['academic_year_id' => $year->id, 'name' => 'Semester 1']);
+        $term = AcademicTerm::query()->where('academic_year_id', $year->id)->where('name', 'Semester 1')->firstOrFail();
+        $termKey = rtrim(strtr(base64_encode("structure|term-semester\x1f".$term->id), '+/', '-_'), '=');
+        $this->put(route('students.references.update', ['reference' => 'codes', 'entry' => $termKey]), [
+            'category' => 'term-semester', 'academic_year_id' => $year->id, 'name' => 'Semester 1', 'type' => 'semester',
+            'starts_on' => '2032-09-02', 'ends_on' => '2033-02-15', 'status' => 'open', 'sort_order' => 1,
+        ])->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'term-semester']));
+        $this->assertSame('2033-02-15', $term->fresh()->ends_on->toDateString());
+
+        $this->post(route('students.references.store', ['reference' => 'codes']), ['category' => 'level', 'name' => 'New level', 'sort_order' => 4])
+            ->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'level']));
+        $level = SchoolLevel::query()->where('name', 'New level')->firstOrFail();
+        $levelKey = rtrim(strtr(base64_encode("structure|level\x1f".$level->id), '+/', '-_'), '=');
+        $this->put(route('students.references.update', ['reference' => 'codes', 'entry' => $levelKey]), ['category' => 'level', 'name' => 'Updated level', 'sort_order' => 4])
+            ->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'level']));
+        $this->assertDatabaseHas('school_levels', ['id' => $level->id, 'name' => 'Updated level']);
+        $this->post(route('students.references.store', ['reference' => 'codes']), ['category' => 'grade', 'school_level_id' => $level->id, 'name' => 'New grade', 'sort_order' => 1])
+            ->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'grade']));
+        $grade = Grade::query()->where('name', 'New grade')->firstOrFail();
+        $gradeKey = rtrim(strtr(base64_encode("structure|grade\x1f".$grade->id), '+/', '-_'), '=');
+        $this->put(route('students.references.update', ['reference' => 'codes', 'entry' => $gradeKey]), ['category' => 'grade', 'school_level_id' => $level->id, 'name' => 'Updated grade', 'sort_order' => 2])
+            ->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'grade']));
+        $this->assertDatabaseHas('grades', ['id' => $grade->id, 'name' => 'Updated grade']);
+        $this->post(route('students.references.store', ['reference' => 'codes']), ['category' => 'section', 'grade_id' => $grade->id, 'name' => 'A', 'room' => '102'])
+            ->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'section']));
+        $this->assertDatabaseHas('sections', ['grade_id' => $grade->id, 'name' => 'A', 'room' => '102']);
+        $section = Section::query()->where('grade_id', $grade->id)->where('name', 'A')->firstOrFail();
+        $sectionKey = rtrim(strtr(base64_encode("structure|section\x1f".$section->id), '+/', '-_'), '=');
+        $this->put(route('students.references.update', ['reference' => 'codes', 'entry' => $sectionKey]), ['category' => 'section', 'grade_id' => $grade->id, 'name' => 'B', 'room' => '103'])
+            ->assertRedirect(route('students.references.show', ['reference' => 'codes', 'type' => 'section']));
+        $this->assertDatabaseHas('sections', ['id' => $section->id, 'name' => 'B', 'room' => '103']);
+
+        $this->get(route('academic.index'))->assertOk()->assertSee('2032-2033')->assertSee('Updated grade')->assertDontSee('Add academic year');
+        $this->delete(route('students.references.destroy', ['reference' => 'codes', 'entry' => $yearKey]))->assertForbidden();
     }
 
     public function test_student_search_matches_full_names_and_a_single_registration(): void
@@ -310,7 +429,7 @@ class StudentDossierTest extends TestCase
         }
     }
 
-    public function test_navigation_uses_canonical_module_routes_and_a_clear_parent_path(): void
+    public function test_navigation_uses_canonical_module_routes_and_a_single_back_control(): void
     {
         [$user] = $this->dossierData();
         $this->actingAs($user);
@@ -324,7 +443,8 @@ class StudentDossierTest extends TestCase
             ->assertDontSee('/StudentProfile/Profile/Dashboard.aspx');
         $this->get(route('students.index'))
             ->assertOk()
-            ->assertSee('Back to Student Records');
+            ->assertSee('data-history-back', false)
+            ->assertDontSee('app-context-trail');
         $this->get(route('dars.student-dashboard'))
             ->assertRedirect(route('students.dashboard'));
 
@@ -342,7 +462,7 @@ class StudentDossierTest extends TestCase
         $assessment = Assessment::create(['academic_year_id' => $year->id, 'academic_term_id' => $term->id, 'subject_id' => $subject->id, 'grade_id' => $grade->id, 'name' => 'Selected assessment', 'type' => 'exam', 'maximum_score' => 100, 'assessment_date' => '2030-10-10', 'status' => 'open']);
         $teacher = Teacher::create(['first_name' => 'Report', 'last_name' => 'Teacher', 'is_active' => true]);
         $assignment = TeacherAssignment::create(['academic_year_id' => $year->id, 'teacher_id' => $teacher->id, 'subject_id' => $subject->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'is_active' => true]);
-        GradeEntry::create(['teacher_id' => $teacher->id, 'teacher_assignment_id' => $assignment->id, 'student_id' => $registration->student_id, 'student_registration_id' => $registration->id, 'assessment_id' => $assessment->id, 'score' => 85, 'status' => 'draft', 'recorded_by' => $user->id]);
+        GradeEntry::create(['teacher_id' => $teacher->id, 'teacher_assignment_id' => $assignment->id, 'student_id' => $registration->student_id, 'student_registration_id' => $registration->id, 'assessment_id' => $assessment->id, 'score' => 85, 'status' => 'published', 'published_at' => now(), 'published_by' => $user->id, 'recorded_by' => $user->id]);
         $filters = ['report' => 'grades', 'academic_year_id' => $year->id, 'academic_term_id' => $term->id, 'grade_id' => $grade->id, 'section_id' => $section->id, 'date_from' => '2030-10-01', 'date_to' => '2030-10-31'];
         $this->actingAs($user)->get(route('reports.school', $filters))->assertOk()->assertViewHas('rows', fn ($rows) => $rows->count() === 1);
         $this->get(route('reports.school.print', $filters))->assertOk()->assertSee('Selected assessment');

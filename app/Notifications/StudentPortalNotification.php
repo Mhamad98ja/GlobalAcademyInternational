@@ -15,6 +15,8 @@ class StudentPortalNotification extends Notification
         private readonly string $title,
         private readonly string $message,
         private readonly ?string $actionUrl = null,
+        private readonly ?int $subjectId = null,
+        private readonly ?int $registrationId = null,
     ) {}
 
     /** @return list<string> */
@@ -31,6 +33,8 @@ class StudentPortalNotification extends Notification
             'message' => $this->message,
             'action_url' => $this->actionUrl,
             'audience' => 'student',
+            'subject_id' => $this->subjectId,
+            'student_registration_id' => $this->registrationId,
         ];
     }
 }

@@ -6,7 +6,6 @@
     $operationSections = [
         'overview' => ['label' => 'Operations overview', 'description' => 'Choose one focused setup area.', 'route' => 'school-academic.index'],
         'subjects' => ['label' => 'Subjects', 'description' => 'Create the subjects taught by the school.', 'route' => 'school-academic.subjects'],
-        'terms' => ['label' => 'Terms / semesters', 'description' => 'Define dates and status for each academic period.', 'route' => 'school-academic.terms', 'navigation' => false],
         'assignments' => ['label' => 'Teacher subject assignments', 'description' => 'Connect a teacher, subject, class, and section.', 'route' => 'school-academic.assignments'],
     ];
 @endphp
@@ -67,44 +66,6 @@
                         </tr>
                     @empty
                         <tr><td colspan="3" class="empty">Add the subjects your school teaches.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
-@endif
-
-@if ($activeSection === 'terms')
-    <section class="panel">
-        <div class="panel-header"><h2 id="terms" class="panel-title scroll-mt-20">Terms / semesters</h2></div>
-        <form method="POST" action="{{ route('school-academic.terms.store') }}" class="space-y-3 border-b border-slate-200 p-5">
-            @csrf
-            <select name="academic_year_id" required>
-                <option value="">Academic year</option>
-                @foreach ($years as $year)
-                    <option value="{{ $year->id }}">{{ $year->name }}</option>
-                @endforeach
-            </select>
-            <div class="grid gap-3 sm:grid-cols-2"><input name="name" required placeholder="Semester 1"><input name="type" required value="semester" placeholder="Type"></div>
-            <div class="grid gap-3 sm:grid-cols-2"><input type="date" name="starts_on" required><input type="date" name="ends_on" required></div>
-            <div class="grid gap-3 sm:grid-cols-2">
-                <select name="status"><option value="draft">Draft</option><option value="open">Open</option><option value="closed">Closed</option></select>
-                <input type="number" min="0" name="sort_order" value="0" placeholder="Order">
-            </div>
-            <button class="btn btn-primary">Add term</button>
-        </form>
-        <div class="table-wrap">
-            <table class="data-table">
-                <thead><tr><th>Year / term</th><th>Dates</th><th>Status</th></tr></thead>
-                <tbody>
-                    @forelse ($terms as $term)
-                        <tr>
-                            <td><div>{{ $term->name }}</div><div class="text-xs text-slate-500">{{ $term->academicYear?->name }} &middot; {{ str($term->type)->headline() }}</div></td>
-                            <td>{{ $term->starts_on->format('d M') }} &ndash; {{ $term->ends_on->format('d M') }}</td>
-                            <td><span class="badge badge-blue">{{ str($term->status)->headline() }}</span></td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="3" class="empty">No terms configured.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -261,34 +222,6 @@
         </div>
         @endif
 
-        @if ($activeSection === 'terms')
-        <div class="space-y-2">
-            <h3 class="font-medium">Terms</h3>
-            @foreach ($terms as $term)
-                <details class="rounded-md border border-slate-200 p-3">
-                    <summary class="cursor-pointer font-medium">{{ $term->academicYear?->name }} &middot; {{ $term->name }}</summary>
-                    <form method="POST" action="{{ route('school-academic.terms.update', $term) }}" class="mt-3 grid gap-2">
-                        @csrf
-                        @method('PUT')
-                        <select name="academic_year_id">
-                            @foreach ($years as $year)
-                                <option value="{{ $year->id }}" @selected($term->academic_year_id === $year->id)>{{ $year->name }}</option>
-                            @endforeach
-                        </select>
-                        <div class="grid grid-cols-2 gap-2"><input name="name" value="{{ $term->name }}" required><input name="type" value="{{ $term->type }}" required></div>
-                        <div class="grid grid-cols-2 gap-2"><input type="date" name="starts_on" value="{{ $term->starts_on->format('Y-m-d') }}" required><input type="date" name="ends_on" value="{{ $term->ends_on->format('Y-m-d') }}" required></div>
-                        <select name="status">
-                            @foreach (['draft', 'open', 'closed'] as $status)
-                                <option value="{{ $status }}" @selected($term->status === $status)>{{ str($status)->headline() }}</option>
-                            @endforeach
-                        </select>
-                        <input type="number" name="sort_order" value="{{ $term->sort_order }}">
-                        <button class="btn btn-secondary btn-small">Update term</button>
-                    </form>
-                </details>
-            @endforeach
-        </div>
-        @endif
 
         @if ($activeSection === 'assessments')
         <div class="space-y-2">

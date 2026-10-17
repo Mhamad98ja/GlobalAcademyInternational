@@ -53,21 +53,23 @@
         </div>
         <div data-role-field="student">
             <label class="form-label">Linked student profile</label>
-            <select name="student_id"><option value="">Not a student account</option>@foreach($students as $student)<option value="{{ $student->id }}" @selected(old('student_id', $managedUser->student_id) == $student->id)>{{ $student->full_name }} · {{ $student->student_number }}</option>@endforeach</select>
-            <p class="mt-1 text-xs text-slate-500">Link this account to a student to open the private student portal after sign-in.</p>
+            <x-student-picker name="student_id" :selected-id="old('student_id', $managedUser->student_id)" :selected-label="$managedUser->student?->full_name" placeholder="Type student name or number" />
+            <p class="mt-1 text-xs text-slate-500">Student portal accounts are created from the parent / guardian profile. This link is shown only so an existing student account can be maintained; it cannot be moved to another student here.</p>
         </div>
         @if ($canManageBranchAssignments)
             <div>
                 <label class="form-label">Role *</label>
                 <select name="role_id" required data-user-role-select>
                     @foreach ($roles as $role)
-                        <option value="{{ $role->id }}" data-role-name="{{ $role->name }}" @selected(old('role_id', $managedUser->roles->first()?->id) == $role->id)>{{ $role->label }}</option>
+                        @if ($role->name !== 'student' || $managedUser->student_id)
+                            <option value="{{ $role->id }}" data-role-name="{{ $role->name }}" @selected(old('role_id', $managedUser->roles->first()?->id) == $role->id)>{{ $role->name === 'super-administrator' ? 'Branch Administrator' : $role->label }}</option>
+                        @endif
                     @endforeach
                 </select>
             </div>
         <div class="border-t border-slate-200 pt-4">
             <h2 class="panel-title">Branch authority</h2>
-            <p class="mt-1 text-xs text-slate-500">Users can work only in assigned branches. The Controller Administrator is the only account with whole-school branch authority.</p>
+            <p class="mt-1 text-xs text-slate-500">Assigned branches are where this person can work. The Global Super Administrator alone controls the whole school.</p>
             <div class="mt-3">
                 <label class="form-label">Assigned branches</label>
                 <div class="max-h-48 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
@@ -77,17 +79,18 @@
                 </div>
             </div>
             <div class="mt-3">
-                <label class="form-label">Default branch</label>
+                <label class="form-label">Starting branch</label>
                 <select name="default_branch_id"><option value="">None</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}" @selected(old('default_branch_id', $managedUser->branches->firstWhere('pivot.is_default', true)?->id) == $branch->id)>{{ $branch->name }}</option>@endforeach</select>
+                <p class="mt-1 text-xs text-slate-500">Used only when this person is assigned to more than one branch. It does not grant extra access.</p>
             </div>
             <div class="mt-3" data-branch-administrator-selection>
-                <label class="form-label">Branch Super Administrator for selected branches</label>
+                <label class="form-label">Responsible Branch Administrator for selected branches</label>
                 <div class="max-h-48 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
                     @foreach ($branches as $branch)
                         <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="branch_administrator_ids[]" value="{{ $branch->id }}" @checked(in_array($branch->id, $branchAdministratorIds, true))>{{ $branch->name }} ({{ $branch->code }})</label>
                     @endforeach
                 </div>
-                <p class="mt-1 text-xs text-slate-500">A Branch Super Administrator has full operational and financial control only in the selected branches. One responsible Branch Super Administrator is allowed for each branch.</p>
+                <p class="mt-1 text-xs text-slate-500">A Branch Administrator can manage only assigned branches and cannot change global settings. Assign a replacement from the Branches page before removing an existing responsibility.</p>
             </div>
         </div>
         @else

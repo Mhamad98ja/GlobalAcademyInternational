@@ -24,12 +24,21 @@ class StudentPortalController extends Controller
 
         $student = Student::query()->with('portalUser')->findOrFail($user->student_id);
         $registrations = StudentRegistration::query()
-            ->with('academicYear', 'grade', 'section')
+            ->with('academicYear', 'grade', 'section', 'subjectExemptions')
             ->where('student_id', $student->id)
             ->where('status', 'active')
             ->whereHas('academicYear', fn (Builder $years) => $years->where('status', 'open'))
             ->latest('registered_on')
             ->get();
+        $exemptions = $student->subjectExemptions()->get();
+        $isExempt = static fn (int $registrationId, ?int $subjectId): bool => $subjectId !== null
+            && $exemptions->contains(fn ($exemption) => $exemption->student_registration_id === $registrationId && $exemption->subject_id === $subjectId);
+        $canSeeSubject = static function (int $yearId, int $gradeId, ?int $sectionId, ?int $subjectId) use ($registrations, $isExempt): bool {
+            return $registrations->contains(fn (StudentRegistration $registration) => $registration->academic_year_id === $yearId
+                && $registration->grade_id === $gradeId
+                && ($sectionId === null || $sectionId === $registration->section_id)
+                && ! $isExempt($registration->id, $subjectId));
+        };
 
         $contents = CourseContent::query()
             ->with('assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section')
@@ -51,8 +60,9 @@ class StudentPortalController extends Controller
             ->orderByRaw('due_on IS NULL')
             ->orderBy('due_on')
             ->latest('published_at')
-            ->take(50)
-            ->get();
+            ->get()
+            ->filter(fn (CourseContent $content) => $content->assignment && $canSeeSubject($content->assignment->academic_year_id, $content->assignment->grade_id, $content->assignment->section_id, $content->assignment->subject_id))
+            ->take(50);
 
         $assessments = Assessment::query()
             ->with('term', 'assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section', 'subject', 'grade', 'section', 'grades')
@@ -80,8 +90,9 @@ class StudentPortalController extends Controller
                 }
             })
             ->orderBy('assessment_date')
-            ->take(50)
-            ->get();
+            ->get()
+            ->filter(fn (Assessment $assessment) => $canSeeSubject($assessment->academic_year_id, $assessment->grade_id ?? $assessment->assignment?->grade_id, $assessment->section_id ?? $assessment->assignment?->section_id, $assessment->subject_id ?? $assessment->assignment?->subject_id))
+            ->take(50);
 
         $announcements = SchoolAnnouncement::query()
             ->whereNotNull('published_at')
@@ -128,10 +139,13 @@ class StudentPortalController extends Controller
             ->with('assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.assignment.grade', 'assessment.assignment.section', 'assessment.subject', 'assessment.term', 'assignment.teacher', 'assignment.grade', 'assignment.section')
             ->where('status', 'published')
             ->latest('published_at')
-            ->take(50)
-            ->get();
+            ->get()
+            ->reject(fn ($entry) => $isExempt($entry->student_registration_id, $entry->assessment?->subject_id ?? $entry->assessment?->assignment?->subject_id ?? $entry->assignment?->subject_id))
+            ->take(50);
 
-        $notifications = $student->notifications()->latest()->take(20)->get();
+        $notifications = $student->notifications()->latest()->get()
+            ->reject(fn ($notification) => $isExempt((int) ($notification->data['student_registration_id'] ?? 0), isset($notification->data['subject_id']) ? (int) $notification->data['subject_id'] : null))
+            ->take(20);
 
         return view('student-portal.index', compact('student', 'registrations', 'contents', 'assessments', 'publishedGrades', 'notifications', 'announcements', 'events'));
     }

@@ -3,6 +3,7 @@
 @section('content')
 <div class="page-header">
     <div><h1 class="page-title">Student attendance</h1><p class="page-subtitle">Record daily or period attendance for an active class roster.</p></div>
+    <a class="btn btn-secondary" href="{{ route('reports.school', ['report' => 'student_attendance', 'academic_year_id' => $filters['academic_year_id'] ?? null, 'grade_id' => $filters['grade_id'] ?? null, 'section_id' => $filters['section_id'] ?? null, 'student_id' => $filters['student_id'] ?? null]) }}">Attendance reports</a>
 </div>
 
 <section class="panel">

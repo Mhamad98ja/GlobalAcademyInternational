@@ -11,10 +11,13 @@ use App\Models\SchoolLevel;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentAttendance;
+use App\Models\StudentPerformanceEvaluation;
 use App\Models\StudentReferenceEntry;
 use App\Models\StudentRegistration;
 use App\Models\SystemSetting;
+use App\Models\TeacherAssignment;
 use App\Services\AuditService;
+use App\Services\AcademicStructureCodes;
 use App\Support\StudentDossierNavigation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
@@ -23,6 +26,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -91,6 +95,68 @@ class StudentDossierController extends Controller
         return view('students.dossier.dashboard-page', compact('studentOverview', 'activeAcademicYear'));
     }
 
+    public function observations(Request $request): View
+    {
+        $user = $request->user();
+        $filters = $request->validate([
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
+            'student_id' => ['nullable', 'integer', 'exists:students,id'],
+            'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
+            'section_id' => ['nullable', 'integer', 'exists:sections,id'],
+            'category' => ['nullable', 'string', 'max:50'],
+            'status' => ['nullable', Rule::in(['draft', 'published'])],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+        ]);
+        $activeAcademicYear = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->first();
+        $yearId = (int) ($filters['academic_year_id'] ?? $activeAcademicYear?->id);
+        $isTeacher = (bool) $user->teacher_id && ! $user->hasPermission('academic_year.manage');
+        $assignments = TeacherAssignment::query()
+            ->with('subject', 'grade', 'section')
+            ->where('is_active', true)
+            ->when($yearId, fn (Builder $query) => $query->where('academic_year_id', $yearId))
+            ->when($isTeacher, fn (Builder $query) => $query->where('teacher_id', $user->teacher_id))
+            ->orderBy('grade_id')->orderBy('subject_id')->get();
+        $records = StudentPerformanceEvaluation::query()
+            ->with('student', 'registration.grade', 'registration.section', 'assignment.subject', 'teacher', 'createdBy')
+            ->when($yearId, fn (Builder $query) => $query->whereHas('registration', fn (Builder $registration) => $registration->where('academic_year_id', $yearId)))
+            ->when($isTeacher, fn (Builder $query) => $query->where('teacher_id', $user->teacher_id))
+            ->when($filters['student_id'] ?? null, fn (Builder $query, int $id) => $query->where('student_id', $id))
+            ->when($filters['grade_id'] ?? null, fn (Builder $query, int $id) => $query->whereHas('registration', fn (Builder $registration) => $registration->where('grade_id', $id)))
+            ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->whereHas('registration', fn (Builder $registration) => $registration->where('section_id', $id)))
+            ->when($filters['category'] ?? null, fn (Builder $query, string $category) => $query->where('category', $category))
+            ->when($filters['status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when($filters['date_from'] ?? null, fn (Builder $query, string $date) => $query->whereDate('observed_on', '>=', $date))
+            ->when($filters['date_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('observed_on', '<=', $date))
+            ->latest('observed_on')->latest('id')->paginate(25)->withQueryString();
+        $registrations = StudentRegistration::query()
+            ->with('student', 'grade', 'section')
+            ->where('status', 'active')
+            ->when($yearId, fn (Builder $query) => $query->where('academic_year_id', $yearId))
+            ->when($isTeacher, function (Builder $query) use ($assignments): void {
+                $query->where(function (Builder $registrations) use ($assignments): void {
+                    foreach ($assignments as $assignment) {
+                        $registrations->orWhere(function (Builder $registration) use ($assignment): void {
+                            $registration->where('grade_id', $assignment->grade_id)
+                                ->when($assignment->section_id, fn (Builder $query) => $query->where('section_id', $assignment->section_id));
+                        });
+                    }
+                });
+            })
+            ->orderBy('grade_id')->orderBy('section_id')->get();
+
+        return view('students.observations', [
+            'records' => $records,
+            'filters' => array_replace($filters, ['academic_year_id' => $yearId]),
+            'years' => AcademicYear::query()->orderByDesc('starts_on')->get(),
+            'grades' => Grade::query()->with('sections')->orderBy('sort_order')->get(),
+            'assignments' => $assignments,
+            'registrations' => $registrations,
+            'categories' => ['participation', 'behavior', 'effort', 'homework', 'engagement', 'other'],
+            'canManage' => $user->hasPermission('performance.manage'),
+        ]);
+    }
+
     public function tools(Request $request, string $section): View|RedirectResponse
     {
         if ($section === 'references') {
@@ -120,12 +186,20 @@ class StudentDossierController extends Controller
             'gender' => ['label' => 'Gender', 'values' => ['--', 'Male', 'Female']],
             'registration-status' => ['label' => 'Registration Status', 'values' => ['--', 'Active', 'Inactive', 'Withdrawn', 'Completed']],
         ];
+        foreach (AcademicStructureCodes::TYPES as $type => $label) {
+            $codeTypes[$type] = ['label' => $label, 'values' => []];
+        }
         $selectedCodeType = $filters['type'] ?? 'blood-type';
 
         $referenceEntries = StudentReferenceEntry::query()->where('reference', $reference)->orderBy('sort_order')->orderBy('value')->get();
         $customEntries = $referenceEntries->where('code', '!=', '__category__')->values();
         $rows = match ($reference) {
-            'codes' => $this->codeRows($codeTypes, $customEntries),
+            'codes' => isset(AcademicStructureCodes::TYPES[$selectedCodeType])
+                ? app(AcademicStructureCodes::class)->rows($selectedCodeType)->map(fn (array $row) => [
+                    ...$row,
+                    'key' => $this->referenceKey('structure', $selectedCodeType."\x1f".$row['model_id']),
+                ])
+                : $this->codeRows($codeTypes, $customEntries),
             'division' => SchoolLevel::query()->orderBy('sort_order')->get()->map(fn (SchoolLevel $level) => ['key' => $this->referenceKey('model', $level->id), 'values' => [$level->id, $level->name, '']]),
             'class-definition' => Grade::query()->orderBy('sort_order')->get()->map(fn (Grade $grade) => ['key' => $this->referenceKey('model', $grade->id), 'values' => [$grade->name, $grade->sort_order]]),
             'classes' => Section::query()->with('grade.level')->orderBy('grade_id')->orderBy('name')->get()->map(fn (Section $section) => ['key' => $this->referenceKey('model', $section->id), 'values' => [$section->grade?->name, $section->name, $section->grade?->sort_order, '', $section->grade?->level?->name, $section->room, '', $section->grade?->name, '', '', '--', '']]),
@@ -154,8 +228,19 @@ class StudentDossierController extends Controller
             ['path' => $request->url(), 'query' => $request->query()],
         );
 
+        $definition = $definitions[$reference];
+        if ($reference === 'codes' && isset(AcademicStructureCodes::TYPES[$selectedCodeType])) {
+            $definition['headers'] = match ($selectedCodeType) {
+                'academic-year' => ['Academic year', 'Dates', 'Status', ''],
+                'term-semester' => ['Term / semester', 'Academic year / type', 'Dates', 'Status'],
+                'level' => ['Level', 'Type', 'Order', ''],
+                'grade' => ['Grade', 'Level', 'Order', ''],
+                'section' => ['Class section', 'Level', 'Room', ''],
+            };
+        }
+
         return view('students.dossier.reference', [
-            'reference' => $definitions[$reference],
+            'reference' => $definition,
             'referenceKey' => $reference,
             'rows' => $rows,
             'years' => AcademicYear::query()->orderByDesc('starts_on')->get(),
@@ -163,29 +248,44 @@ class StudentDossierController extends Controller
             'codeTypes' => $codeTypes,
             'selectedCodeType' => $selectedCodeType,
             'codeCategories' => $this->codeCategories($codeTypes, $referenceEntries),
-            'canManageReferences' => $request->user()->hasPermission('students.view'),
+            'canManageReferences' => $request->user()->hasPermission('students.view')
+                && ! in_array($reference, ['division', 'class-definition', 'classes'], true)
+                && ($reference !== 'codes' || ! isset(AcademicStructureCodes::TYPES[$selectedCodeType]) || $request->user()->hasPermission('academic.manage')),
         ]);
     }
 
     public function referenceCreate(Request $request, string $reference): View
     {
+        $this->denyCodeManagedReference($reference);
         $definitions = $this->referenceDefinitions();
         abort_unless(isset($definitions[$reference]), 404);
+        $this->authorizeStructureCode($request, (string) $request->query('type', ''));
 
-        return $this->referenceForm($reference, null, $request->boolean('category'));
+        return $this->referenceForm($reference, null, $request->boolean('category'), (string) $request->query('type', 'blood-type'));
     }
 
     public function referenceEdit(Request $request, string $reference, string $entry): View
     {
+        $this->denyCodeManagedReference($reference);
         $definitions = $this->referenceDefinitions();
         abort_unless(isset($definitions[$reference]), 404);
 
-        return $this->referenceForm($reference, $this->resolveReferenceEntry($reference, $entry));
+        $resolved = $this->resolveReferenceEntry($reference, $entry);
+        $this->authorizeStructureCode($request, $resolved['category'] ?? '');
+
+        return $this->referenceForm($reference, $resolved, false, $resolved['category'] ?? 'blood-type');
     }
 
     public function referenceStore(Request $request, string $reference): RedirectResponse
     {
+        $this->denyCodeManagedReference($reference);
         abort_unless(isset($this->referenceDefinitions()[$reference]), 404);
+        $type = (string) $request->input('category', '');
+        if ($reference === 'codes' && isset(AcademicStructureCodes::TYPES[$type])) {
+            $this->authorizeStructureCode($request, $type);
+            app(AcademicStructureCodes::class)->save($request, $type);
+            return redirect()->route('students.references.show', ['reference' => 'codes', 'type' => $type])->with('success', 'Academic reference created.');
+        }
         $this->saveReference($request, $reference);
 
         return redirect()->route('students.references.show', ['reference' => $reference])->with('success', 'Reference created.');
@@ -193,8 +293,15 @@ class StudentDossierController extends Controller
 
     public function referenceUpdate(Request $request, string $reference, string $entry): RedirectResponse
     {
+        $this->denyCodeManagedReference($reference);
         abort_unless(isset($this->referenceDefinitions()[$reference]), 404);
         $resolved = $this->resolveReferenceEntry($reference, $entry);
+        if ($reference === 'codes' && $resolved['type'] === 'structure') {
+            $type = $resolved['category'];
+            $this->authorizeStructureCode($request, $type);
+            app(AcademicStructureCodes::class)->save($request, $type, app(AcademicStructureCodes::class)->find($type, (int) $resolved['value']));
+            return redirect()->route('students.references.show', ['reference' => 'codes', 'type' => $type])->with('success', 'Academic reference updated.');
+        }
         $this->saveReference($request, $reference, $resolved);
 
         return redirect()->route('students.references.show', ['reference' => $reference])->with('success', 'Reference updated.');
@@ -202,15 +309,33 @@ class StudentDossierController extends Controller
 
     public function referenceDestroy(string $reference, string $entry): RedirectResponse
     {
+        $this->denyCodeManagedReference($reference);
         abort_unless(isset($this->referenceDefinitions()[$reference]), 404);
-        $this->deleteReference($reference, $this->resolveReferenceEntry($reference, $entry));
+        $resolved = $this->resolveReferenceEntry($reference, $entry);
+        abort_if($resolved['type'] === 'structure', 403, 'Academic references cannot be deleted here.');
+        $this->deleteReference($reference, $resolved);
 
         return redirect()->route('students.references.show', ['reference' => $reference])->with('success', 'Reference deleted.');
+    }
+
+    private function denyCodeManagedReference(string $reference): void
+    {
+        abort_if(in_array($reference, ['division', 'class-definition', 'classes'], true), 403, 'Academic structure is managed in code.');
+    }
+
+    private function authorizeStructureCode(Request $request, string $type): void
+    {
+        if (isset(AcademicStructureCodes::TYPES[$type])) {
+            abort_unless($request->user()->hasPermission('academic.manage'), 403);
+        }
     }
 
     public function referenceCategoryStore(Request $request): RedirectResponse
     {
         $data = $request->validate(['category' => ['required', 'string', 'max:120']]);
+        if (isset(AcademicStructureCodes::TYPES[$data['category']])) {
+            throw ValidationException::withMessages(['category' => 'This academic code type is already available.']);
+        }
         StudentReferenceEntry::query()->firstOrCreate([
             'reference' => 'codes',
             'category' => $data['category'],
@@ -310,7 +435,7 @@ class StudentDossierController extends Controller
         return $existing->concat($entries->map(fn (StudentReferenceEntry $entry) => ['key' => $this->referenceKey('entry', $entry->id), 'values' => [$entry->category, $entry->value, $entry->value_ar]]))->values();
     }
 
-    private function referenceForm(string $reference, ?array $entry, bool $categoryOnly = false): View
+    private function referenceForm(string $reference, ?array $entry, bool $categoryOnly = false, string $selectedCategory = 'blood-type'): View
     {
         $definitions = $this->referenceDefinitions();
         $codeTypes = [
@@ -318,6 +443,9 @@ class StudentDossierController extends Controller
             'gender' => ['label' => 'Gender'],
             'registration-status' => ['label' => 'Registration Status'],
         ];
+        foreach (AcademicStructureCodes::TYPES as $type => $label) {
+            $codeTypes[$type] = ['label' => $label];
+        }
         $categories = $this->codeCategories($codeTypes, StudentReferenceEntry::query()->where('reference', 'codes')->get());
 
         return view('students.dossier.reference-form', [
@@ -328,8 +456,11 @@ class StudentDossierController extends Controller
             'mode' => $entry ? 'edit' : 'create',
             'categoryOnly' => $categoryOnly,
             'categories' => $categories,
+            'selectedCategory' => $selectedCategory,
+            'structureTypes' => AcademicStructureCodes::TYPES,
+            'years' => AcademicYear::query()->orderByDesc('starts_on')->get(),
             'levels' => SchoolLevel::query()->orderBy('sort_order')->get(),
-            'grades' => Grade::query()->orderBy('sort_order')->get(),
+            'grades' => Grade::query()->with('level')->orderBy('sort_order')->get(),
         ]);
     }
 
@@ -353,6 +484,13 @@ class StudentDossierController extends Controller
                 'class-definition' => ['school_level_id' => $model->school_level_id, 'name' => $model->name, 'sort_order' => $model->sort_order],
                 'classes' => ['grade_id' => $model->grade_id, 'name' => $model->name, 'room' => $model->room],
             };
+        } elseif ($type === 'structure') {
+            abort_unless($reference === 'codes' && str_contains($value, "\x1f"), 404);
+            [$category, $id] = explode("\x1f", $value, 2);
+            abort_unless(isset(AcademicStructureCodes::TYPES[$category]) && ctype_digit($id), 404);
+            $model = app(AcademicStructureCodes::class)->find($category, (int) $id);
+            $form = app(AcademicStructureCodes::class)->form($category, $model);
+            $value = $id;
         } elseif ($type === 'entry') {
             $model = StudentReferenceEntry::query()->where('reference', $reference)->findOrFail((int) $value);
             $form = match ($reference) {
@@ -376,7 +514,7 @@ class StudentDossierController extends Controller
             abort(404);
         }
 
-        return ['key' => $key, 'type' => $type, 'value' => $value, 'form' => $form];
+        return ['key' => $key, 'type' => $type, 'value' => $value, 'form' => $form, 'category' => $category ?? ($form['category'] ?? null)];
     }
 
     private function saveReference(Request $request, string $reference, ?array $resolved = null): void
@@ -398,6 +536,9 @@ class StudentDossierController extends Controller
         $data = $request->validate(['category' => ['nullable', 'string', 'max:120'], 'new_category' => ['nullable', 'string', 'max:120'], 'code' => ['required', 'string', 'max:120'], 'value' => ['required', 'string', 'max:255'], 'value_en' => ['nullable', 'string', 'max:255'], 'value_ar' => ['nullable', 'string', 'max:255']]);
         $category = $data['new_category'] ?? $data['category'] ?? null;
         abort_unless(filled($category), 422, 'Choose an existing code category or add a new one.');
+        if (isset(AcademicStructureCodes::TYPES[$category])) {
+            throw ValidationException::withMessages(['category' => 'Use the academic reference form for this code type.']);
+        }
         $payload = ['reference' => 'codes', 'category' => $category, 'code' => $data['code'], 'value' => $data['value'], 'value_en' => $data['value_en'] ?? null, 'value_ar' => $data['value_ar'] ?? null];
         $entryId = $resolved && $resolved['type'] === 'entry' ? (int) $this->decodeReferenceKey($resolved['key'])['value'] : null;
         $duplicate = StudentReferenceEntry::query()->where('reference', 'codes')->where('category', $category)->where('code', $data['code'])->where('value', '!=', '__deleted__')->when($entryId, fn (Builder $query) => $query->whereKeyNot($entryId))->exists();
@@ -612,6 +753,7 @@ class StudentDossierController extends Controller
 
         return view('students.dossier.families', [
             'families' => ResponsiblePerson::query()
+                ->where('branch_id', app(\App\Services\BranchContext::class)->id())
                 ->doesntHave('students')
                 ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where(fn (Builder $people) => $people
                     ->whereInsensitiveLike('full_name', $search)

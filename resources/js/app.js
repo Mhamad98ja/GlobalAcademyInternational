@@ -217,6 +217,7 @@ document.querySelectorAll('[data-student-multi-select]').forEach((picker) => {
     const results = picker.querySelector('[data-student-picker-results]');
     const selected = picker.querySelector('[data-student-picker-selected]');
     const searchUrl = picker.dataset.searchUrl;
+    const branchInput = picker.closest('form')?.querySelector('[name="branch_id"]');
     let requestController;
     let searchTimer;
 
@@ -301,6 +302,7 @@ document.querySelectorAll('[data-student-multi-select]').forEach((picker) => {
             requestController = new AbortController();
             const url = new URL(searchUrl, window.location.origin);
             url.searchParams.set('q', query);
+            if (branchInput?.value) url.searchParams.set('branch_id', branchInput.value);
             try {
                 const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: requestController.signal });
                 if (!response.ok) throw new Error('Student search failed.');
@@ -318,6 +320,116 @@ document.querySelectorAll('[data-student-multi-select]').forEach((picker) => {
     });
     searchInput.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') hideResults();
+    });
+    branchInput?.addEventListener('change', () => {
+        requestController?.abort();
+        searchInput.value = '';
+        selected.replaceChildren();
+        hideResults();
+    });
+});
+
+document.querySelectorAll('[data-student-picker]').forEach((picker) => {
+    const input = picker.querySelector('[data-student-picker-input]');
+    const value = picker.querySelector('[data-student-picker-value]');
+    const results = picker.querySelector('[data-student-picker-results]');
+    const help = picker.querySelector('[data-student-picker-help]');
+    const form = picker.closest('form');
+    const searchUrl = picker.dataset.searchUrl;
+    let requestController;
+    let searchTimer;
+
+    if (!input || !value || !results || !searchUrl) return;
+
+    const currentFilter = (name, fallback) => form?.querySelector(`[name="${name}"]`)?.value || picker.dataset[fallback] || '';
+    const hideResults = () => {
+        results.replaceChildren();
+        results.hidden = true;
+    };
+    const showMessage = (message) => {
+        const paragraph = document.createElement('p');
+        paragraph.className = 'px-3 py-2 text-sm text-slate-500';
+        paragraph.textContent = message;
+        results.replaceChildren(paragraph);
+        results.hidden = false;
+    };
+    const selectStudent = (student) => {
+        const selectedId = picker.dataset.valueKey === 'registration' ? student.registration_id : student.student_id;
+        if (!selectedId) return;
+        value.value = String(selectedId);
+        ['academicYearId', 'gradeId', 'sectionId', 'sectionLabel'].forEach((key) => {
+            const responseKey = key.replace(/[A-Z]/g, (letter) => '_'+letter.toLowerCase());
+            if (student[responseKey] !== undefined) value.dataset[key] = student[responseKey] ?? '';
+        });
+        if (student.section_label) value.dataset.sectionLabel = student.section_label;
+        value.required = false;
+        input.value = student.label || `${student.student_number || ''} · ${student.full_name || ''}`.trim();
+        hideResults();
+        help?.replaceChildren(document.createTextNode('Selected student: '+input.value));
+        value.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const showMatches = (students) => {
+        if (!students.length) {
+            showMessage('No active students match the selected class filters.');
+            return;
+        }
+        const fragment = document.createDocumentFragment();
+        students.forEach((student) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-sky-50';
+            button.textContent = student.label || student.full_name;
+            button.addEventListener('click', () => selectStudent(student));
+            fragment.append(button);
+        });
+        results.replaceChildren(fragment);
+        results.hidden = false;
+    };
+    const search = () => {
+        window.clearTimeout(searchTimer);
+        const query = input.value.trim();
+        requestController?.abort();
+        value.required = Boolean(input.required && !value.value);
+        if (query.length < 2) {
+            hideResults();
+            return;
+        }
+        showMessage('Searching active students...');
+        searchTimer = window.setTimeout(async () => {
+            requestController = new AbortController();
+            const url = new URL(searchUrl, window.location.origin);
+            url.searchParams.set('q', query);
+            url.searchParams.set('mode', picker.dataset.valueKey === 'registration' ? 'registration' : 'student');
+            ['academic_year_id', 'grade_id', 'section_id', 'student_id'].forEach((field) => {
+                const valueForFilter = currentFilter(field, field === 'academic_year_id' ? 'academicYear' : field === 'student_id' ? 'studentId' : field.replace('_id', ''));
+                if (valueForFilter) url.searchParams.set(field, valueForFilter);
+            });
+            try {
+                const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: requestController.signal });
+                if (!response.ok) throw new Error('Student search failed.');
+                const payload = await response.json();
+                if (input.value.trim() === query) showMatches(payload.data || []);
+            } catch (error) {
+                if (error.name !== 'AbortError') showMessage('Student search is unavailable.');
+            }
+        }, 250);
+    };
+    input.addEventListener('input', () => {
+        value.value = '';
+        search();
+    });
+    input.addEventListener('focus', () => {
+        if (input.value.trim().length >= 2) search();
+    });
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') hideResults();
+    });
+    form?.addEventListener('change', (event) => {
+        if (event.target.matches('[name="academic_year_id"], [name="grade_id"], [name="section_id"]')) {
+            value.value = '';
+            input.value = '';
+            hideResults();
+        }
     });
 });
 
@@ -610,7 +722,7 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
 
         if (sameGradePackages.length) {
             const sections = [...new Set(sameGradePackages.map((bookPackage) => bookPackage.section_label))].join(', ');
-            packageHint.textContent = `No package matches Section ${registrationSelect.options[registrationSelect.selectedIndex].dataset.sectionLabel}. Available package sections: ${sections}. Edit a package and choose “All sections” to share it across the grade.`;
+            packageHint.textContent = `No package matches Section ${registrationSelect.dataset.sectionLabel || 'the selected section'}. Available package sections: ${sections}. Edit a package and choose “All sections” to share it across the grade.`;
             return;
         }
 
@@ -618,7 +730,7 @@ document.querySelectorAll('[data-distribution-form]').forEach((form) => {
     };
 
     const refreshPackages = () => {
-        const registration = registrationSelect.options[registrationSelect.selectedIndex];
+        const registration = registrationSelect.value ? registrationSelect : null;
         const previousPackageId = packageSelect.value;
 
         if (!registration?.value) {
@@ -884,13 +996,12 @@ document.querySelectorAll('[data-timetable]').forEach((timetable) => {
             slot.classList.remove('is-drag-over');
             if (!draggedCard) return;
             const existingCard = slot.querySelector('[data-schedule-card]');
-            const allowParallel = timetable.querySelector('[data-parallel-toggle]')?.checked === true;
-            if (existingCard && existingCard !== draggedCard && !allowParallel) {
-                showError('This class section already has a lesson in that period. Enable parallel / split lesson only when the class is divided into groups.');
+            if (existingCard && existingCard !== draggedCard) {
+                showError('This class section already has a lesson in that period. Choose an empty period or move the existing lesson first.');
                 return;
             }
             if (draggedCard.closest('[data-schedule-slot]') === slot) return;
-            const body = { teacher_assignment_id: Number(draggedCard.dataset.assignmentId), section_id: timetable.dataset.sectionId ? Number(timetable.dataset.sectionId) : null, is_parallel: allowParallel, day_of_week: slot.dataset.day, period_number: Number(slot.dataset.period) };
+            const body = { teacher_assignment_id: Number(draggedCard.dataset.assignmentId), section_id: timetable.dataset.sectionId ? Number(timetable.dataset.sectionId) : null, day_of_week: slot.dataset.day, period_number: Number(slot.dataset.period), room: draggedCard.dataset.room || null };
             const existingEntryId = draggedCard.dataset.existingEntryId;
             const endpoint = existingEntryId ? `${timetable.dataset.entryBaseUrl}/${existingEntryId}` : timetable.dataset.storeUrl;
             const response = await fetch(endpoint, {

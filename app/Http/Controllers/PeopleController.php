@@ -11,6 +11,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\Teacher;
 use App\Services\AuditService;
+use App\Services\BranchContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,18 +68,26 @@ class PeopleController extends Controller
 
     public function responsible(Request $request): View
     {
+        $branchId = $this->selectedFamilyBranchId($request);
+        $branches = app(BranchContext::class);
+
         return view('people.responsible', [
             'people' => ResponsiblePerson::query()
-                ->with(['teacher', 'students'])
-                ->when($request->filled('search'), fn ($query) => $query
+                ->with(['teacher', 'students' => fn ($students) => $students->withoutGlobalScopes()->where('students.branch_id', $branchId)])
+                ->where('branch_id', $branchId)
+                ->when($request->filled('search'), fn ($query) => $query->where(fn ($matches) => $matches
                     ->whereInsensitiveLike('full_name', $request->search)
-                    ->orWhereInsensitiveLike('phone', $request->search))
+                    ->orWhereInsensitiveLike('phone', $request->search)
+                    ->orWhereInsensitiveLike('parent_code', $request->search)))
                 ->orderBy('full_name')
                 ->paginate(15)
                 ->withQueryString(),
             'teachers' => Teacher::where('is_active', true)->orderBy('first_name')->get(),
-            'selectedStudents' => $this->studentsForPicker((array) old('student_ids', [])),
+            'selectedStudents' => $this->studentsForPicker((array) old('student_ids', []), $branchId),
             'referenceOptions' => $this->referenceOptions(),
+            'availableBranches' => $branches->accessibleBranches($request->user()),
+            'selectedBranchId' => $branchId,
+            'canChooseBranch' => $request->user()->isControllerAdministrator(),
         ]);
     }
 
@@ -86,11 +95,15 @@ class PeopleController extends Controller
     {
         $data = $request->validate([
             'q' => ['required', 'string', 'min:2', 'max:100'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
+        $branchId = $this->selectedFamilyBranchId($request);
 
         $terms = preg_split('/\s+/', trim($data['q']), -1, PREG_SPLIT_NO_EMPTY);
         $students = Student::query()
+            ->withoutGlobalScopes()
             ->select(['id', 'student_number', 'first_name', 'middle_name', 'last_name'])
+            ->where('branch_id', $branchId)
             ->where(function ($query) use ($terms): void {
                 foreach ($terms as $term) {
                     $query->where(function ($studentQuery) use ($term): void {
@@ -131,15 +144,17 @@ class PeopleController extends Controller
             return $person;
         });
 
-        return back()->with('success', 'Parent and linked student profiles saved.');
+        return redirect()->route('responsible.index', ['branch_id' => $person->branch_id])
+            ->with('success', 'Parent and linked student profiles saved.');
     }
 
     public function editResponsible(ResponsiblePerson $responsiblePerson): View
     {
-        $responsiblePerson->load('students');
+        $this->assertCanManageFamily($responsiblePerson);
+        $responsiblePerson->load(['students' => fn ($students) => $students->withoutGlobalScopes()->where('students.branch_id', $responsiblePerson->branch_id), 'branch']);
         $selectedStudentIds = old('student_ids');
         $selectedStudents = is_array($selectedStudentIds)
-            ? $this->studentsForPicker($selectedStudentIds)
+            ? $this->studentsForPicker($selectedStudentIds, (int) $responsiblePerson->branch_id)
             : $responsiblePerson->students;
 
         return view('people.responsible-form', [
@@ -154,6 +169,7 @@ class PeopleController extends Controller
 
     public function updateResponsible(Request $request, ResponsiblePerson $responsiblePerson): RedirectResponse
     {
+        $this->assertCanManageFamily($responsiblePerson);
         $data = $this->validatedResponsible($request);
         $studentIds = $data['student_ids'] ?? [];
         $children = $data['children'] ?? [];
@@ -166,12 +182,14 @@ class PeopleController extends Controller
             $this->createLinkedStudents($responsiblePerson, $children);
         });
 
-        return redirect()->route('responsible.index')->with('success', 'Responsible person updated.');
+        return redirect()->route('responsible.index', ['branch_id' => $responsiblePerson->branch_id])
+            ->with('success', 'Responsible person updated.');
     }
 
     public function destroyResponsible(ResponsiblePerson $responsiblePerson, AuditService $audit): RedirectResponse
     {
-        if ($responsiblePerson->students()->exists()) {
+        $this->assertCanManageFamily($responsiblePerson);
+        if ($responsiblePerson->students()->withoutGlobalScopes()->exists()) {
             return back()->with('error', 'Remove or reassign the linked students before deleting this family contact.');
         }
 
@@ -234,9 +252,14 @@ class PeopleController extends Controller
         }
 
         $studentIds = collect($data['student_ids'] ?? [])->map(fn ($id) => (int) $id)->all();
-        if ($studentIds !== [] && Student::query()->whereKey($studentIds)->count() !== count($studentIds)) {
+        $person = $request->route('responsiblePerson');
+        $branchId = $person instanceof ResponsiblePerson
+            ? (int) ($person->branch_id ?? app(BranchContext::class)->id())
+            : $this->selectedFamilyBranchId($request);
+        $data['branch_id'] = $branchId;
+        if ($studentIds !== [] && Student::withoutGlobalScopes()->where('branch_id', $branchId)->whereKey($studentIds)->count() !== count($studentIds)) {
             throw ValidationException::withMessages([
-                'student_ids' => 'One or more selected students are not available in this branch.',
+                'student_ids' => 'Every linked student must belong to the selected family branch.',
             ]);
         }
 
@@ -283,7 +306,8 @@ class PeopleController extends Controller
 
         foreach ($children as $child) {
             $student = Student::create([
-                'student_number' => ($child['student_number'] ?? null) ?: 'STU-'.now()->format('Y').'-'.str_pad((string) ((Student::max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT),
+                'branch_id' => $person->branch_id,
+                'student_number' => ($child['student_number'] ?? null) ?: 'STU-'.now()->format('Y').'-'.str_pad((string) ((Student::withoutGlobalScopes()->max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT),
                 'first_name' => $child['first_name'],
                 'middle_name' => $child['middle_name'] ?? null,
                 'last_name' => $child['last_name'],
@@ -307,12 +331,34 @@ class PeopleController extends Controller
         }
     }
 
-    private function studentsForPicker(array $studentIds)
+    private function studentsForPicker(array $studentIds, int $branchId)
     {
-        return Student::query()
+        return Student::withoutGlobalScopes()
+            ->where('branch_id', $branchId)
             ->whereKey(collect($studentIds)->filter()->map(fn ($id) => (int) $id)->unique()->all())
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get();
+    }
+
+    private function selectedFamilyBranchId(Request $request): int
+    {
+        $branches = app(BranchContext::class);
+        $currentBranchId = $branches->id();
+        $branchId = $request->filled('branch_id') ? (int) $request->input('branch_id') : $currentBranchId;
+        if (! $branchId || ! $branches->canUse($request->user(), $branchId)
+            || (! $request->user()->isControllerAdministrator() && $branchId !== $currentBranchId)) {
+            throw ValidationException::withMessages(['branch_id' => 'Choose an active branch you are allowed to manage.']);
+        }
+
+        return $branchId;
+    }
+
+    private function assertCanManageFamily(ResponsiblePerson $person): void
+    {
+        $user = auth()->user();
+        $branchId = (int) ($person->branch_id ?? app(BranchContext::class)->id());
+        abort_unless(app(BranchContext::class)->canUse($user, $branchId), 403);
+        abort_if(! $user->isControllerAdministrator() && $branchId !== app(BranchContext::class)->id(), 403);
     }
 }

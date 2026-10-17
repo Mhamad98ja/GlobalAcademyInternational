@@ -8,12 +8,7 @@
         <div class="panel-header"><h2 class="panel-title">New action record</h2></div>
         <form method="POST" action="{{ route('discipline.store') }}" enctype="multipart/form-data" class="space-y-3 p-5" data-submit-lock>
             @csrf
-            <select name="student_id" required>
-                <option value="">Student</option>
-                @foreach ($students as $student)
-                    <option value="{{ $student->id }}">{{ $student->student_number }} &middot; {{ $student->full_name }}</option>
-                @endforeach
-            </select>
+            <x-student-picker name="student_id" :selected-id="old('student_id')" :selected-label="$students->firstWhere('id', old('student_id'))?->full_name" required />
             <div class="grid gap-3 sm:grid-cols-2">
                 <select name="action_category_id" data-action-category-select data-action-type-target="#action-type">
                     <option value="">Category</option>
@@ -52,7 +47,8 @@
     <section class="panel">
         <div class="panel-header">
             <form method="GET" class="grid w-full gap-2 md:grid-cols-3">
-                <input name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Search student, location, description">
+                <input name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Search location or description">
+                <x-student-picker name="student_id" :selected-id="$filters['student_id'] ?? null" :selected-label="$students->firstWhere('id', $filters['student_id'] ?? null)?->full_name" placeholder="Filter by student name or number" />
                 <select name="action_type_id">
                     <option value="">All action types</option>
                     @foreach ($categories as $category)

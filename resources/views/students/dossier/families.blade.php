@@ -2,7 +2,7 @@
 
 @section('content')
 <div class="page-header">
-    <div><div class="text-sm text-slate-500">Student dossier / Families</div><h1 class="page-title mt-1">Families without students</h1><p class="page-subtitle">Review unlinked parent and guardian records before they are attached to a student, corrected, or removed.</p></div>
+    <div><h1 class="page-title">Families without students</h1><p class="page-subtitle">Review unlinked parent and guardian records before they are attached to a student, corrected, or removed.</p></div>
     <a class="btn btn-primary" href="{{ route('responsible.index') }}">New parent / guardian</a>
 </div>
 

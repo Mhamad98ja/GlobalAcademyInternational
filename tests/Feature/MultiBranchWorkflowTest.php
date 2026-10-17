@@ -427,7 +427,6 @@ class MultiBranchWorkflowTest extends TestCase
                 'address' => 'South district',
                 'is_active' => '1',
                 'user_ids' => [(string) $employee->id],
-                'default_user_id' => (string) $employee->id,
                 'branch_administrator_id' => (string) $employee->id,
             ])->assertRedirect()->assertSessionHas('success');
 
@@ -440,12 +439,12 @@ class MultiBranchWorkflowTest extends TestCase
                 'name' => 'South Campus',
                 'is_active' => '1',
                 'user_ids' => [(string) $administrator->id, (string) $employee->id],
-                'default_user_id' => (string) $administrator->id,
                 'branch_administrator_id' => (string) $employee->id,
             ])->assertRedirect()->assertSessionHas('success');
 
         $this->assertDatabaseHas('branches', ['id' => $south->id, 'name' => 'South Campus']);
-        $this->assertDatabaseHas('branch_user', ['branch_id' => $south->id, 'user_id' => $administrator->id, 'is_default' => true]);
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $south->id, 'user_id' => $administrator->id, 'is_default' => false]);
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $main->id, 'user_id' => $administrator->id, 'is_default' => true]);
     }
 
     public function test_controller_administrator_can_delete_only_an_unused_non_main_branch(): void
@@ -510,7 +509,12 @@ class MultiBranchWorkflowTest extends TestCase
             ->get(route('branches.index'))
             ->assertOk()
             ->assertSee('New branch')
-            ->assertSee('Delete branch');
+            ->assertSee('Choose a branch to manage')
+            ->assertDontSee('Delete branch');
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('branches.index', ['edit' => Branch::where('code', 'NORTH')->firstOrFail()->id]))
+            ->assertOk()->assertSee('Delete branch');
 
         $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
             ->get(route('admin.imports'))
@@ -520,6 +524,10 @@ class MultiBranchWorkflowTest extends TestCase
 
         $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $main->id])
             ->get(route('branches.index'))
+            ->assertForbidden();
+
+        $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $main->id])
+            ->get(route('branches.users.search', ['q' => 'controller']))
             ->assertForbidden();
 
         $this->actingAs($branchAdministrator)->withSession(['current_branch_id' => $main->id])
@@ -537,6 +545,232 @@ class MultiBranchWorkflowTest extends TestCase
             ->assertRedirect();
 
         $this->assertDatabaseHas('branches', ['code' => 'ALLOWED']);
+    }
+
+    public function test_branch_page_searches_branches_and_loads_users_only_when_requested(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['name' => 'Controller', 'is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        $branchAdministrator = $this->user('principal@example.test');
+        $branchAdministrator->update(['name' => 'Principal']);
+        [$main, $north] = $this->branches($controller, $branchAdministrator);
+        $main->users()->updateExistingPivot($branchAdministrator->id, ['is_branch_administrator' => true]);
+        $north->users()->updateExistingPivot($branchAdministrator->id, ['is_branch_administrator' => true]);
+        $south = Branch::create(['code' => 'SOUTH', 'name' => 'South Branch', 'is_active' => true]);
+        $unassigned = User::factory()->create(['name' => 'Searchable Employee', 'email' => 'searchable@example.test', 'is_active' => true]);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('branches.index', ['q' => 'North']))
+            ->assertOk()->assertSee('North Branch')
+            ->assertDontSee('href="'.route('branches.index', ['edit' => $south->id, 'q' => 'North']).'"', false)
+            ->assertDontSee('name="user_ids[]"', false);
+
+        $this->get(route('branches.index', ['edit' => $north->id]))
+            ->assertOk()->assertSee('Edit North Branch')
+            ->assertSee('name="user_ids[]"', false)
+            ->assertDontSee('Searchable Employee');
+
+        $this->get(route('branches.users.search', ['q' => 'Searchable']))
+            ->assertOk()->assertJsonFragment(['id' => $unassigned->id, 'name' => 'Searchable Employee'])
+            ->assertJsonMissing(['name' => 'Principal']);
+
+        foreach (range(1, 15) as $number) {
+            Branch::create(['code' => 'CAMPUS-'.$number, 'name' => 'Campus '.$number, 'is_active' => true]);
+        }
+        $this->get(route('branches.index'))->assertOk()
+            ->assertViewHas('branches', fn ($page) => $page->count() === 12 && $page->hasMorePages());
+    }
+
+    public function test_branch_people_are_grouped_and_student_accounts_cannot_be_moved_from_the_branch_form(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        $administrator = $this->user('principal@example.test');
+        [$main, $north] = $this->branches($controller, $administrator);
+        $north->users()->updateExistingPivot($administrator->id, ['is_branch_administrator' => true]);
+        $student = Student::withoutGlobalScopes()->create(['branch_id' => $north->id, 'student_number' => 'N-100', 'first_name' => 'Nadia', 'last_name' => 'Student']);
+        $studentUser = User::factory()->create(['name' => 'Nadia Student', 'email' => 'nadia@example.test', 'student_id' => $student->id]);
+        $studentRole = Role::firstOrCreate(['name' => 'student'], ['label' => 'Student']);
+        $studentUser->roles()->sync([$studentRole->id]);
+        $studentUser->branches()->attach([$north->id => ['is_default' => true, 'is_branch_administrator' => false]]);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->get(route('branches.index', ['edit' => $north->id]))
+            ->assertOk()->assertSee('data-group="administrators"', false)
+            ->assertSee('data-group="teachers"', false)
+            ->assertSee('data-group="students"', false)
+            ->assertSee('Nadia Student');
+        $this->get(route('branches.users.search', ['q' => 'Nadia', 'kind' => 'students', 'branch_id' => $north->id]))
+            ->assertOk()->assertJsonFragment(['name' => 'Nadia Student', 'kind' => 'students']);
+        $this->get(route('branches.users.search', ['q' => 'Nadia', 'kind' => 'administrators']))
+            ->assertOk()->assertExactJson([]);
+
+        $this->put(route('branches.update', $north), [
+            'code' => 'NORTH', 'name' => 'North Branch', 'is_active' => '1',
+            'user_ids' => [$administrator->id], 'branch_administrator_id' => $administrator->id,
+        ])->assertSessionHasErrors('user_ids');
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $north->id, 'user_id' => $studentUser->id]);
+    }
+
+    public function test_branch_edits_preserve_each_users_default_branch_and_prevent_orphaned_accounts(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        $administrator = $this->user('principal@example.test');
+        $member = $this->user('member@example.test');
+        [$main, $north] = $this->branches($controller);
+        $administrator->branches()->attach([$north->id => ['is_default' => true, 'is_branch_administrator' => true]]);
+        $member->branches()->attach([$north->id => ['is_default' => true, 'is_branch_administrator' => false]]);
+
+        $payload = ['code' => 'NORTH', 'name' => 'North Branch', 'is_active' => '1', 'user_ids' => [$administrator->id], 'branch_administrator_id' => $administrator->id];
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->put(route('branches.update', $north), $payload)->assertSessionHasErrors('user_ids');
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $north->id, 'user_id' => $member->id, 'is_default' => true]);
+
+        $member->branches()->attach([$main->id => ['is_default' => false, 'is_branch_administrator' => false]]);
+        $this->put(route('branches.update', $north), $payload)->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('branch_user', ['branch_id' => $north->id, 'user_id' => $member->id]);
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $main->id, 'user_id' => $member->id, 'is_default' => true]);
+
+        $this->put(route('branches.update', $north), array_replace($payload, ['is_active' => '0']))->assertSessionHasErrors('is_active');
+        $administrator->branches()->attach([$main->id => ['is_default' => false, 'is_branch_administrator' => false]]);
+        $this->put(route('branches.update', $north), array_replace($payload, ['is_active' => '0']))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $main->id, 'user_id' => $administrator->id, 'is_default' => true]);
+        $this->assertDatabaseHas('branches', ['id' => $north->id, 'is_active' => false]);
+    }
+
+    public function test_responsible_administrator_cannot_be_removed_or_disabled_without_a_transfer(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        $responsible = $this->user('responsible@example.test');
+        [$main, $north] = $this->branches($controller, $responsible);
+        $main->users()->updateExistingPivot($responsible->id, ['is_branch_administrator' => true]);
+        $north->users()->updateExistingPivot($responsible->id, ['is_branch_administrator' => true]);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->put(route('admin.users.update', $responsible), [
+                'name' => $responsible->name,
+                'email' => $responsible->email,
+                'role_id' => $responsible->roles()->firstOrFail()->id,
+                'branch_ids' => [$main->id, $north->id],
+                'default_branch_id' => $main->id,
+                'branch_administrator_ids' => [$north->id],
+            ])->assertSessionHasErrors('branch_administrator_ids');
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $main->id, 'user_id' => $responsible->id, 'is_branch_administrator' => true]);
+
+        $employeeRole = Role::firstOrCreate(['name' => 'employee'], ['label' => 'Employee']);
+        $this->put(route('admin.users.update', $responsible), [
+            'name' => 'Changed Name',
+            'email' => $responsible->email,
+            'role_id' => $employeeRole->id,
+            'branch_ids' => [$main->id, $north->id],
+            'default_branch_id' => $main->id,
+            'branch_administrator_ids' => [$main->id, $north->id],
+        ])->assertStatus(422);
+        $this->assertDatabaseHas('users', ['id' => $responsible->id, 'name' => $responsible->name]);
+        $this->assertTrue($responsible->fresh()->hasRole('super-administrator'));
+
+        $this->post(route('admin.users.toggle', $responsible))->assertStatus(422);
+        $this->delete(route('admin.users.destroy', $responsible))->assertStatus(422);
+        $this->assertDatabaseHas('users', ['id' => $responsible->id, 'is_active' => true, 'deleted_at' => null]);
+    }
+
+    public function test_branch_administrator_can_be_prepared_on_an_existing_branch_without_displacing_its_administrator(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        [$main] = $this->branches($controller);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->post(route('admin.users.store'), [
+                'name' => 'Incomplete Administrator',
+                'email' => 'incomplete-admin@example.test',
+                'password' => 'SecurePass123!',
+                'password_confirmation' => 'SecurePass123!',
+                'role_id' => $controller->roles()->firstOrFail()->id,
+                'branch_ids' => [$main->id],
+                'default_branch_id' => $main->id,
+            ])->assertRedirect()->assertSessionHas('success');
+
+        $candidate = User::where('email', 'incomplete-admin@example.test')->firstOrFail();
+        $this->assertDatabaseHas('branch_user', ['user_id' => $candidate->id, 'branch_id' => $main->id, 'is_default' => true, 'is_branch_administrator' => false]);
+    }
+
+    public function test_new_user_single_branch_is_automatically_the_starting_branch(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        [$main, $north] = $this->branches($controller);
+        $employeeRole = Role::firstOrCreate(['name' => 'employee'], ['label' => 'Employee']);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->post(route('admin.users.store'), [
+                'name' => 'North Employee',
+                'email' => 'north-employee@example.test',
+                'password' => 'SecurePass123!',
+                'password_confirmation' => 'SecurePass123!',
+                'role_id' => $employeeRole->id,
+                'branch_id' => $north->id,
+            ])->assertRedirect()->assertSessionHas('success');
+
+        $employee = User::where('email', 'north-employee@example.test')->firstOrFail();
+        $this->assertDatabaseHas('branch_user', ['user_id' => $employee->id, 'branch_id' => $north->id, 'is_default' => true, 'is_branch_administrator' => false]);
+        $this->assertDatabaseMissing('branch_user', ['user_id' => $employee->id, 'branch_id' => $main->id]);
+        $this->actingAs($employee)->get(route('branches.index'))->assertForbidden();
+    }
+
+    public function test_new_branch_can_create_its_first_administrator_in_the_same_step(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        [$main] = $this->branches($controller);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->post(route('branches.store'), [
+                'code' => 'EAST',
+                'name' => 'East Campus',
+                'is_active' => '1',
+                'administrator_name' => 'East Administrator',
+                'administrator_email' => 'east-admin@example.test',
+                'administrator_password' => 'SecurePass123!',
+                'administrator_password_confirmation' => 'SecurePass123!',
+            ])->assertRedirect()->assertSessionHas('success');
+
+        $east = Branch::where('code', 'EAST')->firstOrFail();
+        $administrator = User::where('email', 'east-admin@example.test')->firstOrFail();
+        $this->assertTrue($administrator->hasRole('super-administrator'));
+        $this->assertDatabaseHas('branch_user', ['branch_id' => $east->id, 'user_id' => $administrator->id, 'is_default' => true, 'is_branch_administrator' => true]);
+        $this->assertFalse($administrator->isControllerAdministrator());
+
+        $this->get(route('admin.settings'))->assertOk();
+        $this->actingAs($administrator)->withSession(['current_branch_id' => $east->id])
+            ->get(route('branches.index'))->assertForbidden();
+        $this->get(route('admin.settings'))->assertForbidden();
+        $this->get(route('admin.audit'))->assertForbidden();
+        $this->post(route('students.references.store', ['reference' => 'codes']), [])->assertForbidden();
+        $this->get(route('admin.users'))->assertOk();
+    }
+
+    public function test_failed_inline_administrator_validation_does_not_create_a_branch_or_account(): void
+    {
+        $controller = $this->user('controller@example.test');
+        $controller->update(['is_controller_administrator' => true, 'has_all_branch_access' => true]);
+        [$main] = $this->branches($controller);
+
+        $this->actingAs($controller)->withSession(['current_branch_id' => $main->id])
+            ->post(route('branches.store'), [
+                'code' => 'UNFINISHED',
+                'name' => 'Unfinished Branch',
+                'is_active' => '1',
+                'administrator_name' => 'Unfinished Administrator',
+                'administrator_email' => 'unfinished@example.test',
+                'administrator_password' => 'weak',
+                'administrator_password_confirmation' => 'weak',
+            ])->assertSessionHasErrors('administrator_password');
+
+        $this->assertDatabaseMissing('branches', ['code' => 'UNFINISHED']);
+        $this->assertDatabaseMissing('users', ['email' => 'unfinished@example.test']);
     }
 
     public function test_only_controller_administrator_can_assign_global_or_specific_branch_access(): void
@@ -586,7 +820,7 @@ class MultiBranchWorkflowTest extends TestCase
             ->get(route('admin.users'))
             ->assertOk()
             ->assertSee('data-user-role-select', false)
-            ->assertSee('data-branch-administrator-selection', false)
+            ->assertSee('name="branch_id"', false)
             ->assertSee('data-role-name="super-administrator"', false);
     }
 

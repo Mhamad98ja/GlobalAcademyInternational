@@ -14,8 +14,8 @@
         request()->routeIs('students.*', 'responsible.*', 'attendance.students*', 'discipline.*', 'medical.*', 'exam-absences.*') || $workspace === 'students' => 'students',
         request()->routeIs('grades.*') => 'collaboration',
         request()->routeIs('reports.*', 'report-card.*', 'school-academic.*', 'timetable.*') || $workspace === 'academic' => 'reports',
-        request()->routeIs('collaboration.*', 'messages.*', 'teachers.*', 'attendance.teachers*', 'substitutions.*') || $workspace === 'teachers' => 'collaboration',
-        request()->routeIs('admin.*', 'books.*', 'class-lists.*', 'suppliers.*', 'purchases.*', 'supplier-returns.*', 'distributions.*', 'inventory.*', 'transfers.*', 'finance.*', 'invoices.*', 'payments.*', 'returns.*', 'operations.*') || $workspace === 'operations' => 'administration',
+        request()->routeIs('collaboration.*', 'messages.*', 'attendance.teachers*', 'substitutions.*') || $workspace === 'teachers' => 'collaboration',
+        request()->routeIs('admin.*', 'books.*', 'class-lists.*', 'suppliers.*', 'purchases.*', 'supplier-returns.*', 'distributions.*', 'inventory.*', 'transfers.*', 'finance.*', 'invoices.*', 'payments.*', 'returns.*', 'operations.*', 'teachers.*') || $workspace === 'operations' => 'administration',
         default => null,
     };
     $moduleMenus = [
@@ -23,8 +23,12 @@
             'home' => ['route' => 'students.dashboard', 'label' => 'Home', 'icon' => 'dashboard', 'permission' => 'students.view'],
             'items' => [
                 ['route' => 'students.index', 'label' => 'Student Search', 'icon' => 'students', 'permission' => 'students.view'],
-                ['route' => 'attendance.students', 'label' => 'Manipulation absence', 'icon' => 'students', 'permission' => 'attendance.student.manage'],
-                ['route' => 'students.attestations', 'label' => 'Attestations', 'icon' => 'reports', 'permission' => 'reports.view'],
+                ['route' => 'attendance.students', 'label' => 'Manipulation absence', 'icon' => 'students', 'permission' => 'attendance.student.view'],
+                ['route' => 'reports.school', 'params' => ['report' => 'student_attendance'], 'label' => 'Attendance Reports', 'icon' => 'reports', 'permission' => 'reports.attendance.view'],
+                ['route' => 'medical.index', 'label' => 'Medical Reports', 'icon' => 'reports', 'permission' => 'reports.medical.view'],
+                ['route' => 'discipline.index', 'label' => 'Observations & Issues', 'icon' => 'reports', 'permission' => 'reports.discipline.view'],
+                ['route' => 'students.observations', 'label' => 'Observations Registry', 'icon' => 'reports', 'permission' => 'students.observations.view'],
+                ['route' => 'students.attestations', 'label' => 'Attestations', 'icon' => 'reports', 'permission' => 'students.attestations.view'],
             ],
             'groups' => [],
         ],
@@ -66,84 +70,50 @@
                     ['route' => 'reports.index', 'params' => ['report' => 'students'], 'label' => 'Registration List', 'icon' => 'reports', 'permission' => 'reports.view'],
                 ]],
                 ['label' => 'School Records', 'items' => [
-                    ['route' => 'reports.school', 'params' => ['report' => 'student_attendance'], 'label' => 'Student Attendance', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'teacher_attendance'], 'label' => 'Teacher Attendance', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'incidents'], 'label' => 'Student Incidents and Actions', 'icon' => 'reports', 'permission' => 'discipline.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'medical_records'], 'label' => 'Medical Records', 'icon' => 'reports', 'permission' => 'medical.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'exam_absences'], 'label' => 'Exam Absences', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'substitutions'], 'label' => 'Teacher Substitutions', 'icon' => 'reports', 'permission' => 'reports.view'],
+                    ['route' => 'reports.school', 'params' => ['report' => 'student_attendance'], 'label' => 'Student Attendance', 'icon' => 'reports', 'permission' => 'reports.attendance.view'],
+                    ['route' => 'reports.school', 'params' => ['report' => 'teacher_attendance'], 'label' => 'Teacher Attendance', 'icon' => 'reports', 'permission' => 'reports.attendance.view'],
+                    ['route' => 'reports.school', 'params' => ['report' => 'incidents'], 'label' => 'Student Incidents and Actions', 'icon' => 'reports', 'permission' => 'reports.discipline.view'],
+                    ['route' => 'reports.school', 'params' => ['report' => 'medical_records'], 'label' => 'Medical Records', 'icon' => 'reports', 'permission' => 'reports.medical.view'],
+                    ['route' => 'reports.school', 'params' => ['report' => 'student_observations'], 'label' => 'Student Observations', 'icon' => 'reports', 'permission' => 'reports.observations.view'],
+                    ['route' => 'reports.school', 'params' => ['report' => 'exam_absences'], 'label' => 'Exam Absences', 'icon' => 'reports', 'permission' => 'exam-absences.view'],
+                    ['route' => 'reports.school', 'params' => ['report' => 'substitutions'], 'label' => 'Teacher Substitutions', 'icon' => 'reports', 'permission' => 'substitutions.view'],
                     ['route' => 'reports.school', 'params' => ['report' => 'teacher_workload'], 'label' => 'Teacher Workload', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Grade Results', 'icon' => 'reports', 'permission' => 'reports.view'],
+                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Grade Results', 'icon' => 'reports', 'permission' => 'grades.view'],
                 ]],
             ],
         ],
         'administration' => [
-            'home' => ['route' => 'admin.users', 'label' => 'Users and Roles', 'icon' => 'administration', 'permission' => 'admin.manage'],
-            'items' => [],
+            'home' => ['route' => 'workspaces.show', 'params' => ['workspace' => 'operations'], 'label' => 'Administration & Operations', 'icon' => 'dashboard', 'permission' => 'admin.view'],
+            'items' => [
+                ['route' => 'academic.index', 'label' => 'School Structure (read-only)', 'icon' => 'academic', 'permission' => 'academic.manage'],
+                ['route' => 'teachers.index', 'label' => 'Teachers List', 'icon' => 'teachers', 'permission' => 'people.view'],
+                ['route' => 'attendance.teachers', 'label' => 'Teacher Attendance', 'icon' => 'reports', 'permission' => 'attendance.teacher.view'],
+                ['route' => 'substitutions.index', 'label' => 'Teacher Substitutions', 'icon' => 'teachers', 'permission' => 'substitutions.view'],
+                ['route' => 'reports.school', 'params' => ['report' => 'teacher_workload'], 'label' => 'Teacher Workload', 'icon' => 'reports', 'permission' => 'reports.view'],
+                ['route' => 'timetable.index', 'label' => 'Timetable & Period Setup', 'icon' => 'academic', 'permission' => 'timetable.view'],
+                ['route' => 'admin.report-cards', 'label' => 'Annual & Partial Report Cards', 'icon' => 'reports', 'permission' => 'report-card.view'],
+            ],
             'groups' => [
                 ['label' => 'References', 'items' => [
-                    ['route' => 'students.references.show', 'params' => ['reference' => 'codes'], 'label' => 'Codes', 'icon' => 'administration', 'permission' => 'students.view'],
-                    ['route' => 'students.references.show', 'params' => ['reference' => 'division'], 'label' => 'Division', 'icon' => 'academic', 'permission' => 'students.view'],
-                    ['route' => 'students.references.show', 'params' => ['reference' => 'class-definition'], 'label' => 'Class Definitions', 'icon' => 'academic', 'permission' => 'students.view'],
-                    ['route' => 'students.references.show', 'params' => ['reference' => 'classes'], 'label' => 'Classes', 'icon' => 'academic', 'permission' => 'students.view'],
-                    ['route' => 'students.references.show', 'params' => ['reference' => 'other-schools'], 'label' => 'Other Schools', 'icon' => 'administration', 'permission' => 'students.view'],
-                    ['route' => 'students.references.show', 'params' => ['reference' => 'district'], 'label' => 'Districts', 'icon' => 'administration', 'permission' => 'students.view'],
-                    ['route' => 'students.references.show', 'params' => ['reference' => 'towns'], 'label' => 'Towns', 'icon' => 'administration', 'permission' => 'students.view'],
-                    ['route' => 'academic.index', 'anchor' => 'academic-years', 'label' => 'Academic Years', 'icon' => 'academic', 'permission' => 'academic.manage'],
-                    ['route' => 'academic.index', 'anchor' => 'terms-semesters', 'label' => 'Terms / Semesters', 'icon' => 'academic', 'permission' => 'academic.manage'],
-                    ['route' => 'academic.index', 'anchor' => 'levels-grades', 'label' => 'Levels & Grades', 'icon' => 'academic', 'permission' => 'academic.manage'],
-                    ['route' => 'academic.index', 'anchor' => 'sections', 'label' => 'Sections', 'icon' => 'academic', 'permission' => 'academic.manage'],
-                    ['route' => 'admin.settings', 'label' => 'Dictionary', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
-                    ['route' => 'responsible.index', 'label' => 'Family Type', 'icon' => 'responsible', 'permission' => 'people.manage'],
-                    ['route' => 'discipline.index', 'label' => 'Family Remark Type', 'icon' => 'administration', 'permission' => 'discipline.view', 'anchor' => 'action-references'],
-                    ['route' => 'admin.imports', 'label' => 'Import', 'icon' => 'administration', 'permission' => 'admin.manage'],
-                    ['route' => 'admin.settings', 'label' => 'File Category', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
-                    ['route' => 'messages.index', 'label' => 'Mail Type', 'icon' => 'responsible', 'permission' => 'messages.view'],
+                    ['route' => 'students.references.show', 'params' => ['reference' => 'codes'], 'label' => 'Codes', 'icon' => 'administration', 'permission' => 'students.view', 'controller_only' => true],
+                    ['route' => 'students.references.show', 'params' => ['reference' => 'other-schools'], 'label' => 'Other Schools', 'icon' => 'administration', 'permission' => 'students.view', 'controller_only' => true],
+                    ['route' => 'admin.imports', 'label' => 'Import', 'icon' => 'administration', 'permission' => 'admin.manage', 'controller_only' => true],
                 ]],
             ],
         ],
         'collaboration' => [
             'home' => ['route' => 'collaboration.index', 'label' => 'Home', 'icon' => 'dashboard', 'permission' => 'collaboration.view'],
             'items' => [
-                ['route' => 'teachers.index', 'label' => 'Teachers List', 'icon' => 'teachers', 'permission' => 'people.manage'],
-                ['route' => 'collaboration.index', 'params' => ['section' => 'homework'], 'label' => 'Subject Agenda', 'icon' => 'academic', 'permission' => 'collaboration.view'],
+                ['route' => 'collaboration.index', 'params' => ['section' => 'homework'], 'label' => 'Subject Agenda', 'icon' => 'academic', 'permission' => 'collaboration.agenda.view'],
                 ['route' => 'messages.index', 'label' => 'Messages', 'icon' => 'responsible', 'permission' => 'messages.view'],
-                ['route' => 'collaboration.index', 'params' => ['section' => 'calendar'], 'label' => 'Calendar', 'icon' => 'academic', 'permission' => 'collaboration.view'],
-                ['route' => 'collaboration.index', 'params' => ['section' => 'performance'], 'label' => 'Performance Appraisals', 'icon' => 'reports', 'permission' => 'performance.view'],
-                ['route' => 'students.index', 'label' => 'Students', 'icon' => 'students', 'permission' => 'students.view'],
-                ['route' => 'collaboration.index', 'params' => ['section' => 'performance-dashboard'], 'label' => 'Performance Dashboard', 'icon' => 'reports', 'permission' => 'performance.view'],
+                ['route' => 'collaboration.index', 'params' => ['section' => 'calendar'], 'label' => 'Calendar', 'icon' => 'academic', 'permission' => 'collaboration.calendar.view'],
             ],
             'groups' => [
                 ['label' => 'Evaluations', 'items' => [
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'evaluation-dashboard'], 'label' => 'Dashboard', 'icon' => 'reports', 'permission' => 'performance.view'],
-                    ['route' => 'grades.index', 'params' => ['view' => 'evaluations'], 'label' => 'Evaluation Grades', 'icon' => 'academic', 'permission' => 'grades.enter'],
-                    ['route' => 'grades.index', 'params' => ['view' => 'grade-book'], 'label' => 'Grade Book', 'icon' => 'academic', 'permission' => 'grades.enter'],
-                    ['route' => 'collaboration.section', 'params' => ['section' => 'modification-requests'], 'label' => 'Evaluation Requests', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'modification-requests'], 'label' => 'My Requests', 'icon' => 'reports', 'permission' => 'performance.view'],
-                ]],
-                ['label' => 'Agenda reports', 'items' => [
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'homework-report'], 'label' => 'Homework Report', 'icon' => 'reports', 'permission' => 'collaboration.view'],
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'homework-totals'], 'label' => 'Homework Report Totals', 'icon' => 'reports', 'permission' => 'collaboration.view'],
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'homework-comparison'], 'label' => 'Homework Comparison', 'icon' => 'reports', 'permission' => 'collaboration.view'],
-                ]],
-                ['label' => 'Skills', 'items' => [
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'skills-student'], 'label' => 'Skills per Student', 'icon' => 'reports', 'permission' => 'performance.view'],
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'skills-approve'], 'label' => 'Skills to Approve', 'icon' => 'reports', 'permission' => 'performance.view'],
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'remarks-approve'], 'label' => 'Remarks to Approve', 'icon' => 'reports', 'permission' => 'performance.view'],
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'item-remarks'], 'label' => 'Item Remarks', 'icon' => 'reports', 'permission' => 'performance.view'],
-                ]],
-                ['label' => 'Remarks', 'items' => [
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'class-remarks'], 'label' => 'Remarks per Class', 'icon' => 'reports', 'permission' => 'performance.view'],
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'principal-appreciations'], 'label' => 'Cycle Principal Appreciations', 'icon' => 'reports', 'permission' => 'performance.view'],
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'remarks-entry'], 'label' => 'Remarks Entry', 'icon' => 'reports', 'permission' => 'performance.view'],
-                    ['route' => 'attendance.students', 'label' => 'Attendance Management', 'icon' => 'students', 'permission' => 'attendance.student.manage'],
-                ]],
-                ['label' => 'Administration', 'items' => [
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'standards'], 'label' => 'Standards', 'icon' => 'administration', 'permission' => 'collaboration.manage'],
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'report-card-receipt'], 'label' => 'Report Card Acknowledgment of Receipt', 'icon' => 'administration', 'permission' => 'collaboration.manage'],
-                    ['route' => 'collaboration.index', 'params' => ['section' => 'icons'], 'label' => 'Icons', 'icon' => 'administration', 'permission' => 'collaboration.manage'],
-                    ['route' => 'admin.audit', 'label' => 'System Error Log', 'icon' => 'administration', 'permission' => 'admin.manage'],
-                    ['route' => 'messages.index', 'label' => 'Bulk Message', 'icon' => 'responsible', 'permission' => 'messages.view'],
+                    ['route' => 'collaboration.index', 'params' => ['section' => 'evaluation-dashboard'], 'label' => 'Dashboard', 'icon' => 'reports', 'permission' => 'evaluation.dashboard.view'],
+                    ['route' => 'grades.index', 'params' => ['view' => 'evaluations'], 'label' => 'Evaluation', 'icon' => 'academic', 'permission' => 'evaluation.view'],
+                    ['route' => 'grades.assessments.create', 'label' => 'New evaluation', 'icon' => 'academic', 'permission' => 'evaluation.create'],
+                    ['route' => 'collaboration.section', 'params' => ['section' => 'modification-requests'], 'label' => 'Modification request', 'icon' => 'reports', 'permission' => 'evaluation.modification-requests.view'],
                 ]],
             ],
         ],
@@ -210,7 +180,6 @@
         'File Category' => ['page' => 'file-category', 'label' => 'Catégorie de Fichier'],
         'Mail Type' => ['page' => 'mail-type', 'label' => 'Type de Courrier'],
     ];
-    $moduleMenus['administration']['home']['label'] = 'Utilisateurs et Accès';
     foreach ($moduleMenus['administration']['groups'] as &$adminGroup) {
         $adminGroup['label'] = $adminGroup['label'] === 'References' ? 'Références' : $adminGroup['label'];
         foreach ($adminGroup['items'] as &$adminItem) {
@@ -320,7 +289,6 @@
         unset($item);
     }
     unset($group);
-    $moduleMenus['administration']['home']['label'] = 'Users and Access';
     foreach ($moduleMenus['administration']['groups'] as &$group) {
         // Keep this administration category in English even if legacy menu
         // definitions contain translated or mis-encoded labels.
@@ -350,15 +318,21 @@
     $moduleMenus['reports'] = [
         'home' => ['route' => 'workspaces.show', 'params' => ['workspace' => 'academic'], 'label' => 'Academic & Report Card', 'icon' => 'dashboard', 'permission' => 'dashboard.view'],
         'items' => [
-            ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Report Card', 'icon' => 'reports', 'permission' => 'reports.view'],
             ['route' => 'reports.index', 'label' => 'Academic Reports', 'icon' => 'reports', 'permission' => 'reports.view'],
             ['route' => 'school-academic.index', 'label' => 'Academic Operations', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
         ],
         'groups' => [],
     ];
     $menu = $module ? $moduleMenus[$module] : null;
+    $coreNavigation = [
+        ['workspace' => 'students', 'label' => 'Student Records', 'icon' => 'students', 'permission' => 'students.view'],
+        ['workspace' => 'academic', 'label' => 'Academic & Report Card', 'icon' => 'reports', 'permission' => 'reports.view'],
+        ['workspace' => 'teachers', 'label' => 'Teaching & Collaboration', 'icon' => 'responsible', 'permission' => 'collaboration.view'],
+        ['workspace' => 'operations', 'label' => 'Administration & Operations', 'icon' => 'administration', 'permission' => 'admin.view'],
+    ];
     $showAdministrationReferences = $module === 'administration'
-        && (request()->routeIs('operations.index') || request()->routeIs('students.references.*') || request()->routeIs('academic.*'));
+        && (request()->routeIs('operations.index') || request()->routeIs('students.references.*') || request()->routeIs('academic.*')
+            || (request()->routeIs('workspaces.show') && $workspace === 'operations'));
     $canSee = fn (array $item) => ($item['financial'] ?? false) ? $signedInUser->canViewFinancials() : ((! ($item['controller_only'] ?? false) || $signedInUser->isControllerAdministrator()) && $signedInUser->hasPermission($item['permission']));
     $darsAdministrationLabels = ['School Year', 'Menu', 'Pages', 'Report Header', 'Configuration', 'Dynamic Fields', 'Dictionary', 'Family Type', 'Family Remark Type', 'Colleges', 'Import', 'File Category', 'Mail Type'];
     $darsCollaborationSections = ['Teachers List' => 'teachers', 'Messages' => 'messages', 'Calendar' => 'calendar', 'Performance Appraisals' => 'performance', 'Students' => 'students', 'Performance Dashboard' => 'performance-dashboard', 'Evaluation Grades' => 'evaluation-grades', 'Grade Book' => 'grade-book', 'Evaluations List' => 'evaluations-list', 'Student Failures' => 'student-failures', 'Modification Requests' => 'modification-requests', 'Transcript by Subject Choice' => 'transcript-subject-choice', 'Evaluation Statement' => 'evaluation-statement', 'Skills per Student' => 'skills-student', 'Skills to Approve' => 'skills-approve', 'Remarks to Approve' => 'remarks-approve', 'Item Remarks' => 'item-remarks', 'Remarks per Class' => 'class-remarks', 'Cycle Principal Appreciations' => 'principal-appreciations', 'Remarks Entry' => 'remarks-entry', 'Attendance Management' => 'attendance-management', 'Standards' => 'standards', 'Report Card Acknowledgment of Receipt' => 'report-card-receipt', 'Icons' => 'icons', 'System Error Log' => 'system-error-log', 'Bulk Message' => 'bulk-message'];
@@ -417,10 +391,14 @@
         'students' => ['label' => 'Student Records', 'route' => route('students.index')],
         'reports' => ['label' => 'Academic & Report Card', 'route' => route('workspaces.show', ['workspace' => 'academic'])],
         'collaboration' => ['label' => 'Teaching & Collaboration', 'route' => route('collaboration.index')],
-        'administration' => ['label' => 'Administration & Operations', 'route' => route('operations.index')],
+        'administration' => ['label' => 'Administration & Operations', 'route' => route('workspaces.show', ['workspace' => 'operations'])],
         default => null,
     };
-    $showNavigationContext = $moduleContext !== null && ! request()->routeIs('dashboard');
+    $showNavigationContext = ! request()->routeIs('dashboard');
+    $backFallback = $moduleContext['route'] ?? $homeRoute;
+    if (url()->current() === $backFallback) {
+        $backFallback = $homeRoute;
+    }
 @endphp
 @if(isset($title))<script>document.title = @json($title) + ' ' + String.fromCharCode(183) + ' Global Academy International';</script>@endif
 <div class="app-shell" data-app-shell>
@@ -457,11 +435,16 @@
                         </section>
                     @endif
                 @endforeach
+            @else
+                <p class="sidebar-nav-heading sidebar-nav-heading-static">Main areas</p>
+                @foreach ($coreNavigation as $coreItem)
+                    @if ($signedInUser->hasPermission($coreItem['permission']))
+                        <a href="{{ route('workspaces.show', ['workspace' => $coreItem['workspace']]) }}" class="sidebar-link"><span class="sidebar-link-icon"><x-nav-icon :name="$coreItem['icon']" /></span><span class="sidebar-link-label">{{ $coreItem['label'] }}</span></a>
+                    @endif
+                @endforeach
             @endif
         </nav>
-        @if ($menu)
-            <div class="shrink-0 border-t border-white/10 p-2"><form method="POST" action="{{ route('logout') }}">@csrf<button class="sidebar-link w-full text-left"><span class="sidebar-link-icon"><x-nav-icon name="sign-out" /></span><span class="sidebar-signout-label">Sign out</span></button></form></div>
-        @endif
+        <div class="shrink-0 border-t border-white/10 p-2"><form method="POST" action="{{ route('logout') }}">@csrf<button class="sidebar-link w-full text-left"><span class="sidebar-link-icon"><x-nav-icon name="sign-out" /></span><span class="sidebar-signout-label">Sign out</span></button></form></div>
     </aside>
     <main class="main">
         <header class="topbar no-print">
@@ -490,22 +473,15 @@
                     <span class="hidden text-xs font-medium text-slate-500 sm:block">{{ $activeBranch->name }}</span>
                 @endif
             </div>
-            <div class="flex shrink-0 items-center gap-2"><a href="{{ route('notifications.index') }}" class="topbar-icon-button relative" aria-label="Notifications"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.31 6.022 23.848 23.848 0 0 0 5.454 1.31m5.713 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" /></svg>@if($signedInUser->unreadNotifications()->count())<span class="absolute -right-1 -top-1 min-w-4 rounded-full bg-orange-500 px-1 text-center text-[9px] font-bold leading-4 text-white">{{ min($signedInUser->unreadNotifications()->count(), 99) }}</span>@endif</a><span class="topbar-help">Help</span><span class="topbar-user">{{ $signedInUser->name }}</span></div>
+            <div class="flex shrink-0 items-center gap-2"><a href="{{ route('notifications.index') }}" class="topbar-icon-button relative" aria-label="Notifications"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.31 6.022 23.848 23.848 0 0 0 5.454 1.31m5.713 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" /></svg>@if($signedInUser->unreadNotifications()->count())<span class="absolute -right-1 -top-1 min-w-4 rounded-full bg-orange-500 px-1 text-center text-[9px] font-bold leading-4 text-white">{{ min($signedInUser->unreadNotifications()->count(), 99) }}</span>@endif</a><span class="topbar-help">Help</span><span class="topbar-user">{{ $signedInUser->name }}</span><form method="POST" action="{{ route('logout') }}" class="topbar-signout-form">@csrf<button type="submit" class="topbar-signout"><x-nav-icon name="sign-out" /><span>Sign out</span></button></form></div>
         </header>
         @if ($showNavigationContext)
-            <nav class="app-context no-print" aria-label="Page location">
-                <div class="app-context-trail">
-                    <a href="{{ $homeRoute }}">Home</a>
-                    <span aria-hidden="true">/</span>
-                    <a href="{{ $moduleContext['route'] }}">{{ $moduleContext['label'] }}</a>
-                    <span aria-hidden="true">/</span>
-                    <strong>{{ $title ?? $moduleContext['label'] }}</strong>
-                </div>
-                <a class="app-context-back" href="{{ $moduleContext['route'] }}">Back to {{ $moduleContext['label'] }}</a>
+            <nav class="app-context no-print" aria-label="Page navigation">
+                <a class="app-context-back" href="{{ $backFallback }}" data-history-back>← Back</a>
             </nav>
         @endif
         <div class="page">@include('components.flash')@yield('content')</div>
     </main>
 </div>
-<script>document.querySelectorAll('[data-modal]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.modal).classList.add('is-open')));document.querySelectorAll('[data-close-modal]').forEach(b=>b.addEventListener('click',()=>b.closest('.modal').classList.remove('is-open')));document.querySelectorAll('form[data-submit-lock]').forEach(f=>f.addEventListener('submit',()=>{const b=f.querySelector('[type=submit]');if(b){b.disabled=true;b.dataset.original=b.textContent;b.textContent='Saving...'}}));</script>
+<script>document.querySelectorAll('[data-modal]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.modal).classList.add('is-open')));document.querySelectorAll('[data-close-modal]').forEach(b=>b.addEventListener('click',()=>b.closest('.modal').classList.remove('is-open')));document.querySelectorAll('form[data-submit-lock]').forEach(f=>f.addEventListener('submit',()=>{const b=f.querySelector('[type=submit]');if(b){b.disabled=true;b.dataset.original=b.textContent;b.textContent='Saving...'}}));document.querySelectorAll('[data-history-back]').forEach(link=>link.addEventListener('click',event=>{try{const previous=new URL(document.referrer);if(previous.origin===window.location.origin&&previous.href!==window.location.href){event.preventDefault();window.history.back()}}catch{}}));</script>
 </body></html>

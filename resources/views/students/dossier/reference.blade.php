@@ -2,7 +2,6 @@
 
 @section('content')
 <section class="dars-reference-page">
-    <div class="dars-breadcrumb"><a href="{{ route('students.references.show', ['reference' => 'codes']) }}">Administration / References</a><span>&gt;</span><strong>{{ $reference['title'] }}</strong></div>
 
     @if($referenceKey === 'codes')
         <div class="flex flex-wrap items-end gap-3">
@@ -15,8 +14,10 @@
             </select>
         </form>
         @if($canManageReferences)
-            <a class="dars-add-new" href="{{ route('students.references.create', ['reference' => 'codes']) }}">Add New Code</a>
-            <a class="btn btn-secondary btn-small" href="{{ route('students.references.create', ['reference' => 'codes', 'category' => 1]) }}">Add New Category</a>
+            <a class="dars-add-new" href="{{ route('students.references.create', ['reference' => 'codes', 'type' => $selectedCodeType]) }}">Add New {{ $codeTypes[$selectedCodeType]['label'] ?? 'Code' }}</a>
+            @if(!isset(\App\Services\AcademicStructureCodes::TYPES[$selectedCodeType]))
+                <a class="btn btn-secondary btn-small" href="{{ route('students.references.create', ['reference' => 'codes', 'category' => 1]) }}">Add New Category</a>
+            @endif
         @endif
         </div>
     @elseif($referenceKey === 'classes')

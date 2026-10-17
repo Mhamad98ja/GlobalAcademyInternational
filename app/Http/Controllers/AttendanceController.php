@@ -11,6 +11,7 @@ use App\Models\StudentRegistration;
 use App\Models\Teacher;
 use App\Models\TeacherAssignment;
 use App\Models\TeacherAttendance;
+use App\Models\TeacherSubstitution;
 use App\Services\AuditService;
 use App\Services\SubstitutionService;
 use Illuminate\Http\RedirectResponse;
@@ -162,8 +163,13 @@ class AttendanceController extends Controller
         $date = $filters['attendance_date'] ?? today()->toDateString();
         $teachers = Teacher::query()->where('is_active', true)->when($filters['teacher_id'] ?? null, fn ($query, $id) => $query->whereKey($id))->orderBy('first_name')->get();
         $records = TeacherAttendance::query()->whereDate('attendance_date', $date)->whereIn('teacher_id', $teachers->modelKeys())->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))->get()->keyBy('teacher_id');
+        $substitutions = TeacherSubstitution::query()
+            ->with('entry.subject', 'entry.grade', 'entry.section', 'absentTeacher', 'substituteTeacher')
+            ->whereDate('substitution_date', $date)
+            ->orderBy('id')
+            ->get();
 
-        return view('attendance.teachers', compact('teachers', 'records', 'filters', 'date'));
+        return view('attendance.teachers', compact('teachers', 'records', 'filters', 'date', 'substitutions'));
     }
 
     public function saveTeacher(Request $request, SubstitutionService $substitutions, AuditService $audit): RedirectResponse
@@ -184,7 +190,7 @@ class AttendanceController extends Controller
                 $data + ['recorded_by' => auth()->id()],
             );
         });
-        $substitutions->createForAbsence($record);
+        $substitutions->syncForAttendance($record);
         $audit->log('teacher_attendance.saved', $record, [], $record->only(['teacher_id', 'attendance_date', 'status', 'checked_in_at', 'checked_out_at']));
 
         return redirect()->route('attendance.teachers', ['attendance_date' => $data['attendance_date']])->with('success', 'Teacher attendance saved. Substitute recommendations were generated when needed.');

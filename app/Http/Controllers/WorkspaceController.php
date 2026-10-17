@@ -232,7 +232,7 @@ class WorkspaceController extends Controller
                 $this->stat($user, 'timetable.view', 'Scheduled lessons', $timetableEntries, 'Timetable entries in the active year'),
             ],
             [
-                $this->task('academic_year.manage', 'Academic operations', 'Configure subjects, terms, assessments, and teacher assignments in focused pages.', 'school-academic.index', 'academic', 'Open operations'),
+                $this->task('academic_year.manage', 'Academic operations', 'Configure subjects and teacher assignments in focused pages.', 'school-academic.index', 'academic', 'Open operations'),
                 $this->task('grades.enter', 'Grade entry', $gradeEntries ? number_format($gradeEntries).' grade records are available in your permitted assignments.' : 'Enter marks only for your permitted teacher assignments.', 'grades.index', 'academic', 'Enter grades', ['view' => 'evaluations']),
                 $this->task('timetable.view', 'Graphical timetable', 'Build class schedules and prevent teacher conflicts.', 'timetable.index', 'academic', 'Open timetable'),
             ],
@@ -263,10 +263,10 @@ class WorkspaceController extends Controller
 
         return $this->page(
             $user,
-            'Operations, books & reports',
+            'Administration & Operations',
             'operations',
             'operations',
-            'Keep books moving from catalogue to student: packages, barcode distribution, stock control, suppliers, transfers, finance, and reports.',
+            'Manage users, school references, branches, books, inventory, finance, and daily operations from one place.',
             [
                 $this->stat($user, 'books.view', 'Books in stock', $stock, 'Available in this branch'),
                 $this->stat($user, 'inventory.view', 'Low-stock titles', $lowStock, 'At or below their reorder level'),
@@ -274,6 +274,14 @@ class WorkspaceController extends Controller
                 $this->stat($user, 'inventory.view', 'Stock movements', $movements, 'Posted in the active academic year'),
             ],
             [
+                $this->task('admin.manage', 'Users and Access', 'Find users and manage each person’s account permissions.', 'admin.users', 'administration', 'Manage users'),
+                ...($user->isControllerAdministrator() ? [$this->task('admin.manage', 'Branches', 'Manage school branches and their access.', 'branches.index', 'administration', 'Manage branches')] : []),
+                $this->task('report-card.view', 'Annual & partial report cards', 'Generate official report cards from published or locked grades, then print them in the school format.', 'admin.report-cards', 'reports', 'Open report cards'),
+                $this->task('students.view', 'References', 'Manage academic structure and other school codes in one place.', 'students.references.show', 'administration', 'Open codes', ['reference' => 'codes']),
+                $this->task('academic.manage', 'School structure', 'View academic years, terms, levels, grades, and sections read-only.', 'academic.index', 'academic', 'View structure'),
+                $this->task('attendance.teacher.view', 'Teacher attendance', 'Record today’s teacher attendance and trigger period-level coverage for absences.', 'attendance.teachers', 'administration', 'Record attendance'),
+                $this->task('substitutions.view', 'Temporary teacher coverage', 'Review recommendations and assign a substitute for every affected period today.', 'substitutions.index', 'administration', 'Open coverage board'),
+                $this->task('reports.view', 'Teacher workload', 'Review planned, timetabled, extra coverage, and total periods taken by each teacher.', 'reports.school', 'reports', 'Open workload report', ['report' => 'teacher_workload']),
                 $this->task('distributions.create', 'Distribute books', 'Issue a package or individual books to an active student using barcode scanning.', 'distributions.create', 'distribution', 'Start distribution'),
                 $this->task('distributions.create', 'Distribution history', 'Find completed distributions by student, class, year, or date.', 'distributions.index', 'distribution', 'View history'),
                 $this->task('books.view', 'Book catalogue', 'Manage titles, shelves, stock levels, and book details.', 'books.index', 'books', 'Open catalogue'),

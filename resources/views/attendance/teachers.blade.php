@@ -2,33 +2,21 @@
 
 @section('content')
 <div class="page-header">
-    <div><h1 class="page-title">Teacher attendance IN / OUT</h1><p class="page-subtitle">Absences identify affected timetable lessons and generate fair substitute recommendations.</p></div>
-    <a class="btn btn-secondary" href="{{ route('attendance.students') }}">Student attendance</a>
+    <div><h1 class="page-title">Teacher attendance IN / OUT</h1><p class="page-subtitle">Record today’s attendance. An absence immediately creates one temporary coverage item for every affected timetable period.</p></div>
+    <div class="flex flex-wrap gap-2"><a class="btn btn-primary" href="{{ route('substitutions.index', ['substitution_date' => $date]) }}">Open today’s coverage</a><a class="btn btn-secondary" href="{{ route('attendance.students') }}">Student attendance</a></div>
 </div>
 
 <section class="panel">
-    <div class="panel-header"><form method="GET" class="flex w-full max-w-lg gap-2"><input type="date" name="attendance_date" value="{{ $date }}"><button class="btn btn-secondary">Load date</button></form></div>
-    <div class="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
+    <div class="panel-header"><form method="GET" class="flex w-full max-w-xl flex-wrap gap-2"><input type="date" name="attendance_date" value="{{ $date }}"><select name="teacher_id"><option value="">All active teachers</option>@foreach($teachers as $teacher)<option value="{{ $teacher->id }}" @selected(($filters['teacher_id'] ?? null) == $teacher->id)>{{ $teacher->full_name }}</option>@endforeach</select><button class="btn btn-secondary">Load date</button></form></div>
+    <div class="grid gap-4 border-b border-slate-200 p-5 sm:grid-cols-3"><div class="stat"><div class="stat-label">Present / working</div><div class="stat-value">{{ $records->whereNotIn('status', ['excused_absence', 'unexcused_absence'])->count() }}</div><div class="stat-note">Includes late and early leave</div></div><div class="stat"><div class="stat-label">Absent</div><div class="stat-value text-rose-700">{{ $records->whereIn('status', ['excused_absence', 'unexcused_absence'])->count() }}</div><div class="stat-note">Save an absence to create cover periods</div></div><div class="stat"><div class="stat-label">Coverage items</div><div class="stat-value text-amber-700">{{ $substitutions->whereIn('status', ['pending', 'recommended'])->count() }}</div><div class="stat-note"><a class="link" href="{{ route('substitutions.index', ['substitution_date' => $date]) }}">Open coverage board</a></div></div></div>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Teacher</th><th>Check in / out</th><th>Status</th><th>Minutes</th><th>Note</th><th>Save</th></tr></thead><tbody>
         @forelse ($teachers as $teacher)
             @php($record = $records->get($teacher->id))
-            <form method="POST" action="{{ route('attendance.teachers.save') }}" class="rounded-md border border-slate-200 p-4 space-y-3" data-submit-lock>
-                @csrf
-                <input type="hidden" name="teacher_id" value="{{ $teacher->id }}">
-                <input type="hidden" name="attendance_date" value="{{ $date }}">
-                <div><div class="font-medium">{{ $teacher->full_name }}</div><div class="text-xs text-slate-500">{{ $teacher->employee_number }}</div></div>
-                <div class="grid grid-cols-2 gap-2"><label class="text-xs text-slate-600">Check in<input type="time" name="checked_in_at" value="{{ $record?->checked_in_at }}"></label><label class="text-xs text-slate-600">Check out<input type="time" name="checked_out_at" value="{{ $record?->checked_out_at }}"></label></div>
-                <label class="text-xs text-slate-600">Status<select name="status">
-                    @foreach (['present' => 'Present', 'late' => 'Late', 'early_leave' => 'Early leave', 'excused_absence' => 'Excused absence', 'unexcused_absence' => 'Unexcused absence'] as $value => $label)
-                        <option value="{{ $value }}" @selected(($record?->status ?? 'present') === $value)>{{ $label }}</option>
-                    @endforeach
-                </select></label>
-                <div class="grid grid-cols-2 gap-2"><label class="text-xs text-slate-600">Late minutes<input type="number" min="0" name="late_minutes" value="{{ $record?->late_minutes ?? 0 }}"></label><label class="text-xs text-slate-600">Early leave<input type="number" min="0" name="early_leave_minutes" value="{{ $record?->early_leave_minutes ?? 0 }}"></label></div>
-                <input name="notes" value="{{ $record?->notes }}" placeholder="Optional note">
-                <button class="btn btn-secondary btn-small w-full">Save attendance</button>
-            </form>
+            <tr><td><strong>{{ $teacher->full_name }}</strong><div class="text-xs text-slate-500">{{ $teacher->employee_number ?: 'No employee number' }}</div></td><td><form id="teacher-attendance-{{ $teacher->id }}" method="POST" action="{{ route('attendance.teachers.save') }}" data-submit-lock>@csrf<input type="hidden" name="teacher_id" value="{{ $teacher->id }}"><input type="hidden" name="attendance_date" value="{{ $date }}"><div class="grid gap-1"><input type="time" name="checked_in_at" value="{{ $record?->checked_in_at }}" aria-label="Check in"><input type="time" name="checked_out_at" value="{{ $record?->checked_out_at }}" aria-label="Check out"></div></form></td><td><select name="status" form="teacher-attendance-{{ $teacher->id }}">@foreach (['present' => 'Present', 'late' => 'Late', 'early_leave' => 'Early leave', 'excused_absence' => 'Excused absence', 'unexcused_absence' => 'Unexcused absence'] as $value => $label)<option value="{{ $value }}" @selected(($record?->status ?? 'present') === $value)>{{ $label }}</option>@endforeach</select></td><td><div class="grid gap-1"><input type="number" min="0" name="late_minutes" value="{{ $record?->late_minutes ?? 0 }}" form="teacher-attendance-{{ $teacher->id }}" aria-label="Late minutes"><input type="number" min="0" name="early_leave_minutes" value="{{ $record?->early_leave_minutes ?? 0 }}" form="teacher-attendance-{{ $teacher->id }}" aria-label="Early leave minutes"></div></td><td><input name="notes" value="{{ $record?->notes }}" placeholder="Optional note" form="teacher-attendance-{{ $teacher->id }}"></td><td><button class="btn btn-secondary btn-small" form="teacher-attendance-{{ $teacher->id }}">Save</button></td></tr>
         @empty
-            <div class="empty md:col-span-2 xl:col-span-3">No active teachers found.</div>
+            <tr><td colspan="6" class="empty">No active teachers found.</td></tr>
         @endforelse
-    </div>
+    </tbody></table></div>
+    <div class="border-t border-slate-200 bg-amber-50 px-5 py-3 text-sm text-amber-900"><strong>Workflow:</strong> choose <em>Excused absence</em> or <em>Unexcused absence</em>, save, then open today’s coverage to confirm the recommended teacher for each affected period. Saving the teacher as present later cancels only unassigned recommendations.</div>
 </section>
 @endsection

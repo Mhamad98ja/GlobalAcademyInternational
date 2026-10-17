@@ -16,15 +16,11 @@
         <div class="form-grid">
             <div class="md:col-span-2">
                 <label class="form-label">Active student registration *</label>
-                <select name="student_registration_id" required data-distribution-registration>
-                    <option value="">Search/select a registration</option>
-                    @foreach ($registrations as $registration)
-                        <option value="{{ $registration->id }}" data-academic-year-id="{{ $registration->academic_year_id }}" data-grade-id="{{ $registration->grade_id }}" data-section-id="{{ $registration->section_id ?? '' }}" data-section-label="{{ $registration->section?->name ?? 'No section' }}" @selected(old('student_registration_id', $selectedRegistration) == $registration->id)>
-                            {{ $registration->student->full_name }} - {{ $registration->academicYear->name }} - {{ $registration->grade->name }}{{ $registration->section ? '.'.$registration->section->name : '' }}
-                        </option>
-                    @endforeach
-                </select>
-                <p class="mt-1 text-xs text-slate-500">Scanner users can focus this field and type a known registration ID.</p>
+                @php($selectedRegistrationModel = $registrations->firstWhere('id', old('student_registration_id', $selectedRegistration)))
+                <div data-distribution-registration-wrapper>
+                    <x-student-picker name="student_registration_id" value-key="registration" :selected-id="$selectedRegistrationModel?->id" :selected-label="$selectedRegistrationModel ? $selectedRegistrationModel->student->full_name.' · '.$selectedRegistrationModel->grade->name.($selectedRegistrationModel->section ? ' '.$selectedRegistrationModel->section->name : '') : null" :academic-year-id="$selectedRegistrationModel?->academic_year_id" :grade-id="$selectedRegistrationModel?->grade_id" :section-id="$selectedRegistrationModel?->section_id" placeholder="Type student name, number, or class" required />
+                </div>
+                <p class="mt-1 text-xs text-slate-500">Only active registrations appear. Type at least two characters; the package loads from the selected student’s class.</p>
             </div>
 
             <div class="md:col-span-2">

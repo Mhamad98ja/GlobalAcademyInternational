@@ -3,7 +3,6 @@
 @section('content')
 <section class="dars-student-report-page">
     @if($reportKey === 'dynamic')
-        <div class="dars-breadcrumb"><a href="{{ route('reports.school', ['report' => 'student_attendance']) }}">Reports Centre</a><span>&gt;</span><strong>{{ $report['title'] }}</strong></div>
         <div class="dars-dynamic-title">Student &amp; Family Report</div>
         <div class="dars-dynamic-report">
             <div class="dars-dynamic-layout">

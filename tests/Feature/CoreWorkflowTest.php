@@ -737,7 +737,7 @@ class CoreWorkflowTest extends TestCase
             ->assertSee('global-academy-international-logo.png');
     }
 
-    public function test_academic_years_levels_grades_and_sections_can_be_edited(): void
+    public function test_legacy_academic_structure_routes_are_read_only(): void
     {
         $user = $this->administrator();
         $year = AcademicYear::create(['name' => '2026-2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'open', 'created_by' => $user->id]);
@@ -747,18 +747,18 @@ class CoreWorkflowTest extends TestCase
 
         $this->actingAs($user)->put(route('academic.years.update', $year), [
             'name' => '2026-2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'closed',
-        ])->assertRedirect()->assertSessionHas('success');
-        $this->actingAs($user)->put(route('academic.levels.update', $level), ['name' => 'Elementary', 'sort_order' => 2])->assertRedirect()->assertSessionHas('success');
-        $this->actingAs($user)->put(route('academic.grades.update', $grade), ['school_level_id' => $level->id, 'name' => 'Grade 4A', 'sort_order' => 2])->assertRedirect()->assertSessionHas('success');
-        $this->actingAs($user)->put(route('academic.sections.update', $section), ['grade_id' => $grade->id, 'name' => 'B', 'room' => '202'])->assertRedirect()->assertSessionHas('success');
+        ])->assertForbidden();
+        $this->actingAs($user)->put(route('academic.levels.update', $level), ['name' => 'Elementary', 'sort_order' => 2])->assertForbidden();
+        $this->actingAs($user)->put(route('academic.grades.update', $grade), ['school_level_id' => $level->id, 'name' => 'Grade 4A', 'sort_order' => 2])->assertForbidden();
+        $this->actingAs($user)->put(route('academic.sections.update', $section), ['grade_id' => $grade->id, 'name' => 'B', 'room' => '202'])->assertForbidden();
 
-        $this->assertDatabaseHas('academic_years', ['id' => $year->id, 'status' => 'closed']);
-        $this->assertDatabaseHas('school_levels', ['id' => $level->id, 'name' => 'Elementary', 'sort_order' => 2]);
-        $this->assertDatabaseHas('grades', ['id' => $grade->id, 'name' => 'Grade 4A', 'sort_order' => 2]);
-        $this->assertDatabaseHas('sections', ['id' => $section->id, 'name' => 'B', 'room' => '202']);
+        $this->assertDatabaseHas('academic_years', ['id' => $year->id, 'status' => 'open']);
+        $this->assertDatabaseHas('school_levels', ['id' => $level->id, 'name' => 'Primary']);
+        $this->assertDatabaseHas('grades', ['id' => $grade->id, 'name' => 'Grade 4']);
+        $this->assertDatabaseHas('sections', ['id' => $section->id, 'name' => 'A', 'room' => '101']);
     }
 
-    public function test_academic_structure_page_renders_its_edit_controls(): void
+    public function test_academic_structure_page_is_read_only(): void
     {
         $user = $this->administrator();
         $year = AcademicYear::create(['name' => '2027-2028', 'starts_on' => '2027-09-01', 'ends_on' => '2028-06-30', 'status' => 'draft', 'created_by' => $user->id]);
@@ -769,10 +769,9 @@ class CoreWorkflowTest extends TestCase
         $this->actingAs($user)->get(route('academic.index'))
             ->assertOk()
             ->assertSee($year->name)
-            ->assertSee('Edit academic year')
-            ->assertSee('Edit level')
-            ->assertSee('Edit grade')
-            ->assertSee('Edit section');
+            ->assertSee('Read-only')
+            ->assertDontSee('Edit academic year')
+            ->assertDontSee('Add section');
     }
 
     public function test_dashboard_uses_the_open_academic_year_without_a_manual_selector(): void
@@ -790,7 +789,7 @@ class CoreWorkflowTest extends TestCase
             ->assertDontSee('href="'.route('returns.index').'"', false);
     }
 
-    public function test_opening_a_new_academic_year_closes_the_previous_open_year(): void
+    public function test_new_academic_year_cannot_be_opened_from_http(): void
     {
         $user = $this->administrator();
         $currentYear = AcademicYear::create(['name' => '2026-2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'status' => 'open', 'created_by' => $user->id]);
@@ -800,10 +799,10 @@ class CoreWorkflowTest extends TestCase
             'starts_on' => '2027-09-01',
             'ends_on' => '2028-06-30',
             'status' => 'open',
-        ])->assertRedirect()->assertSessionHas('success');
+        ])->assertForbidden();
 
-        $this->assertDatabaseHas('academic_years', ['id' => $currentYear->id, 'status' => 'closed']);
-        $this->assertDatabaseHas('academic_years', ['name' => '2027-2028', 'status' => 'open']);
+        $this->assertDatabaseHas('academic_years', ['id' => $currentYear->id, 'status' => 'open']);
+        $this->assertDatabaseMissing('academic_years', ['name' => '2027-2028']);
     }
 
     public function test_financial_center_combines_separate_student_and_supplier_documents_without_changing_their_workflows(): void
@@ -888,12 +887,34 @@ class CoreWorkflowTest extends TestCase
         $this->assertDatabaseCount('users', 1);
         $this->assertDatabaseHas('users', ['email' => 'admin@school.test', 'is_active' => true]);
         $this->assertDatabaseCount('academic_years', 2);
-        $this->assertDatabaseCount('school_levels', 2);
-        $this->assertDatabaseCount('grades', 15);
-        $this->assertDatabaseCount('sections', 40);
+        $this->assertDatabaseCount('academic_terms', 4);
+        $this->assertDatabaseHas('school_levels', ['name' => 'School', 'sort_order' => 2]);
+        $this->assertDatabaseHas('grades', ['name' => 'Grade 12', 'sort_order' => 15]);
+        $this->assertDatabaseHas('sections', ['name' => 'D']);
         $this->assertDatabaseCount('students', 0);
         $this->assertDatabaseCount('books', 0);
         $this->assertDatabaseCount('suppliers', 0);
         $this->assertDatabaseCount('invoices', 0);
+    }
+
+    public function test_structure_reseed_preserves_existing_record_ids_and_edits(): void
+    {
+        $this->seed();
+        $ids = [
+            'years' => AcademicYear::query()->orderBy('name')->pluck('id', 'name')->all(),
+            'terms' => \App\Models\AcademicTerm::withoutGlobalScopes()->orderBy('name')->pluck('id', 'name')->all(),
+            'grades' => Grade::query()->orderBy('name')->pluck('id', 'name')->all(),
+            'sections' => Section::query()->count(),
+        ];
+
+        SchoolLevel::query()->where('name', 'School')->update(['sort_order' => 77]);
+
+        $this->seed(\Database\Seeders\SchoolStructureSeeder::class);
+
+        $this->assertSame($ids['years'], AcademicYear::query()->orderBy('name')->pluck('id', 'name')->all());
+        $this->assertSame($ids['terms'], \App\Models\AcademicTerm::withoutGlobalScopes()->orderBy('name')->pluck('id', 'name')->all());
+        $this->assertSame($ids['grades'], Grade::query()->orderBy('name')->pluck('id', 'name')->all());
+        $this->assertSame($ids['sections'], Section::query()->count());
+        $this->assertDatabaseHas('school_levels', ['name' => 'School', 'sort_order' => 77]);
     }
 }

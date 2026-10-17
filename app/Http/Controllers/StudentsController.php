@@ -18,15 +18,90 @@ use App\Models\Teacher;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\BranchContext;
 use App\Services\StudentRegistrationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class StudentsController extends Controller
 {
+    public function search(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['required', 'string', 'min:2', 'max:100'],
+            'mode' => ['nullable', 'in:student,registration'],
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
+            'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
+            'section_id' => ['nullable', 'integer', 'exists:sections,id'],
+            'student_id' => ['nullable', 'integer', 'exists:students,id'],
+        ]);
+        $terms = preg_split('/\s+/', trim($data['q']), -1, PREG_SPLIT_NO_EMPTY);
+        $matches = fn ($query) => $query->where(function ($students) use ($terms): void {
+            foreach ($terms as $term) {
+                $students->where(function ($studentQuery) use ($term): void {
+                    $studentQuery->whereInsensitiveLike('student_number', $term)
+                        ->orWhereInsensitiveLike('registration_number', $term)
+                        ->orWhereInsensitiveLike('first_name', $term)
+                        ->orWhereInsensitiveLike('middle_name', $term)
+                        ->orWhereInsensitiveLike('last_name', $term);
+                });
+            }
+        });
+
+        if (($data['mode'] ?? 'student') === 'registration') {
+            $registrations = StudentRegistration::query()
+                ->with('student', 'grade', 'section', 'academicYear')
+                ->where('status', 'active')
+                ->when($data['academic_year_id'] ?? null, fn ($query, $id) => $query->where('academic_year_id', $id))
+                ->when($data['grade_id'] ?? null, fn ($query, $id) => $query->where('grade_id', $id))
+                ->when($data['section_id'] ?? null, fn ($query, $id) => $query->where('section_id', $id))
+                ->when($data['student_id'] ?? null, fn ($query, $id) => $query->where('student_id', $id))
+                ->whereHas('student', $matches)
+                ->latest('registered_on')
+                ->limit(25)
+                ->get();
+
+            return response()->json(['data' => $registrations->map(fn (StudentRegistration $registration): array => [
+                'id' => $registration->id,
+                'student_id' => $registration->student_id,
+                'registration_id' => $registration->id,
+                'student_number' => $registration->student?->student_number,
+                'full_name' => $registration->student?->full_name,
+                'academic_year_id' => $registration->academic_year_id,
+                'grade_id' => $registration->grade_id,
+                'section_id' => $registration->section_id,
+                'section_label' => $registration->section?->name ?? 'All sections',
+                'context' => trim(($registration->academicYear?->name ?? '').' · '.($registration->grade?->name ?? '').($registration->section ? ' '.$registration->section->name : '')),
+                'label' => trim(($registration->student?->full_name ?? '').' · '.($registration->grade?->name ?? '').($registration->section ? ' '.$registration->section->name : '')),
+            ])]);
+        }
+
+        $students = Student::query()
+            ->when(($data['academic_year_id'] ?? null) || ($data['grade_id'] ?? null) || ($data['section_id'] ?? null), fn ($query) => $query->whereHas('registrations', fn ($registrations) => $registrations
+                ->where('status', 'active')
+                ->when($data['academic_year_id'] ?? null, fn ($query, $id) => $query->where('academic_year_id', $id))
+                ->when($data['grade_id'] ?? null, fn ($query, $id) => $query->where('grade_id', $id))
+                ->when($data['section_id'] ?? null, fn ($query, $id) => $query->where('section_id', $id))))
+            ->where($matches)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit(25)
+            ->get();
+
+        return response()->json(['data' => $students->map(fn (Student $student): array => [
+            'id' => $student->id,
+            'student_id' => $student->id,
+            'student_number' => $student->student_number,
+            'full_name' => $student->full_name,
+            'label' => trim(($student->student_number ? $student->student_number.' · ' : '').$student->full_name),
+        ])]);
+    }
+
     public function index(Request $request): View
     {
         $filters = $request->validate([
@@ -98,7 +173,9 @@ class StudentsController extends Controller
 
     public function create(Request $request): View
     {
-        $responsiblePerson = $request->integer('responsible_person_id') ? ResponsiblePerson::query()->find($request->integer('responsible_person_id')) : null;
+        $responsiblePerson = $request->integer('responsible_person_id')
+            ? ResponsiblePerson::query()->where('branch_id', app(BranchContext::class)->id())->find($request->integer('responsible_person_id'))
+            : null;
 
         return view('students.form', ['student' => new Student, 'registrations' => false, 'responsiblePerson' => $responsiblePerson]);
     }
@@ -109,12 +186,16 @@ class StudentsController extends Controller
             $data = $request->validated();
             $portalPassword = $data['password'];
             $responsiblePersonId = $data['responsible_person_id'] ?? null;
+            $responsiblePerson = $responsiblePersonId ? ResponsiblePerson::query()->findOrFail($responsiblePersonId) : null;
+            if ($responsiblePerson && (int) $responsiblePerson->branch_id !== (int) app(BranchContext::class)->id()) {
+                throw ValidationException::withMessages(['responsible_person_id' => 'The parent and student must belong to the same branch.']);
+            }
             unset($data['password']);
             unset($data['responsible_person_id']);
             $data['student_number'] = $data['student_number'] ?? 'STU-'.now()->format('Y').'-'.str_pad((string) ((Student::max('id') ?? 0) + 1), 5, '0', STR_PAD_LEFT);
             $student = Student::create($data);
-            if ($responsiblePersonId) {
-                ResponsiblePerson::query()->findOrFail($responsiblePersonId)->students()->syncWithoutDetaching([$student->id => ['relationship' => 'Parent / guardian', 'is_primary' => true]]);
+            if ($responsiblePerson) {
+                $responsiblePerson->students()->syncWithoutDetaching([$student->id => ['relationship' => 'Parent / guardian', 'is_primary' => true]]);
             }
             $portalUser = User::create([
                 'name' => $student->full_name,
@@ -188,6 +269,16 @@ class StudentsController extends Controller
                 ->where(fn ($sections) => $sections->whereNull('section_id')->orWhere('section_id', $activeRegistration->section_id)))->orderBy('name')->get()
             : collect();
         $student->load(['supportAssignments.user', 'subjectExemptions.subject']);
+        $isExempt = fn (int $registrationId, ?int $subjectId): bool => $subjectId !== null && $student->subjectExemptions->contains(fn ($exemption) => $exemption->student_registration_id === $registrationId && $exemption->subject_id === $subjectId);
+        if ($canViewGrades) {
+            $student->setRelation('gradeEntries', $student->gradeEntries->reject(fn ($entry) => $isExempt($entry->student_registration_id, $entry->assessment?->subject_id ?? $entry->assessment?->assignment?->subject_id)));
+        }
+        if ($canViewExamAbsences) {
+            $student->setRelation('examAbsences', $student->examAbsences->reject(fn ($entry) => $isExempt($entry->student_registration_id, $entry->assessment?->subject_id ?? $entry->assessment?->assignment?->subject_id)));
+        }
+        if ($canViewPerformance) {
+            $student->setRelation('performanceEvaluations', $student->performanceEvaluations->reject(fn ($entry) => $entry->assignment && $isExempt($entry->student_registration_id, $entry->assignment->subject_id)));
+        }
         $supportUsers = User::query()->where('is_active', true)->whereNull('student_id')->orderBy('name')->get();
 
         return view('students.show', compact('student', 'canViewFinancials', 'canViewAttendance', 'canViewDiscipline', 'canViewMedical', 'canViewGrades', 'canViewExamAbsences', 'canViewPerformance', 'subjects', 'supportUsers'));

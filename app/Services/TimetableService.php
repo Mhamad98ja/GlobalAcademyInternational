@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 
 final class TimetableService
 {
-    /** @param array{day_of_week:string,period_number:int,section_id?:int|null,is_parallel?:bool,room?:string|null} $slot */
+    /** @param array{day_of_week:string,period_number:int,section_id?:int|null,room?:string|null} $slot */
     public function create(TeacherAssignment $assignment, array $slot): TimetableEntry
     {
         $attributes = $this->attributes($assignment, $slot);
@@ -19,7 +19,7 @@ final class TimetableService
         return TimetableEntry::create($attributes);
     }
 
-    /** @param array{day_of_week:string,period_number:int,section_id?:int|null,is_parallel?:bool,room?:string|null} $slot */
+    /** @param array{day_of_week:string,period_number:int,section_id?:int|null,room?:string|null} $slot */
     public function update(TimetableEntry $entry, TeacherAssignment $assignment, array $slot): TimetableEntry
     {
         $attributes = $this->attributes($assignment, $slot);
@@ -29,7 +29,7 @@ final class TimetableService
         return $entry->refresh();
     }
 
-    /** @param array{day_of_week:string,period_number:int,section_id?:int|null,is_parallel?:bool,room?:string|null} $slot
+    /** @param array{day_of_week:string,period_number:int,section_id?:int|null,room?:string|null} $slot
      * @return array<string, mixed>
      */
     private function attributes(TeacherAssignment $assignment, array $slot): array
@@ -45,7 +45,7 @@ final class TimetableService
                 : $assignment->section_id,
             'day_of_week' => strtolower($slot['day_of_week']),
             'period_number' => (int) $slot['period_number'],
-            'is_parallel' => (bool) ($slot['is_parallel'] ?? false),
+            'is_parallel' => false,
             'room' => blank($slot['room'] ?? null) ? null : $slot['room'],
         ];
     }
@@ -63,8 +63,8 @@ final class TimetableService
             ->where('grade_id', $attributes['grade_id'])
             ->where('section_id', $attributes['section_id']))
             ->exists();
-        if ($sectionConflict && ! $attributes['is_parallel']) {
-            throw ValidationException::withMessages(['period_number' => 'This class section already has a lesson in that period. Enable parallel lessons when the class is divided into groups.']);
+        if ($sectionConflict) {
+            throw ValidationException::withMessages(['period_number' => 'This class section already has a lesson in that period. Choose an empty period or move the existing lesson first.']);
         }
 
         $teacherConflict = $withoutCurrent($slot(TimetableEntry::query())->where('teacher_id', $attributes['teacher_id']))->exists();

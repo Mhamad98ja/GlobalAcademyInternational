@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\AcademicYear;
+use App\Models\AcademicTerm;
 use App\Models\Assessment;
+use App\Models\AssessmentModificationRequest;
 use App\Models\CourseContent;
 use App\Models\Grade;
 use App\Models\SchoolAnnouncement;
@@ -16,7 +18,9 @@ use App\Models\Student;
 use App\Models\StudentPerformanceEvaluation;
 use App\Models\StudentRegistration;
 use App\Models\TeacherAssignment;
+use App\Models\TeacherSubstitution;
 use App\Models\Teacher;
+use App\Models\TimetableEntry;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Notifications\StudentPortalNotification;
@@ -39,9 +43,11 @@ class CollaborationController extends Controller
         abort_unless($user instanceof User, 403);
 
         $activeAcademicYear = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->first();
+        $activeAcademicTerm = AcademicTerm::activeForYear($activeAcademicYear?->id);
         $section = (string) $request->route('section', $request->query('section', ''));
         $search = trim((string) $request->query('q', ''));
         $gradeId = $request->integer('grade_id') ?: null;
+        $studentId = $request->integer('student_id') ?: null;
         $date = $request->date('date');
         $agendaDate = $request->date('agenda_date') ?? today();
         $agendaStart = Carbon::parse($agendaDate)->startOfWeek(Carbon::MONDAY);
@@ -60,7 +66,12 @@ class CollaborationController extends Controller
             (int) ($calendarFilters['month'] ?? today()->month),
             1,
         );
-        $assignments = $this->availableAssignments($user, $activeAcademicYear?->id);
+        $assignments = $this->availableAssignments($user, $activeAcademicYear?->id, $gradeId);
+        $evaluationAssignmentId = $request->integer('teacher_assignment_id') ?: null;
+        $evaluationAssignments = $assignments
+            ->when($evaluationAssignmentId, fn (Collection $items) => $items->where('id', $evaluationAssignmentId)->values());
+        $assignmentStudentCounts = $this->assignmentStudentCounts($assignments, $activeAcademicYear?->id);
+        $isTeacherAgenda = (bool) $user->teacher_id && ! $this->canManageAllAssignments($user);
         $canManage = $user->hasPermission('collaboration.manage');
         $canManagePerformance = $user->hasPermission('performance.manage');
         $canViewPerformance = $user->hasPermission('performance.view') || $canManagePerformance;
@@ -76,6 +87,8 @@ class CollaborationController extends Controller
 
         $contents = CourseContent::query()
             ->with('assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section', 'createdBy')
+            ->when($assignments->isNotEmpty(), fn (Builder $query) => $query->whereIn('teacher_assignment_id', $assignments->modelKeys()))
+            ->when($assignments->isEmpty(), fn (Builder $query) => $query->whereRaw('1 = 0'))
             ->when(! $canManage, function (Builder $query) use ($user): void {
                 $query->where(function (Builder $contents) use ($user): void {
                     $contents->whereNotNull('published_at')->where('published_at', '<=', now());
@@ -130,14 +143,16 @@ class CollaborationController extends Controller
 
         $evaluations = $canViewPerformance
             ? StudentPerformanceEvaluation::query()
-                ->with('student', 'registration.grade', 'registration.section', 'assignment.subject', 'teacher')
+                ->with('student', 'registration.grade', 'registration.section', 'registration.subjectExemptions', 'assignment.subject', 'teacher')
                 ->when($activeAcademicYear, fn (Builder $query) => $query->whereHas('registration', fn (Builder $registrations) => $registrations->where('academic_year_id', $activeAcademicYear->id)))
                 ->when($gradeId, fn (Builder $query, int $id) => $query->whereHas('registration', fn (Builder $registrations) => $registrations->where('grade_id', $id)))
+                ->when($studentId, fn (Builder $query, int $id) => $query->where('student_id', $id))
                 ->when($user->teacher_id && ! $this->canManageAllAssignments($user), fn (Builder $query) => $query->where('teacher_id', $user->teacher_id))
                 ->latest('observed_on')
                 ->latest('id')
-                ->take(15)
                 ->get()
+                ->reject(fn ($evaluation) => $evaluation->assignment && ($evaluation->registration?->subjectExemptions->contains('subject_id', $evaluation->assignment->subject_id) ?? false))
+                ->take(15)
             : collect();
 
         $teachers = Teacher::query()
@@ -148,18 +163,103 @@ class CollaborationController extends Controller
                 ->orWhereInsensitiveLike('employee_number', $search)))
             ->orderBy('first_name')->orderBy('last_name')->take(30)->get();
         $messages = SchoolMessage::query()->with('sender')->latest('sent_at')->latest('id')->take(30)->get();
-        $assessmentRequests = Assessment::query()
-            ->with('assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section', 'reviewedBy')
-            ->when($user->teacher_id && ! $this->canManageAllAssignments($user), fn (Builder $query) => $query->whereHas('assignment', fn (Builder $assignments) => $assignments->where('teacher_id', $user->teacher_id)))
-            ->when($gradeId, fn (Builder $query, int $id) => $query->whereHas('assignment', fn (Builder $assignments) => $assignments->where('grade_id', $id)))
-            ->when($request->filled('assessment_column'), fn (Builder $query) => $query->where('assessment_column', $request->string('assessment_column')->toString()))
-            ->when($request->filled('review_status'), fn (Builder $query) => $query->where('review_status', $request->string('review_status')->toString()))
-            ->latest('created_at')->take(100)->get();
+        $assessmentTerms = $activeAcademicTerm ? collect([$activeAcademicTerm]) : collect();
+        $isEvaluationAdministrator = $this->canManageAllAssignments($user);
+        $submittedEvaluations = $section === 'modification-requests'
+            ? Assessment::query()
+                ->with('term', 'assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section', 'modificationRequests')
+                ->where('review_status', 'submitted')
+                ->when($activeAcademicYear, fn (Builder $query) => $query->where('academic_year_id', $activeAcademicYear->id))
+                ->when($activeAcademicTerm, fn (Builder $query) => $query->where('academic_term_id', $activeAcademicTerm->id), fn (Builder $query) => $query->whereRaw('1 = 0'))
+                ->when(! $isEvaluationAdministrator, fn (Builder $query) => $query->whereHas('assignment', fn (Builder $assignments) => $assignments->where('teacher_id', $user->teacher_id)))
+                ->latest('created_at')->take(100)->get()
+            : collect();
+        $modificationRequests = $section === 'modification-requests'
+            ? AssessmentModificationRequest::query()
+                ->with('requestedBy', 'reviewedBy', 'assessment.term', 'assessment.assignment.teacher', 'assessment.assignment.subject', 'assessment.assignment.grade', 'assessment.assignment.section')
+                ->when($activeAcademicTerm, fn (Builder $query) => $query->whereHas('assessment', fn (Builder $assessment) => $assessment->where('academic_term_id', $activeAcademicTerm->id)), fn (Builder $query) => $query->whereRaw('1 = 0'))
+                ->when(! $isEvaluationAdministrator, fn (Builder $query) => $query->where('requested_by', $user->id))
+                ->latest('created_at')->take(100)->get()
+            : collect();
 
-        return view('collaboration.index', [
+        $todayLessons = $activeAcademicYear
+            ? TimetableEntry::query()
+                ->with('subject', 'grade', 'section', 'teacher')
+                ->where('academic_year_id', $activeAcademicYear->id)
+                ->where('day_of_week', strtolower(today()->englishDayOfWeek))
+                ->when($assignments->isNotEmpty(), fn (Builder $query) => $query->whereIn('teacher_assignment_id', $assignments->modelKeys()))
+                ->when($assignments->isEmpty(), fn (Builder $query) => $query->whereRaw('1 = 0'))
+                ->orderBy('period_number')
+                ->get()
+            : collect();
+        $todaySubstitutions = TeacherSubstitution::query()
+            ->with('entry.subject', 'entry.grade', 'entry.section', 'absentTeacher', 'substituteTeacher')
+            ->whereDate('substitution_date', today())
+            ->when($isTeacherAgenda, fn (Builder $query) => $query->where(fn (Builder $substitutions) => $substitutions
+                ->where('absent_teacher_id', $user->teacher_id)
+                ->orWhere('substitute_teacher_id', $user->teacher_id)))
+            ->orderBy('id')
+            ->take(12)
+            ->get();
+        $dashboardTasks = collect([
+            ['permission' => 'collaboration.agenda.view', 'label' => 'Open subject agenda', 'description' => 'Review lessons, homework, resources, and due dates.', 'route' => 'collaboration.index', 'params' => ['section' => 'homework'], 'tone' => 'blue'],
+            ['permission' => 'evaluation.dashboard.view', 'label' => 'Open evaluation dashboard', 'description' => 'See the current term assessment grid and status.', 'route' => 'collaboration.index', 'params' => ['section' => 'evaluation-dashboard'], 'tone' => 'violet'],
+            ['permission' => 'attendance.teacher.view', 'label' => 'Record teacher attendance', 'description' => 'Mark today’s presence and generate substitution coverage.', 'route' => 'attendance.teachers', 'params' => [], 'tone' => 'amber'],
+            ['permission' => 'substitutions.view', 'label' => 'Manage substitutions', 'description' => 'Assign or confirm today’s temporary cover periods.', 'route' => 'substitutions.index', 'params' => [], 'tone' => 'green'],
+        ])->filter(fn (array $task): bool => $user->hasPermission($task['permission']))->values();
+
+        $evaluationDashboardAssessments = $section === 'evaluation-dashboard' && $evaluationAssignments->isNotEmpty()
+            ? Assessment::query()
+                ->with('term')
+                ->whereIn('teacher_assignment_id', $evaluationAssignments->modelKeys())
+                ->when($activeAcademicYear, fn (Builder $query) => $query->where('academic_year_id', $activeAcademicYear->id))
+                ->when($activeAcademicTerm, fn (Builder $query) => $query->where('academic_term_id', $activeAcademicTerm->id), fn (Builder $query) => $query->whereRaw('1 = 0'))
+                ->orderBy('academic_term_id')
+                ->orderBy('assessment_date')
+                ->orderBy('id')
+                ->get()
+                ->map(function (Assessment $assessment): array {
+                    $termLabel = $assessment->term?->name ?: 'No term assigned';
+
+                    return [
+                        'id' => $assessment->id,
+                        'teacher_assignment_id' => $assessment->teacher_assignment_id,
+                        'name' => $assessment->name,
+                        'type' => $assessment->type,
+                        'type_key' => str($assessment->type)->snake()->toString(),
+                        'type_label' => str($assessment->type)->headline()->toString(),
+                        'column_key' => str($termLabel)->slug()->toString(),
+                        'column_label' => $termLabel,
+                        'term_label' => $termLabel,
+                        'status_key' => str($assessment->review_status ?: $assessment->status)->slug()->toString(),
+                        'status_label' => str($assessment->review_status ?: $assessment->status)->headline()->toString(),
+                        'assessment_date' => $assessment->assessment_date?->format('d M Y'),
+                    ];
+                })
+            : collect();
+        $evaluationColumns = $evaluationDashboardAssessments
+            ->map(fn (array $item): array => ['key' => $item['column_key'], 'label' => $item['column_label']])
+            ->unique('key')->values();
+        $evaluationTypes = $evaluationDashboardAssessments
+            ->map(fn (array $item): array => ['key' => $item['type_key'], 'label' => $item['type_label']])
+            ->unique('key')->values();
+        if ($evaluationColumns->isEmpty()) {
+            $evaluationColumns = collect([['key' => 'unassigned', 'label' => 'Unassigned']]);
+        }
+        if ($evaluationTypes->isEmpty()) {
+            $evaluationTypes = collect([['key' => 'project', 'label' => 'Project'], ['key' => 'quiz', 'label' => 'Quiz']]);
+        }
+
+        return view($section === '' ? 'collaboration.dashboard' : 'collaboration.index', [
             'activeAcademicYear' => $activeAcademicYear,
+            'activeAcademicTerm' => $activeAcademicTerm,
             'grades' => Grade::query()->with('sections')->orderBy('sort_order')->get(),
             'assignments' => $assignments,
+            'evaluationAssignments' => $evaluationAssignments,
+            'evaluationAssignmentId' => $evaluationAssignmentId,
+            'evaluationDashboardAssessments' => $evaluationDashboardAssessments,
+            'evaluationColumns' => $evaluationColumns,
+            'evaluationTypes' => $evaluationTypes,
             'registrations' => $canManagePerformance ? $this->availableRegistrations($assignments, $activeAcademicYear?->id) : collect(),
             'announcements' => $announcements,
             'contents' => $contents,
@@ -167,7 +267,10 @@ class CollaborationController extends Controller
             'evaluations' => $evaluations,
             'teachers' => $teachers,
             'messages' => $messages,
-            'assessmentRequests' => $assessmentRequests,
+            'submittedEvaluations' => $submittedEvaluations,
+            'modificationRequests' => $modificationRequests,
+            'isEvaluationAdministrator' => $isEvaluationAdministrator,
+            'assessmentTerms' => $assessmentTerms,
             'canManage' => $canManage,
             'canManagePerformance' => $canManagePerformance,
             'canViewPerformance' => $canViewPerformance,
@@ -181,7 +284,56 @@ class CollaborationController extends Controller
             'agendaDays' => $agendaDays,
             'agendaView' => $agendaView,
             'agendaGrid' => $agendaGrid,
+            'assignmentStudentCounts' => $assignmentStudentCounts,
+            'isTeacherAgenda' => $isTeacherAgenda,
+            'todayLessons' => $todayLessons,
+            'todaySubstitutions' => $todaySubstitutions,
+            'dashboardTasks' => $dashboardTasks,
         ]);
+    }
+
+    public function storeModificationRequest(Request $request, AuditService $audit): RedirectResponse
+    {
+        $data = $request->validate([
+            'assessment_id' => ['required', 'integer', 'exists:assessments,id'],
+            'reason' => ['required', 'string', 'max:2000'],
+        ]);
+        $assessment = Assessment::query()->with('assignment')->findOrFail($data['assessment_id']);
+        $user = $request->user();
+        abort_unless($this->canManageAllAssignments($user) || ($user->teacher_id && $assessment->assignment?->teacher_id === $user->teacher_id), 403);
+        abort_unless($assessment->review_status === 'submitted', 422, 'Only submitted evaluations can be sent for modification.');
+        if (AssessmentModificationRequest::query()->where('assessment_id', $assessment->id)->where('requested_by', $user->id)->where('status', 'pending')->exists()) {
+            throw ValidationException::withMessages(['assessment_id' => 'A modification request is already pending for this evaluation.']);
+        }
+
+        $modificationRequest = AssessmentModificationRequest::create([
+            'assessment_id' => $assessment->id,
+            'requested_by' => $user->id,
+            'reason' => $data['reason'],
+            'status' => 'pending',
+        ]);
+        $audit->log('assessment.modification_requested', $modificationRequest, [], $modificationRequest->only(['assessment_id', 'requested_by', 'reason', 'status']));
+
+        return redirect()->route('collaboration.section', ['section' => 'modification-requests'])->with('success', 'Modification request sent to administration.');
+    }
+
+    public function approveModificationRequest(AssessmentModificationRequest $modificationRequest, AuditService $audit): RedirectResponse
+    {
+        abort_unless($modificationRequest->status === 'pending', 422, 'Only pending modification requests can be approved.');
+        $modificationRequest->update(['status' => 'approved', 'reviewed_by' => request()->user()->id, 'reviewed_at' => now(), 'response' => null]);
+        $audit->log('assessment.modification_request_approved', $modificationRequest, [], $modificationRequest->only(['assessment_id', 'status', 'reviewed_by']));
+
+        return back()->with('success', 'The teacher can now modify this submitted evaluation.');
+    }
+
+    public function rejectModificationRequest(Request $request, AssessmentModificationRequest $modificationRequest, AuditService $audit): RedirectResponse
+    {
+        $data = $request->validate(['response' => ['required', 'string', 'max:2000']]);
+        abort_unless($modificationRequest->status === 'pending', 422, 'Only pending modification requests can be rejected.');
+        $modificationRequest->update(['status' => 'rejected', 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'response' => $data['response']]);
+        $audit->log('assessment.modification_request_rejected', $modificationRequest, [], $modificationRequest->only(['assessment_id', 'status', 'reviewed_by', 'response']));
+
+        return back()->with('success', 'Modification request returned to the teacher.');
     }
 
     public function storeAnnouncement(Request $request, AuditService $audit): RedirectResponse
@@ -330,6 +482,9 @@ class CollaborationController extends Controller
         if ($assignment && ($assignment->academic_year_id !== $registration->academic_year_id || $assignment->grade_id !== $registration->grade_id || ($assignment->section_id && $assignment->section_id !== $registration->section_id))) {
             throw ValidationException::withMessages(['teacher_assignment_id' => 'The selected teacher subject assignment does not apply to this student registration.']);
         }
+        if ($assignment && $registration->subjectExemptions()->where('subject_id', $assignment->subject_id)->exists()) {
+            throw ValidationException::withMessages(['teacher_assignment_id' => 'This student is exempt from the selected subject. Use general follow-up if the observation is not subject-specific.']);
+        }
         if (! $assignment && ! $this->canManageAllAssignments($request->user())) {
             throw ValidationException::withMessages(['teacher_assignment_id' => 'Choose one of your subject assignments for this evaluation.']);
         }
@@ -345,16 +500,42 @@ class CollaborationController extends Controller
     }
 
     /** @return Collection<int, TeacherAssignment> */
-    private function availableAssignments(User $user, ?int $academicYearId)
+    private function availableAssignments(User $user, ?int $academicYearId, ?int $gradeId = null)
     {
         return TeacherAssignment::query()
             ->with('teacher', 'subject', 'grade', 'section')
             ->where('is_active', true)
             ->when($academicYearId, fn (Builder $query) => $query->where('academic_year_id', $academicYearId))
+            ->when($gradeId, fn (Builder $query) => $query->where('grade_id', $gradeId))
             ->when($user->teacher_id && ! $this->canManageAllAssignments($user), fn (Builder $query) => $query->where('teacher_id', $user->teacher_id))
             ->when(! $user->teacher_id && ! $this->canManageAllAssignments($user), fn (Builder $query) => $query->whereRaw('1 = 0'))
             ->orderBy('teacher_id')
             ->get();
+    }
+
+    /** @param Collection<int, TeacherAssignment> $assignments @return array<int, int> */
+    private function assignmentStudentCounts(Collection $assignments, ?int $academicYearId): array
+    {
+        if ($assignments->isEmpty()) {
+            return [];
+        }
+
+        $counts = StudentRegistration::query()
+            ->select('grade_id', 'section_id', DB::raw('COUNT(*) as students_count'))
+            ->where('status', 'active')
+            ->when($academicYearId, fn (Builder $query) => $query->where('academic_year_id', $academicYearId))
+            ->whereIn('grade_id', $assignments->pluck('grade_id')->unique()->values())
+            ->groupBy('grade_id', 'section_id')
+            ->get();
+
+        return $assignments->mapWithKeys(function (TeacherAssignment $assignment) use ($counts): array {
+            $matchingCounts = $counts->where('grade_id', $assignment->grade_id);
+            if ($assignment->section_id) {
+                $matchingCounts = $matchingCounts->where('section_id', $assignment->section_id);
+            }
+
+            return [$assignment->id => (int) $matchingCounts->sum('students_count')];
+        })->all();
     }
 
     /** @return Collection<int, StudentRegistration> */
@@ -408,17 +589,16 @@ class CollaborationController extends Controller
 
     private function notifyCourseAudience(TeacherAssignment $assignment, string $title, string $message): void
     {
-        Student::query()
-            ->with('portalUser')
-            ->whereHas('registrations', function (Builder $registrations) use ($assignment): void {
-                $registrations->where('status', 'active')
-                    ->where('academic_year_id', $assignment->academic_year_id)
-                    ->where('grade_id', $assignment->grade_id)
-                    ->when($assignment->section_id, fn (Builder $query) => $query->where('section_id', $assignment->section_id));
-            })
+        StudentRegistration::query()
+            ->with('student')
+            ->where('status', 'active')
+            ->where('academic_year_id', $assignment->academic_year_id)
+            ->where('grade_id', $assignment->grade_id)
+            ->when($assignment->section_id, fn (Builder $query) => $query->where('section_id', $assignment->section_id))
+            ->whereDoesntHave('subjectExemptions', fn (Builder $query) => $query->where('subject_id', $assignment->subject_id))
             ->get()
-            ->each(function (Student $student) use ($title, $message): void {
-                $student->notify(new StudentPortalNotification($title, $message, route('student-portal.index')));
+            ->each(function (StudentRegistration $registration) use ($assignment, $title, $message): void {
+                $registration->student?->notify(new StudentPortalNotification($title, $message, route('student-portal.index'), $assignment->subject_id, $registration->id));
             });
     }
 
@@ -448,6 +628,7 @@ class CollaborationController extends Controller
             if ($assignment->section_id) {
                 $registrationQuery->where('section_id', $assignment->section_id);
             }
+            $registrationQuery->whereDoesntHave('subjectExemptions', fn (Builder $query) => $query->where('subject_id', $assignment->subject_id));
             abort_unless($courseContent->published_at && $courseContent->published_at->isPast() && $registrationQuery->exists(), 403);
         } else {
             $this->authorizedAssignment($user, (int) $courseContent->teacher_assignment_id);

@@ -7,7 +7,6 @@
 
 @section('content')
 <section class="dars-administration-page">
-    <div class="dars-breadcrumb"><a href="{{ route('admin.users') }}">Administration</a><span>&gt;</span><strong>{{ $definition['title'] }}</strong></div>
 
     @if($page === 'school-year')
         <div class="dars-admin-card-grid dars-school-year-actions">

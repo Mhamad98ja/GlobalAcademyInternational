@@ -12,7 +12,7 @@ use App\Models\Section;
 use App\Models\Subject;
 use App\Models\Teacher;
 use App\Models\TeacherAssignment;
-use App\Models\Student;
+use App\Models\StudentRegistration;
 use App\Services\AuditService;
 use App\Notifications\StudentPortalNotification;
 use Illuminate\Http\RedirectResponse;
@@ -33,9 +33,9 @@ class SchoolAcademicController extends Controller
         return $this->operationsPage('subjects');
     }
 
-    public function terms(): View
+    public function terms(): RedirectResponse
     {
-        return $this->operationsPage('terms');
+        return redirect()->to(route('academic.index').'#terms-semesters');
     }
 
     public function assignments(): View
@@ -84,23 +84,6 @@ class SchoolAcademicController extends Controller
         return back()->with('success', 'Subject updated.');
     }
 
-    public function storeTerm(Request $request, AuditService $audit): RedirectResponse
-    {
-        $term = AcademicTerm::create($this->termData($request));
-        $audit->log('academic_term.created', $term, [], $term->only(['academic_year_id', 'name', 'status']));
-
-        return back()->with('success', 'Academic term created.');
-    }
-
-    public function updateTerm(Request $request, AcademicTerm $term, AuditService $audit): RedirectResponse
-    {
-        $old = $term->only(['academic_year_id', 'name', 'type', 'starts_on', 'ends_on', 'status', 'sort_order']);
-        $term->update($this->termData($request, $term));
-        $audit->log('academic_term.updated', $term, $old, $term->only(array_keys($old)));
-
-        return back()->with('success', 'Academic term updated.');
-    }
-
     public function storeAssessment(Request $request, AuditService $audit): RedirectResponse
     {
         $data = $this->assessmentData($request);
@@ -124,6 +107,10 @@ class SchoolAcademicController extends Controller
     {
         abort_unless($assessment->review_status === 'submitted', 422, 'Only submitted assessments can be approved.');
         $assessment->update(['review_status' => 'approved', 'status' => 'open', 'reviewed_by' => request()->user()->id, 'reviewed_at' => now(), 'rejection_reason' => null]);
+        $assessment->grades()
+            ->whereNotNull('score')
+            ->whereIn('status', ['draft', 'published'])
+            ->update(['status' => 'published', 'published_at' => now(), 'published_by' => request()->user()->id]);
         $audit->log('assessment.approved', $assessment, [], ['review_status' => 'approved', 'status' => 'open']);
         $this->notifyAssessmentStudents($assessment);
 
@@ -146,16 +133,18 @@ class SchoolAcademicController extends Controller
         if (! $assignment) {
             return;
         }
-        Student::query()->whereHas('registrations', function ($registrations) use ($assignment): void {
-            $registrations->where('status', 'active')
-                ->where('academic_year_id', $assignment->academic_year_id)
-                ->where('grade_id', $assignment->grade_id)
-                ->when($assignment->section_id, fn ($query) => $query->where('section_id', $assignment->section_id));
-        })->get()->each(function (Student $student) use ($assessment): void {
-            $student->notify(new StudentPortalNotification(
+        StudentRegistration::query()->with('student')->where('status', 'active')
+            ->where('academic_year_id', $assignment->academic_year_id)
+            ->where('grade_id', $assignment->grade_id)
+            ->when($assignment->section_id, fn ($query) => $query->where('section_id', $assignment->section_id))
+            ->whereDoesntHave('subjectExemptions', fn ($query) => $query->where('subject_id', $assignment->subject_id))
+            ->get()->each(function (StudentRegistration $registration) use ($assessment, $assignment): void {
+            $registration->student?->notify(new StudentPortalNotification(
                 'New '.$assessment->type.' scheduled',
                 $assessment->name.' is scheduled for '.($assessment->assessment_date?->format('d M Y') ?? 'a future date').'.',
                 route('student-portal.index'),
+                $assignment->subject_id,
+                $registration->id,
             ));
         });
     }
@@ -175,30 +164,6 @@ class SchoolAcademicController extends Controller
         $audit->log('teacher_assignment.updated', $assignment, $old, $assignment->only(array_keys($old)));
 
         return back()->with('success', 'Teacher subject assignment updated.');
-    }
-
-    /** @return array<string, mixed> */
-    private function termData(Request $request, ?AcademicTerm $term = null): array
-    {
-        $data = $request->validate([
-            'academic_year_id' => ['required', 'integer', 'exists:academic_years,id'],
-            'name' => ['required', 'string', 'max:100'],
-            'type' => ['required', 'string', 'max:50'],
-            'starts_on' => ['required', 'date'],
-            'ends_on' => ['required', 'date', 'after:starts_on'],
-            'status' => ['required', Rule::in(['draft', 'open', 'closed'])],
-            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999'],
-        ]);
-        $year = AcademicYear::findOrFail($data['academic_year_id']);
-        if ($data['starts_on'] < $year->starts_on->toDateString() || $data['ends_on'] > $year->ends_on->toDateString()) {
-            throw ValidationException::withMessages(['starts_on' => 'Term dates must fall within the selected academic year.']);
-        }
-        $duplicate = AcademicTerm::query()->where('academic_year_id', $data['academic_year_id'])->where('name', $data['name'])->when($term, fn ($query) => $query->whereKeyNot($term->id))->exists();
-        if ($duplicate) {
-            throw ValidationException::withMessages(['name' => 'This academic year already has a term with that name.']);
-        }
-
-        return $data;
     }
 
     /** @return array<string, mixed> */
