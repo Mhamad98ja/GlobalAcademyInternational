@@ -126,7 +126,6 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
     Route::get('/students/search', [StudentsController::class, 'search'])->middleware('permission:students.search')->name('students.search');
     Route::middleware('permission:students.view')->group(function (): void {
         Route::get('/students/dashboard', [StudentDossierController::class, 'dashboard'])->name('students.dashboard');
-        Route::get('/students/observations', [StudentDossierController::class, 'observations'])->middleware('permission:students.observations.view')->name('students.observations');
         Route::get('/students/tools/{section}', [StudentDossierController::class, 'tools'])->where('section', 'file|references')->name('students.tools');
         Route::get('/students/references/{reference}/create', [StudentDossierController::class, 'referenceCreate'])->middleware('can:manage-branches')->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.create');
         Route::get('/students/references/{reference}/{entry}/edit', [StudentDossierController::class, 'referenceEdit'])->middleware('can:manage-branches')->where('reference', 'codes|division|class-definition|classes|other-schools|district|towns')->name('students.references.edit');
@@ -213,6 +212,8 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::get('/academic/operations/subjects', [SchoolAcademicController::class, 'subjects'])->middleware('permission:academic.subjects.view')->name('school-academic.subjects');
         Route::get('/academic/operations/terms', [SchoolAcademicController::class, 'terms'])->middleware('permission:academic_year.view')->name('school-academic.terms');
         Route::get('/academic/operations/teacher-assignments', [SchoolAcademicController::class, 'assignments'])->middleware('permission:academic.teacher-assignments.view')->name('school-academic.assignments');
+        Route::get('/academic/operations/teacher-assignments/create', [SchoolAcademicController::class, 'createAssignment'])->middleware('permission:academic.teacher-assignments.manage')->name('school-academic.assignments.create');
+        Route::get('/academic/operations/teacher-assignments/teacher/{teacher}', [SchoolAcademicController::class, 'teacherAssignments'])->middleware('permission:academic.teacher-assignments.view')->name('school-academic.teacher-assignments');
         // Keep the old URL as a compatibility redirect; evaluations live in Online Collaboration.
         Route::get('/academic/operations/assessments', fn () => redirect()->route('collaboration.section', ['section' => 'modification-requests']))->name('school-academic.assessments');
         Route::post('/academic/subjects', [SchoolAcademicController::class, 'storeSubject'])->middleware('permission:academic.subjects.manage')->name('school-academic.subjects.store');
@@ -225,6 +226,7 @@ Route::middleware(['auth', 'branch'])->group(function (): void {
         Route::post('/academic/assessments/{assessment}/reject', [SchoolAcademicController::class, 'rejectAssessment'])->middleware('permission:academic.assessments.approve')->name('school-academic.assessments.reject');
         Route::post('/academic/teacher-assignments', [SchoolAcademicController::class, 'storeAssignment'])->middleware('permission:academic.teacher-assignments.manage')->name('school-academic.assignments.store');
         Route::put('/academic/teacher-assignments/{assignment}', [SchoolAcademicController::class, 'updateAssignment'])->middleware('permission:academic.teacher-assignments.manage')->name('school-academic.assignments.update');
+        Route::delete('/academic/teacher-assignments/{assignment}', [SchoolAcademicController::class, 'destroyAssignment'])->middleware('permission:academic.teacher-assignments.manage')->name('school-academic.assignments.destroy');
     });
     Route::middleware('permission:attendance.student.view')->group(function (): void {
         Route::get('/attendance/students', [AttendanceController::class, 'students'])->name('attendance.students');

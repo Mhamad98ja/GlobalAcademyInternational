@@ -9,7 +9,6 @@
         ['label' => 'Find a student', 'description' => 'Open a student profile or registration record.', 'route' => 'students.index', 'permission' => 'students.view', 'icon' => 'students', 'tone' => 'blue'],
         ['label' => 'Record attendance', 'description' => 'Capture today\'s student attendance by class.', 'route' => 'attendance.students', 'permission' => 'attendance.student.view', 'icon' => 'reports', 'tone' => 'gold'],
         ['label' => 'Open evaluations', 'description' => 'Review grades for the active academic term.', 'route' => 'collaboration.index', 'params' => ['section' => 'evaluation-dashboard'], 'permission' => 'evaluation.dashboard.view', 'icon' => 'academic', 'tone' => 'mint'],
-        ['label' => 'Generate report cards', 'description' => 'Prepare official annual or partial report cards.', 'route' => 'admin.report-cards', 'permission' => 'report-card.view', 'icon' => 'reports', 'tone' => 'sky'],
     ];
     $workspaceLinks = [
         ['label' => 'Student Profile', 'description' => 'Students, registrations, families', 'workspace' => 'students', 'permission' => 'students.view', 'icon' => 'students'],

@@ -1,18 +1,12 @@
 @extends('layouts.app', ['title' => $definition['title'] ?? $report])
 
 @php
-    $reportGroups = [
-        'Reports' => ['report-card', 'individual-transcript', 'remarks-summary', 'general-transcript', 'remarks-detail', 'progress-transcript', 'subjects-list-per-class', 'transcript-by-subject-choice', 'student-ranking-per-subject', 'subjects-transcript', 'official-statement', 'official-statement-mehe', 'student-performance', 'subject-averages-per-class', 'failure-per-subject', 'underachievers-by-subject', 'annual-progression-of-class-average', 'top-5-students-per-division', 'highest-grade-per-subject', 'export-bacc-francais', 'best-annual-columns-transcript'],
-        'Statistical Reports' => ['students-transcript', 'grade-distribution', 'class-average-evolution', 'statistical-calculation', 'results-comparison-table'],
-    ];
     $valueFor = static fn (array $field): mixed => request($field['name']) ?? $field['default'] ?? null;
 @endphp
 
 @section('content')
 <section class="dars-report-card-page">
-    @if(!empty($definition['home']))
-        <div class="dars-report-home">@foreach($reportGroups as $groupTitle => $groupReports)<section class="dars-report-home-group" aria-labelledby="report-group-{{ $loop->index }}"><h1 id="report-group-{{ $loop->index }}">{{ $groupTitle }}</h1><div class="dars-report-home-list">@foreach($groupReports as $groupReport)@continue($groupReport === 'report-card')@if(isset($definitions[$groupReport]))<a href="{{ route('report-card.show', ['report' => $groupReport]) }}"><span aria-hidden="true">[]</span>{{ $definitions[$groupReport]['title'] }}</a>@endif@endforeach</div></section>@endforeach</div>
-    @else
+    @if(empty($definition['home']))
         <form method="GET" action="{{ route('report-card.show', ['report' => $reportKey]) }}" class="dars-report-card-form {{ !empty($definition['statistical']) ? 'dars-report-card-statistical' : '' }}">
             @foreach($definition['fields'] ?? [] as $field)
                 @if($field['type'] === 'heading')<h2 class="dars-report-card-heading">{{ $field['label'] }}</h2>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Models\AcademicYear;
 use App\Models\SchoolMessage;
 use App\Models\SchoolMessageRecipient;
 use App\Models\User;
@@ -22,34 +23,70 @@ class MessagesController extends Controller
         abort_unless($user instanceof User, 403);
 
         $branchId = $branches->id();
+        $canSeeAllPeople = $user->hasGlobalBranchAccess();
+        $activeAcademicYearId = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->value('id');
         $recipients = User::query()
             ->where('is_active', true)
             ->whereKeyNot($user->id)
-            ->when($branchId, fn ($query) => $query->where(fn ($users) => $users
+            ->when($branchId && ! $canSeeAllPeople, fn ($query) => $query->where(fn ($users) => $users
                 ->where('has_all_branch_access', true)
                 ->orWhereHas('branches', fn ($assignedBranches) => $assignedBranches->whereKey($branchId))))
+            ->with([
+                'roles:id,name',
+                'student:id,first_name,middle_name,last_name',
+                'student.registrations' => fn ($query) => $query
+                    ->with('grade')
+                    ->where('status', 'active')
+                    ->when($activeAcademicYearId, fn ($registrations) => $registrations->where('academic_year_id', $activeAcademicYearId))
+                    ->latest('registered_on')
+                    ->latest('id'),
+            ])
             ->orderBy('name')
-            ->get(['id', 'name', 'email']);
+            ->get();
+
+        $recipientGroups = $recipients
+            ->groupBy(function (User $recipient): string {
+                $roleNames = $recipient->roles->pluck('name');
+                if ($roleNames->contains(fn (string $role): bool => in_array($role, ['parent', 'guardian', 'responsible-person', 'responsible_person'], true))) {
+                    return 'Parents / guardians';
+                }
+                if ($recipient->student_id || $roleNames->contains('student')) {
+                    $gradeName = $recipient->student?->registrations->first()?->grade?->name;
+
+                    return $gradeName ? 'Students - '.$gradeName : 'Students';
+                }
+                if ($recipient->teacher_id || $roleNames->contains('teacher')) {
+                    return 'Teachers';
+                }
+
+                return $recipient->is_controller_administrator || $roleNames->contains('super-administrator')
+                    ? 'Administrators'
+                    : 'Staff';
+            })
+            ->map(fn ($group) => $group->sortBy(fn (User $recipient): string => mb_strtolower($recipient->name))->values());
+        $groupOrder = ['Parents / guardians' => 1, 'Teachers' => 2, 'Students' => 3, 'Administrators' => 4, 'Staff' => 5];
+        $recipientGroups = $recipientGroups->sortBy(fn ($group, string $label): string => sprintf('%02d-%s', $groupOrder[preg_replace('/ - .+$/u', '', $label)] ?? 9, $label));
+        $selectedRecipientIds = collect(old('recipient_ids', []))->map(fn ($id): int => (int) $id)->all();
 
         $search = trim((string) $request->query('q', ''));
         $inbox = SchoolMessageRecipient::query()
             ->where('recipient_id', $user->id)
             ->where('is_archived', false)
-            ->when($search !== '', fn ($query) => $query->whereHas('message', fn ($messages) => $messages
+            ->when($search !== '', fn ($query) => $query->whereHas('message', fn ($messages) => $messages->withoutGlobalScopes()
                 ->whereInsensitiveLike('subject', $search)
                 ->orWhereInsensitiveLike('body', $search)))
-            ->with('message.sender')
+            ->with(['message' => fn ($messages) => $messages->withoutGlobalScopes()->with('sender')])
             ->latest('id')
             ->paginate(20, ['*'], 'inbox_page');
 
-        $sent = SchoolMessage::query()
+        $sent = SchoolMessage::withoutGlobalScopes()
             ->where('sender_id', $user->id)
             ->withCount('recipients')
             ->latest('sent_at')
             ->take(12)
             ->get();
 
-        return view('messages.index', compact('inbox', 'sent', 'recipients', 'search'));
+        return view('messages.index', compact('inbox', 'sent', 'recipients', 'recipientGroups', 'selectedRecipientIds', 'search'));
     }
 
     public function store(Request $request, BranchContext $branches, AuditService $audit): RedirectResponse
@@ -63,11 +100,12 @@ class MessagesController extends Controller
             'body' => ['required', 'string', 'max:10000'],
         ]);
         $branchId = $branches->id();
+        $canSendToAllPeople = $sender->hasGlobalBranchAccess();
         $recipients = User::query()
             ->whereIn('id', $data['recipient_ids'])
             ->where('is_active', true)
             ->whereKeyNot($sender->id)
-            ->when($branchId, fn ($query) => $query->where(fn ($users) => $users
+            ->when($branchId && ! $canSendToAllPeople, fn ($query) => $query->where(fn ($users) => $users
                 ->where('has_all_branch_access', true)
                 ->orWhereHas('branches', fn ($assignedBranches) => $assignedBranches->whereKey($branchId))))
             ->get(['id']);

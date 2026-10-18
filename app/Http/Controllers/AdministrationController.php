@@ -131,7 +131,7 @@ class AdministrationController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', 'unique:users,whatsapp_number'],
+            'phone' => ['nullable', 'string', 'max:30'],
             'teacher_id' => [Rule::requiredIf($roleName === 'teacher'), 'nullable', 'integer', 'exists:teachers,id', Rule::unique('users', 'teacher_id')],
             'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()],
             'role_id' => [$canManageBranchAssignments ? 'required' : 'nullable', 'exists:roles,id'],
@@ -154,7 +154,7 @@ class AdministrationController extends Controller
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'whatsapp_number' => $data['whatsapp_number'] ?? null,
+                'phone' => $data['phone'] ?? null,
                 'teacher_id' => $data['teacher_id'] ?? null,
                 'password' => $data['password'],
                 'is_active' => true,
@@ -204,16 +204,16 @@ class AdministrationController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'whatsapp_number' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/', Rule::unique('users', 'whatsapp_number')->ignore($user->id)],
+            'phone' => ['nullable', 'string', 'max:30'],
             'teacher_id' => [Rule::requiredIf($roleName === 'teacher'), 'nullable', 'integer', 'exists:teachers,id', Rule::unique('users', 'teacher_id')->ignore($user)],
             'student_id' => [Rule::requiredIf($roleName === 'student'), 'nullable', 'integer', 'exists:students,id', Rule::unique('users', 'student_id')->ignore($user)],
             'password' => ['nullable', 'confirmed', Password::min(12)->mixedCase()->numbers()],
             'role_id' => [$canManageBranchAssignments ? 'required' : 'nullable', 'exists:roles,id'],
-            'branch_ids' => [Rule::requiredIf($canManageBranchAssignments), 'array', 'min:1'],
+            'branch_ids' => ['sometimes', 'array', 'min:1'],
             'branch_ids.*' => ['integer', 'exists:branches,id'],
-            'default_branch_id' => [Rule::requiredIf($canManageBranchAssignments), 'nullable', 'integer', 'exists:branches,id'],
+            'default_branch_id' => ['sometimes', 'nullable', 'integer', 'exists:branches,id'],
             'has_all_branch_access' => ['nullable', 'boolean'],
-            'branch_administrator_ids' => ['nullable', 'array'],
+            'branch_administrator_ids' => ['sometimes', 'array'],
             'branch_administrator_ids.*' => ['integer', 'exists:branches,id'],
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:max_width=3000,max_height=3000'],
             'remove_profile_photo' => ['nullable', 'boolean'],
@@ -229,14 +229,27 @@ class AdministrationController extends Controller
             ]);
         }
         $this->ensureStudentBranchAssignment($roleName, $data, $canManageBranchAssignments);
-        if ($canManageBranchAssignments) {
-            $this->ensureResponsibleBranchesRemain($user, $data['branch_administrator_ids'] ?? []);
+        $branchAssignmentsProvided = $canManageBranchAssignments && (
+            array_key_exists('branch_ids', $data)
+            || array_key_exists('default_branch_id', $data)
+            || array_key_exists('branch_administrator_ids', $data)
+        );
+        $existingBranchIds = $user->branches()->pluck('branches.id')->map(fn ($id) => (int) $id)->all();
+        $effectiveBranchIds = array_key_exists('branch_ids', $data) ? $data['branch_ids'] : $existingBranchIds;
+        $effectiveDefaultBranchId = array_key_exists('default_branch_id', $data)
+            ? ($data['default_branch_id'] === null ? null : (int) $data['default_branch_id'])
+            : $user->branches()->wherePivot('is_default', true)->value('branches.id');
+        $effectiveBranchAdministratorIds = array_key_exists('branch_administrator_ids', $data)
+            ? $data['branch_administrator_ids']
+            : $user->branches()->wherePivot('is_branch_administrator', true)->pluck('branches.id')->map(fn ($id) => (int) $id)->all();
+        if ($branchAssignmentsProvided) {
+            $this->ensureResponsibleBranchesRemain($user, $effectiveBranchAdministratorIds);
         }
 
         $attributes = [
             'name' => $data['name'],
             'email' => $data['email'],
-            'whatsapp_number' => $data['whatsapp_number'] ?? null,
+            'phone' => $data['phone'] ?? null,
             'teacher_id' => $data['teacher_id'] ?? null,
             'student_id' => $data['student_id'] ?? null,
         ];
@@ -247,16 +260,13 @@ class AdministrationController extends Controller
         if ($canManageBranchAssignments && $user->is_controller_administrator && Role::whereKey($data['role_id'])->where('name', '!=', 'super-administrator')->exists()) {
             abort(422, 'The Controller Administrator must remain a Branch Super Administrator.');
         }
-        DB::transaction(function () use ($user, $attributes, $data, $canManageBranchAssignments): void {
+        DB::transaction(function () use ($user, $attributes, $data, $canManageBranchAssignments, $branchAssignmentsProvided, $effectiveBranchIds, $effectiveDefaultBranchId, $effectiveBranchAdministratorIds): void {
             $user->update($attributes);
             if ($canManageBranchAssignments) {
                 $user->roles()->sync([(int) $data['role_id']]);
-                $this->syncBranches(
-                    $user,
-                    $data['branch_ids'] ?? [],
-                    isset($data['default_branch_id']) ? (int) $data['default_branch_id'] : null,
-                    $data['branch_administrator_ids'] ?? [],
-                );
+                if ($branchAssignmentsProvided) {
+                    $this->syncBranches($user, $effectiveBranchIds, $effectiveDefaultBranchId, $effectiveBranchAdministratorIds);
+                }
             }
         });
         if ($request->hasFile('profile_photo')) {
@@ -284,7 +294,7 @@ class AdministrationController extends Controller
     /** @param array<string, mixed> $data */
     private function ensureStudentBranchAssignment(?string $roleName, array $data, bool $canManageBranchAssignments): void
     {
-        if (! $canManageBranchAssignments || $roleName !== 'student' || empty($data['student_id'])) {
+        if (! $canManageBranchAssignments || $roleName !== 'student' || empty($data['student_id']) || ! array_key_exists('branch_ids', $data)) {
             return;
         }
 
@@ -436,7 +446,9 @@ class AdministrationController extends Controller
         $branchAdministratorIds = array_map('intval', $branchAdministratorIds);
         $defaultBranchId = $defaultBranchId === null ? null : (int) $defaultBranchId;
         if ($defaultBranchId !== null && ! in_array($defaultBranchId, $branchIds, true)) {
-            abort(422, 'The default branch must be assigned to this user.');
+            throw ValidationException::withMessages([
+                'default_branch_id' => 'The starting branch must be one of the assigned branches.',
+            ]);
         }
         if (array_diff($branchAdministratorIds, $branchIds) !== []) {
             abort(422, 'A branch administrator must be assigned to that branch.');

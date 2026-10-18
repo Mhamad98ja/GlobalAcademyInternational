@@ -14,7 +14,7 @@ class Student extends Model
 {
     use BelongsToBranch,HasPublicId,Notifiable,SoftDeletes;
 
-    protected $fillable = ['branch_id', 'student_number', 'registration_number', 'first_name', 'middle_name', 'last_name', 'gender', 'date_of_birth', 'phone', 'email', 'address', 'area', 'street', 'area_number', 'street_number', 'building_name', 'building_number', 'apartment', 'enrollment_date', 'previous_school', 'photo_path', 'notes'];
+    protected $fillable = ['branch_id', 'student_number', 'registration_number', 'official_id_number', 'nationality', 'place_of_birth', 'first_name', 'middle_name', 'last_name', 'gender', 'date_of_birth', 'phone', 'email', 'address', 'area', 'street', 'area_number', 'street_number', 'building_name', 'building_number', 'apartment', 'enrollment_date', 'previous_school', 'photo_path', 'notes'];
 
     protected function casts(): array
     {

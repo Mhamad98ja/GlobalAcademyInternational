@@ -235,7 +235,6 @@ class StudentsController extends Controller
         $canViewMedical = $request->user()->hasPermission('medical.view');
         $canViewGrades = $request->user()->hasPermission('grades.enter');
         $canViewExamAbsences = $request->user()->hasPermission('academic_year.manage');
-        $canViewPerformance = $request->user()->hasPermission('performance.view') || $request->user()->hasPermission('performance.manage');
         if ($canViewFinancials) {
             $relations[] = 'invoices';
         }
@@ -255,10 +254,6 @@ class StudentsController extends Controller
         if ($canViewExamAbsences) {
             $relations[] = 'examAbsences.assessment.subject';
         }
-        if ($canViewPerformance) {
-            $relations[] = 'performanceEvaluations.assignment.subject';
-            $relations[] = 'performanceEvaluations.teacher';
-        }
         $student->load($relations);
 
         $activeRegistration = $student->registrations->firstWhere('status', 'active') ?? $student->registrations->first();
@@ -276,12 +271,9 @@ class StudentsController extends Controller
         if ($canViewExamAbsences) {
             $student->setRelation('examAbsences', $student->examAbsences->reject(fn ($entry) => $isExempt($entry->student_registration_id, $entry->assessment?->subject_id ?? $entry->assessment?->assignment?->subject_id)));
         }
-        if ($canViewPerformance) {
-            $student->setRelation('performanceEvaluations', $student->performanceEvaluations->reject(fn ($entry) => $entry->assignment && $isExempt($entry->student_registration_id, $entry->assignment->subject_id)));
-        }
         $supportUsers = User::query()->where('is_active', true)->whereNull('student_id')->orderBy('name')->get();
 
-        return view('students.show', compact('student', 'canViewFinancials', 'canViewAttendance', 'canViewDiscipline', 'canViewMedical', 'canViewGrades', 'canViewExamAbsences', 'canViewPerformance', 'subjects', 'supportUsers'));
+        return view('students.show', compact('student', 'canViewFinancials', 'canViewAttendance', 'canViewDiscipline', 'canViewMedical', 'canViewGrades', 'canViewExamAbsences', 'subjects', 'supportUsers'));
     }
 
     public function storeSupportAssignment(Request $request, Student $student): RedirectResponse

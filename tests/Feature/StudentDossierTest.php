@@ -450,8 +450,8 @@ class StudentDossierTest extends TestCase
 
         $this->get(route('workspaces.show', ['workspace' => 'students']))
             ->assertOk()
-            ->assertSee('Reports')
-            ->assertSee(route('reports.school', ['report' => 'student_attendance']));
+            ->assertDontSee('Reports')
+            ->assertDontSee(route('reports.school', ['report' => 'student_attendance']));
     }
 
     public function test_grade_reports_apply_term_class_and_assessment_date_filters_to_exports_too(): void

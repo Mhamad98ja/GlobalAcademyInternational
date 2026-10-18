@@ -25,6 +25,9 @@ class StoreStudentRequest extends FormRequest
         return [
             'student_number' => ['nullable', 'string', 'max:50', Rule::unique('students', 'student_number')->ignore($student)],
             'registration_number' => ['nullable', 'string', 'max:50'],
+            'official_id_number' => ['nullable', 'string', 'max:100'],
+            'nationality' => ['nullable', 'string', 'max:100'],
+            'place_of_birth' => ['nullable', 'string', 'max:150'],
             'first_name' => ['required', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],

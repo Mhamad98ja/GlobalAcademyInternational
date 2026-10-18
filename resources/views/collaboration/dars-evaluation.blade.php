@@ -4,7 +4,7 @@
         <form method="GET" action="{{ route('collaboration.section', ['section' => 'evaluation-dashboard']) }}" class="dars-evaluation-assignment-picker">
             <input type="hidden" name="section" value="evaluation-dashboard">
             <select name="teacher_assignment_id" aria-label="Choose class subject" onchange="this.form.submit()">
-                <option value="">All assigned subjects</option>
+                <option value="">All assigned classes and subjects</option>
                 @foreach($assignments as $assignment)
                     <option value="{{ $assignment->id }}" @selected($evaluationAssignmentId === $assignment->id)>{{ $assignment->grade?->name }}{{ $assignment->section ? ' / '.$assignment->section->name : '' }} · {{ $assignment->subject?->name }}</option>
                 @endforeach
@@ -13,7 +13,7 @@
         <nav class="dars-evaluation-action-links" aria-label="Evaluation tools">
             <a href="{{ route('grades.index', ['view' => 'evaluations']) }}">Evaluation</a>
             <a class="{{ $evaluationPage === 'evaluation-dashboard' ? 'is-active' : '' }}" href="{{ route('collaboration.section', ['section' => 'evaluation-dashboard']) }}">Dashboard</a>
-            @if($activeAcademicTerm)<a class="dars-evaluation-add" href="{{ route('grades.assessments.create') }}">+ New evaluation</a>@else<span class="dars-evaluation-context">Configure an active academic term</span>@endif
+            @if($activeAcademicTerm && $assignments->isNotEmpty())<a class="dars-evaluation-add" href="{{ route('grades.assessments.create', ['teacher_assignment_id' => $evaluationAssignmentId ?: $assignments->first()->id]) }}">+ New evaluation</a>@elseif($assignments->isEmpty())<span class="dars-evaluation-context">No assigned classes or subjects</span>@else<span class="dars-evaluation-context">Configure an active academic term</span>@endif
             <a class="{{ $evaluationPage === 'modification-requests' ? 'is-active' : '' }}" href="{{ route('collaboration.section', ['section' => 'modification-requests']) }}">Modification request</a>
         </nav>
     </div>

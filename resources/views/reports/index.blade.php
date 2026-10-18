@@ -5,10 +5,11 @@
 @php($canSelectReportRows = $selectableReportRows ?? false)
 <div class="page-header">
     <div>
-        <h1 class="page-title">Reports</h1>
-        <p class="page-subtitle">Choose a report, then filter by the information that belongs to it.</p>
+        <h1 class="page-title">{{ $reportLabel }}</h1>
+        <p class="page-subtitle">Filter this report using only the fields that belong to it.</p>
     </div>
     <div class="flex flex-wrap gap-2">
+        <a class="btn btn-secondary" href="{{ route('reports.index') }}">All reports</a>
         <a class="btn btn-secondary" target="_blank" rel="noopener" href="{{ route('reports.print', $reportQuery) }}">Print report</a>
         @if ($canSelectReportRows)
             <button type="button" class="btn btn-secondary" data-print-selected-students data-print-url="{{ route('reports.print') }}" data-selection-key="{{ $selectionKey }}" data-report="{{ $report }}">Print selected records</button>
@@ -21,16 +22,10 @@
     <div class="panel-header">
         <form method="GET" class="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-4">
             @if(request('module') === 'students')<input type="hidden" name="module" value="students">@endif
+            <input type="hidden" name="report" value="{{ $report }}">
             <div>
-                <label class="form-label" for="report">Report type</label>
-                <select id="report" name="report" data-report-type-select>
-                    <option value="student_information" @selected($report === 'student_information')>Student general information</option>
-                    <option value="students" @selected($report === 'students')>Student registrations</option>
-                    @if ($canViewOperationalReports)<option value="stock" @selected($report === 'stock')>Stock on hand</option>@endif
-                    @if ($canViewFinancials)<option value="invoices" @selected($report === 'invoices')>Invoices</option>@endif
-                    @if ($canViewOperationalReports)<option value="distributions" @selected($report === 'distributions')>Book distributions</option>@endif
-                    @if ($canViewFinancials)<option value="payments" @selected($report === 'payments')>Payments</option>@endif
-                </select>
+                <span class="form-label">Report type</span>
+                <p class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">{{ $reportLabel }}</p>
             </div>
 
             @if ($report === 'stock')

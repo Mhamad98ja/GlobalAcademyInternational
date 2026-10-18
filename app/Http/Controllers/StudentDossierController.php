@@ -11,11 +11,9 @@ use App\Models\SchoolLevel;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentAttendance;
-use App\Models\StudentPerformanceEvaluation;
 use App\Models\StudentReferenceEntry;
 use App\Models\StudentRegistration;
 use App\Models\SystemSetting;
-use App\Models\TeacherAssignment;
 use App\Services\AuditService;
 use App\Services\AcademicStructureCodes;
 use App\Support\StudentDossierNavigation;
@@ -26,7 +24,6 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -93,68 +90,6 @@ class StudentDossierController extends Controller
         ];
 
         return view('students.dossier.dashboard-page', compact('studentOverview', 'activeAcademicYear'));
-    }
-
-    public function observations(Request $request): View
-    {
-        $user = $request->user();
-        $filters = $request->validate([
-            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
-            'student_id' => ['nullable', 'integer', 'exists:students,id'],
-            'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
-            'section_id' => ['nullable', 'integer', 'exists:sections,id'],
-            'category' => ['nullable', 'string', 'max:50'],
-            'status' => ['nullable', Rule::in(['draft', 'published'])],
-            'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
-        ]);
-        $activeAcademicYear = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->first();
-        $yearId = (int) ($filters['academic_year_id'] ?? $activeAcademicYear?->id);
-        $isTeacher = (bool) $user->teacher_id && ! $user->hasPermission('academic_year.manage');
-        $assignments = TeacherAssignment::query()
-            ->with('subject', 'grade', 'section')
-            ->where('is_active', true)
-            ->when($yearId, fn (Builder $query) => $query->where('academic_year_id', $yearId))
-            ->when($isTeacher, fn (Builder $query) => $query->where('teacher_id', $user->teacher_id))
-            ->orderBy('grade_id')->orderBy('subject_id')->get();
-        $records = StudentPerformanceEvaluation::query()
-            ->with('student', 'registration.grade', 'registration.section', 'assignment.subject', 'teacher', 'createdBy')
-            ->when($yearId, fn (Builder $query) => $query->whereHas('registration', fn (Builder $registration) => $registration->where('academic_year_id', $yearId)))
-            ->when($isTeacher, fn (Builder $query) => $query->where('teacher_id', $user->teacher_id))
-            ->when($filters['student_id'] ?? null, fn (Builder $query, int $id) => $query->where('student_id', $id))
-            ->when($filters['grade_id'] ?? null, fn (Builder $query, int $id) => $query->whereHas('registration', fn (Builder $registration) => $registration->where('grade_id', $id)))
-            ->when($filters['section_id'] ?? null, fn (Builder $query, int $id) => $query->whereHas('registration', fn (Builder $registration) => $registration->where('section_id', $id)))
-            ->when($filters['category'] ?? null, fn (Builder $query, string $category) => $query->where('category', $category))
-            ->when($filters['status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
-            ->when($filters['date_from'] ?? null, fn (Builder $query, string $date) => $query->whereDate('observed_on', '>=', $date))
-            ->when($filters['date_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('observed_on', '<=', $date))
-            ->latest('observed_on')->latest('id')->paginate(25)->withQueryString();
-        $registrations = StudentRegistration::query()
-            ->with('student', 'grade', 'section')
-            ->where('status', 'active')
-            ->when($yearId, fn (Builder $query) => $query->where('academic_year_id', $yearId))
-            ->when($isTeacher, function (Builder $query) use ($assignments): void {
-                $query->where(function (Builder $registrations) use ($assignments): void {
-                    foreach ($assignments as $assignment) {
-                        $registrations->orWhere(function (Builder $registration) use ($assignment): void {
-                            $registration->where('grade_id', $assignment->grade_id)
-                                ->when($assignment->section_id, fn (Builder $query) => $query->where('section_id', $assignment->section_id));
-                        });
-                    }
-                });
-            })
-            ->orderBy('grade_id')->orderBy('section_id')->get();
-
-        return view('students.observations', [
-            'records' => $records,
-            'filters' => array_replace($filters, ['academic_year_id' => $yearId]),
-            'years' => AcademicYear::query()->orderByDesc('starts_on')->get(),
-            'grades' => Grade::query()->with('sections')->orderBy('sort_order')->get(),
-            'assignments' => $assignments,
-            'registrations' => $registrations,
-            'categories' => ['participation', 'behavior', 'effort', 'homework', 'engagement', 'other'],
-            'canManage' => $user->hasPermission('performance.manage'),
-        ]);
     }
 
     public function tools(Request $request, string $section): View|RedirectResponse

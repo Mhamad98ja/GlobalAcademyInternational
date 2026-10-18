@@ -85,12 +85,18 @@ final class TimetableService
             throw ValidationException::withMessages(['teacher_assignment_id' => 'The required weekly periods for this assignment are already scheduled.']);
         }
 
-        if ($assignment->weekly_period_limit !== null) {
+        $teacherWeeklyLimit = TeacherAssignment::query()
+            ->where('teacher_id', $attributes['teacher_id'])
+            ->where('academic_year_id', $attributes['academic_year_id'])
+            ->where('is_active', true)
+            ->whereNotNull('weekly_period_limit')
+            ->min('weekly_period_limit');
+        if ($teacherWeeklyLimit !== null) {
             $teacherWeeklyPeriods = $withoutCurrent(TimetableEntry::query()
                 ->where('academic_year_id', $attributes['academic_year_id'])
                 ->where('teacher_id', $attributes['teacher_id']))
                 ->count();
-            if ($teacherWeeklyPeriods >= $assignment->weekly_period_limit) {
+            if ($teacherWeeklyPeriods >= (int) $teacherWeeklyLimit) {
                 throw ValidationException::withMessages(['teacher_assignment_id' => 'Scheduling this lesson would exceed the teacher weekly workload limit.']);
             }
         }

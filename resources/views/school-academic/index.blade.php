@@ -4,7 +4,6 @@
 @php
     $activeSection = $activeSection ?? 'overview';
     $operationSections = [
-        'overview' => ['label' => 'Operations overview', 'description' => 'Choose one focused setup area.', 'route' => 'school-academic.index'],
         'subjects' => ['label' => 'Subjects', 'description' => 'Create the subjects taught by the school.', 'route' => 'school-academic.subjects'],
         'assignments' => ['label' => 'Teacher subject assignments', 'description' => 'Connect a teacher, subject, class, and section.', 'route' => 'school-academic.assignments'],
     ];
@@ -16,7 +15,8 @@
     </div>
 </div>
 
-<nav class="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4" aria-label="Academic operations sections">
+@if ($activeSection === 'overview')
+<nav class="mb-6 grid gap-3 md:grid-cols-2" aria-label="Academic operations sections">
     @foreach ($operationSections as $key => $section)
         @if ($section['navigation'] ?? true)
         <a href="{{ route($section['route']) }}" class="rounded-lg border p-4 transition hover:-translate-y-0.5 hover:shadow-sm {{ $activeSection === $key ? 'border-teal-600 bg-teal-50 ring-1 ring-teal-600/20' : 'border-slate-200 bg-white hover:border-teal-300' }}">
@@ -27,8 +27,9 @@
         @endif
     @endforeach
 </nav>
+@endif
 
-@if ($activeSection === 'overview')
+@if (false)
     <section class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         @foreach (['subjects' => ['count' => $subjects->count(), 'label' => 'Subjects ready', 'note' => 'Active and inactive subject records'], 'assignments' => ['count' => $assignments->where('is_active', true)->count(), 'label' => 'Active assignments', 'note' => 'Teacher-to-subject class links']] as $key => $stat)
             <a href="{{ route($operationSections[$key]['route']) }}" class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md">
@@ -74,68 +75,109 @@
 @endif
 
 @if ($activeSection === 'assignments')
+@if (! $selectedTeacher)
     <section class="panel">
-        <div class="panel-header"><h2 id="assignments" class="panel-title scroll-mt-20">Teacher subject assignments</h2></div>
-        <form method="POST" action="{{ route('school-academic.assignments.store') }}" class="space-y-3 border-b border-slate-200 p-5">
-            @csrf
-            <select name="academic_year_id" required>
-                <option value="">Academic year</option>
-                @foreach ($years as $year)
-                    <option value="{{ $year->id }}">{{ $year->name }}</option>
-                @endforeach
-            </select>
-            <div class="grid gap-3 sm:grid-cols-2">
-                <select name="teacher_id" required>
-                    <option value="">Teacher</option>
-                    @foreach ($teachers as $teacher)
-                        <option value="{{ $teacher->id }}">{{ $teacher->full_name }}</option>
-                    @endforeach
-                </select>
-                <select name="subject_id" required>
-                    <option value="">Subject</option>
-                    @foreach ($subjects->where('is_active', true) as $subject)
-                        <option value="{{ $subject->id }}">{{ $subject->name }}</option>
-                    @endforeach
-                </select>
+        <div class="panel-header"><div><h2 id="assignments" class="panel-title scroll-mt-20">Teachers</h2><p class="mt-1 text-sm text-slate-500">Select a teacher to configure their subject assignments.</p></div></div>
+        <div class="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3">
+            @forelse ($teachers as $teacher)
+                <a href="{{ route('school-academic.teacher-assignments', $teacher) }}" class="flex items-center justify-between rounded-md border border-slate-200 bg-white px-4 py-3 font-medium text-slate-700 transition hover:border-teal-400 hover:bg-teal-50 hover:text-teal-800">
+                    <span>{{ $teacher->full_name }}</span><span aria-hidden="true">&rarr;</span>
+                </a>
+            @empty
+                <p class="empty sm:col-span-2 lg:col-span-3">No active teachers found.</p>
+            @endforelse
+        </div>
+    </section>
+@else
+    <section class="panel">
+        <div class="panel-header">
+            <div>
+                <a class="link text-sm" href="{{ route('school-academic.assignments') }}">← Back to teachers</a>
+                <h2 id="assignments" class="panel-title mt-1 scroll-mt-20">{{ $selectedTeacher->full_name }}</h2>
+                <p class="mt-1 text-sm text-slate-500">Configure this teacher's subject assignments.</p>
             </div>
-            <div class="grid gap-3 sm:grid-cols-2">
-                <select name="grade_id" required data-grade-select data-section-target="#assignment-section">
-                    <option value="">Grade</option>
-                    @foreach ($grades as $grade)
-                        <option value="{{ $grade->id }}">{{ $grade->name }}</option>
-                    @endforeach
-                </select>
-                <select id="assignment-section" name="section_id" disabled>
-                    <option value="">All sections in grade</option>
-                    @foreach ($grades as $grade)
-                        @foreach ($grade->sections as $section)
-                            <option value="{{ $section->id }}" data-grade-id="{{ $grade->id }}">{{ $grade->name }} &middot; {{ $section->name }}</option>
-                        @endforeach
-                    @endforeach
-                </select>
-            </div>
-            <div class="grid gap-3 sm:grid-cols-2"><input type="number" min="0" max="50" name="required_periods_per_week" value="0" placeholder="Required periods / week"><input type="number" min="1" max="60" name="weekly_period_limit" placeholder="Teacher weekly limit"></div>
-            <textarea name="notes" rows="2" placeholder="Notes (optional)"></textarea>
-            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" value="1" checked> Active</label>
-            <button class="btn btn-primary">Assign subject to teacher</button>
-        </form>
+            <a class="btn btn-primary btn-small" href="{{ route('school-academic.assignments.create', ['teacher_id' => $selectedTeacher->id]) }}">Add subject</a>
+        </div>
         <div class="table-wrap">
             <table class="data-table">
-                <thead><tr><th>Teacher / subject</th><th>Class</th><th>Weekly plan</th></tr></thead>
+                <thead><tr><th>Subject</th><th>Class</th><th>Weekly workload</th><th>Actions</th></tr></thead>
                 <tbody>
-                    @forelse ($assignments as $assignment)
-                        <tr>
-                            <td><div>{{ $assignment->teacher?->full_name }}</div><div class="text-xs text-slate-500">{{ $assignment->academicYear?->name }} &middot; {{ $assignment->subject?->name }}</div></td>
-                            <td>{{ $assignment->grade?->name }} &middot; {{ $assignment->section?->name ?? 'All sections' }}</td>
-                            <td>{{ $assignment->required_periods_per_week }} required @if ($assignment->weekly_period_limit) &middot; {{ $assignment->weekly_period_limit }} max @endif</td>
-                        </tr>
+                    @php($assignmentGroups = $assignments->groupBy(fn ($assignment) => $assignment->teacher_id.'-'.$assignment->academic_year_id))
+                    @forelse ($assignmentGroups as $teacherAssignments)
+                        @php($weeklyLimits = $teacherAssignments->pluck('weekly_period_limit')->filter(fn ($limit) => $limit !== null)->unique()->values())
+                        @php($workloadKey = $teacherAssignments->first()->teacher_id.'-'.$teacherAssignments->first()->academic_year_id)
+                        @php($scheduledPeriods = $timetableCounts->get($workloadKey, 0))
+                        @php($substitutionPeriods = $substitutionCounts->get($workloadKey, 0))
+                        @php($totalPeriods = $scheduledPeriods + $substitutionPeriods)
+                        @foreach ($teacherAssignments as $assignmentIndex => $assignment)
+                            <tr>
+                                <td><div>{{ $assignment->subject?->name }}</div><div class="text-xs text-slate-500">{{ $assignment->academicYear?->name }}</div></td>
+                                <td>{{ $assignment->grade?->name }} &middot; {{ $assignment->section?->name ?? 'All sections' }}</td>
+                                @if ($assignmentIndex === 0)
+                                    <td rowspan="{{ $teacherAssignments->count() }}" class="align-top">
+                                        <div><strong>Scheduled: {{ $scheduledPeriods }}</strong> / week</div>
+                                        @if ($substitutionPeriods > 0)
+                                            <div class="text-xs text-amber-700">Substitutions: +{{ $substitutionPeriods }} this week</div>
+                                        @endif
+                                        <div class="text-xs text-slate-500">Total workload: {{ $totalPeriods }} / week</div>
+                                        @if ($weeklyLimits->count() === 1)
+                                            <div class="text-xs text-slate-500">Maximum: {{ $weeklyLimits->first() }} / week</div>
+                                            @if ($totalPeriods > (int) $weeklyLimits->first())
+                                                <div class="mt-1 text-xs font-semibold text-rose-700">Over limit by {{ $totalPeriods - (int) $weeklyLimits->first() }}</div>
+                                            @endif
+                                        @elseif ($weeklyLimits->isNotEmpty())
+                                            <div class="text-xs text-slate-500">Maximum varies: {{ $weeklyLimits->implode(', ') }}</div>
+                                        @else
+                                            <div class="text-xs text-slate-500">No maximum set</div>
+                                        @endif
+                                    </td>
+                                @endif
+                                <td class="align-top">
+                                    <div class="flex flex-wrap gap-2">
+                                        <details>
+                                            <summary class="btn btn-secondary btn-small cursor-pointer list-none">Edit assignment</summary>
+                                            <form method="POST" action="{{ route('school-academic.assignments.update', $assignment) }}" class="mt-3 min-w-64 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                                                @csrf
+                                                @method('PUT')
+                                                <label class="form-label">Subject<select name="subject_id">
+                                                    @foreach ($subjects as $subject)
+                                                        <option value="{{ $subject->id }}" @selected($assignment->subject_id === $subject->id)>{{ $subject->name }}</option>
+                                                    @endforeach
+                                                </select></label>
+                                                <label class="form-label">Grade<select name="grade_id">
+                                                    @foreach ($grades as $grade)
+                                                        <option value="{{ $grade->id }}" @selected($assignment->grade_id === $grade->id)>{{ $grade->name }}</option>
+                                                    @endforeach
+                                                </select></label>
+                                                <label class="form-label">Section<select name="section_id">
+                                                    <option value="">All sections</option>
+                                                    @foreach ($grades as $grade)
+                                                        @foreach ($grade->sections as $section)
+                                                            <option value="{{ $section->id }}" @selected($assignment->section_id === $section->id)>{{ $grade->name }} &middot; {{ $section->name }}</option>
+                                                        @endforeach
+                                                    @endforeach
+                                                </select></label>
+                                                <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" value="1" @checked($assignment->is_active)> Active</label>
+                                                <button class="btn btn-primary btn-small w-full">Save changes</button>
+                                            </form>
+                                        </details>
+                                        <form method="POST" action="{{ route('school-academic.assignments.destroy', $assignment) }}" onsubmit="return confirm('Delete this teacher subject assignment?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button class="btn btn-danger btn-small" type="submit">Delete</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
                     @empty
-                        <tr><td colspan="3" class="empty">No teacher assignments yet.</td></tr>
+                        <tr><td colspan="4" class="empty">No subject assignments yet. Add the first subject for this teacher.</td></tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
     </section>
+@endif
 @endif
 
 @if ($activeSection === 'assessments')
@@ -199,9 +241,11 @@
     @endforelse
     </tbody></table></div>
 </section>
+@endif
 
+@if ($activeSection === 'subjects')
 <section class="panel mt-6">
-    <div class="panel-header"><div><h2 class="panel-title">Edit academic configuration</h2><p class="text-sm text-slate-500">Historical records remain intact; changes here affect future work.</p></div></div>
+    <div class="panel-header"><div><h2 class="panel-title">Edit subjects</h2><p class="text-sm text-slate-500">Open a subject below to correct its name, code, description, or status.</p></div></div>
     <div class="grid gap-4 p-5 xl:grid-cols-2">
         @if ($activeSection === 'subjects')
         <div class="space-y-2">
@@ -270,39 +314,39 @@
             <h3 class="font-medium">Teacher assignments</h3>
             @foreach ($assignments as $assignment)
                 <details class="rounded-md border border-slate-200 p-3">
-                    <summary class="cursor-pointer font-medium">{{ $assignment->teacher?->full_name }} &middot; {{ $assignment->subject?->name }} &middot; {{ $assignment->grade?->name }} {{ $assignment->section?->name }}</summary>
+                    <summary class="flex cursor-pointer items-center justify-between gap-3 font-medium"><span>{{ $assignment->teacher?->full_name }} &middot; {{ $assignment->subject?->name }} &middot; {{ $assignment->grade?->name }} {{ $assignment->section?->name }}</span><span class="text-xs font-semibold uppercase tracking-wide text-teal-700">Edit assignment</span></summary>
                     <form method="POST" action="{{ route('school-academic.assignments.update', $assignment) }}" class="mt-3 grid gap-2">
                         @csrf
                         @method('PUT')
-                        <select name="academic_year_id">
+                        <label class="form-label">Academic year<select name="academic_year_id">
                             @foreach ($years as $year)
                                 <option value="{{ $year->id }}" @selected($assignment->academic_year_id === $year->id)>{{ $year->name }}</option>
                             @endforeach
-                        </select>
-                        <select name="teacher_id">
+                        </select></label>
+                        <label class="form-label">Teacher<select name="teacher_id">
                             @foreach ($teachers as $teacher)
                                 <option value="{{ $teacher->id }}" @selected($assignment->teacher_id === $teacher->id)>{{ $teacher->full_name }}</option>
                             @endforeach
-                        </select>
-                        <select name="subject_id">
+                        </select></label>
+                        <label class="form-label">Subject<select name="subject_id">
                             @foreach ($subjects as $subject)
                                 <option value="{{ $subject->id }}" @selected($assignment->subject_id === $subject->id)>{{ $subject->name }}</option>
                             @endforeach
-                        </select>
-                        <select name="grade_id">
+                        </select></label>
+                        <label class="form-label">Grade<select name="grade_id">
                             @foreach ($grades as $grade)
                                 <option value="{{ $grade->id }}" @selected($assignment->grade_id === $grade->id)>{{ $grade->name }}</option>
                             @endforeach
-                        </select>
-                        <select name="section_id">
+                        </select></label>
+                        <label class="form-label">Section<select name="section_id">
                             <option value="">All sections</option>
                             @foreach ($grades as $grade)
                                 @foreach ($grade->sections as $section)
                                     <option value="{{ $section->id }}" @selected($assignment->section_id === $section->id)>{{ $grade->name }} &middot; {{ $section->name }}</option>
                                 @endforeach
                             @endforeach
-                        </select>
-                        <div class="grid grid-cols-2 gap-2"><input type="number" min="0" name="required_periods_per_week" value="{{ $assignment->required_periods_per_week }}"><input type="number" min="1" name="weekly_period_limit" value="{{ $assignment->weekly_period_limit }}"></div>
+                        </select></label>
+                        <label><span class="form-label">Teacher maximum periods per week</span><input type="number" min="1" name="weekly_period_limit" value="{{ $assignment->weekly_period_limit }}"></label>
                         <textarea name="notes" rows="2">{{ $assignment->notes }}</textarea>
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" value="1" @checked($assignment->is_active)> Active</label>
                         <button class="btn btn-secondary btn-small">Update assignment</button>

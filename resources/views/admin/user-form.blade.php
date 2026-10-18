@@ -42,9 +42,8 @@
             <input type="email" name="email" required value="{{ old('email', $managedUser->email) }}">
         </div>
         <div>
-            <label class="form-label">WhatsApp number</label>
-            <input name="whatsapp_number" value="{{ old('whatsapp_number', $managedUser->whatsapp_number) }}" placeholder="+961XXXXXXXX">
-            <p class="mt-1 text-xs text-slate-500">Use international format. This is used only for password reset codes.</p>
+            <label class="form-label">Phone</label>
+            <input name="phone" value="{{ old('phone', $managedUser->phone) }}" placeholder="Phone number">
         </div>
         <div data-role-field="teacher">
             <label class="form-label">Linked teacher profile</label>
@@ -69,7 +68,7 @@
             </div>
         <div class="border-t border-slate-200 pt-4">
             <h2 class="panel-title">Branch authority</h2>
-            <p class="mt-1 text-xs text-slate-500">Assigned branches are where this person can work. The Global Super Administrator alone controls the whole school.</p>
+            <p class="mt-1 text-xs text-slate-500">Assigned branches are where this person can work. Leave these values unchanged when you are only editing the profile; the Global Super Administrator controls the whole school.</p>
             <div class="mt-3">
                 <label class="form-label">Assigned branches</label>
                 <div class="max-h-48 space-y-2 overflow-y-auto rounded-md border border-slate-300 p-3">
@@ -80,8 +79,9 @@
             </div>
             <div class="mt-3">
                 <label class="form-label">Starting branch</label>
-                <select name="default_branch_id"><option value="">None</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}" @selected(old('default_branch_id', $managedUser->branches->firstWhere('pivot.is_default', true)?->id) == $branch->id)>{{ $branch->name }}</option>@endforeach</select>
-                <p class="mt-1 text-xs text-slate-500">Used only when this person is assigned to more than one branch. It does not grant extra access.</p>
+                <select name="default_branch_id"><option value="">Automatic</option>@foreach ($branches->filter(fn ($branch) => in_array($branch->id, $assignedBranchIds, true)) as $branch)<option value="{{ $branch->id }}" @selected(old('default_branch_id', $managedUser->branches->firstWhere('pivot.is_default', true)?->id) == $branch->id)>{{ $branch->name }}</option>@endforeach</select>
+                @error('default_branch_id')<p class="form-error">{{ $message }}</p>@enderror
+                <p class="mt-1 text-xs text-slate-500">Choose only from assigned branches. When there is one assigned branch, it is selected automatically.</p>
             </div>
             <div class="mt-3" data-branch-administrator-selection>
                 <label class="form-label">Responsible Branch Administrator for selected branches</label>

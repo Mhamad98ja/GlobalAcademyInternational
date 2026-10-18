@@ -1018,3 +1018,59 @@ document.querySelectorAll('[data-timetable]').forEach((timetable) => {
         });
     });
 });
+
+document.querySelectorAll('[data-recipient-picker]').forEach((picker) => {
+    const form = picker.closest('form');
+    const search = picker.querySelector('[data-recipient-search]');
+    const clear = picker.querySelector('[data-recipient-clear]');
+    const summary = picker.querySelector('[data-recipient-summary]');
+    const error = picker.querySelector('[data-recipient-error]');
+    const checkboxes = [...picker.querySelectorAll('[data-recipient-checkbox]')];
+    const options = [...picker.querySelectorAll('[data-recipient-option]')];
+    const groups = [...picker.querySelectorAll('[data-recipient-group]')];
+
+    const updateSummary = () => {
+        const selected = checkboxes.filter((checkbox) => checkbox.checked).length;
+        if (summary) summary.textContent = `${selected} ${selected === 1 ? 'person' : 'people'} selected`;
+        if (selected > 0) {
+            error?.setAttribute('hidden', 'hidden');
+            picker.classList.remove('has-error');
+        }
+    };
+
+    const filterOptions = () => {
+        const query = search?.value.trim().toLocaleLowerCase() ?? '';
+        options.forEach((option) => {
+            option.hidden = query !== '' && !option.dataset.recipientSearchable.includes(query);
+        });
+        groups.forEach((group) => {
+            group.hidden = !group.querySelector('[data-recipient-option]:not([hidden])');
+        });
+    };
+
+    search?.addEventListener('input', filterOptions);
+    clear?.addEventListener('click', () => {
+        checkboxes.forEach((checkbox) => { checkbox.checked = false; });
+        updateSummary();
+    });
+    picker.querySelectorAll('[data-recipient-group-toggle]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const group = button.closest('[data-recipient-group]');
+            const groupCheckboxes = [...(group?.querySelectorAll('[data-recipient-checkbox]') ?? [])];
+            const selectAll = groupCheckboxes.some((checkbox) => !checkbox.checked);
+            groupCheckboxes.forEach((checkbox) => { checkbox.checked = selectAll; });
+            button.textContent = selectAll ? 'Clear group' : 'Select all';
+            updateSummary();
+        });
+    });
+    checkboxes.forEach((checkbox) => checkbox.addEventListener('change', updateSummary));
+    form?.addEventListener('submit', (event) => {
+        if (checkboxes.some((checkbox) => checkbox.checked)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        error?.removeAttribute('hidden');
+        picker.classList.add('has-error');
+        search?.focus();
+    });
+    updateSummary();
+});

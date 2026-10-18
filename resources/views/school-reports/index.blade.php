@@ -3,7 +3,7 @@
 @section('content')
 @php($query = array_merge(request()->except('page'), ['report' => $report]))
 <div class="page-header">
-    <div><div class="text-sm text-slate-500"><a class="link" href="{{ route('reports.index') }}">Reports</a> / School operations</div><h1 class="page-title mt-1">School operations reports</h1><p class="page-subtitle">Filter academic, attendance, wellbeing, timetable, workload, substitution, and grading records from one reporting surface.</p></div>
+    <div><div class="text-sm text-slate-500"><a class="link" href="{{ route('reports.index') }}">Reports</a> / School records</div><h1 class="page-title mt-1">{{ $reportLabel }}</h1><p class="page-subtitle">School operations reports · Filter this report using only the fields that belong to it.</p></div>
     <div class="flex gap-2">
         <a class="btn btn-secondary" target="_blank" rel="noopener" href="{{ route('reports.school.print', $query) }}">Print / PDF</a>
         @if (auth()->user()->hasPermission('reports.export'))
@@ -16,11 +16,8 @@
     <div class="panel-header">
         <form method="GET" class="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-5">
             @if(request('module') === 'students')<input type="hidden" name="module" value="students">@endif
-            <select name="report" aria-label="Report type" onchange="this.form.submit()"><option value="">Report type</option>
-                @foreach ($reports as $key => $label)
-                    <option value="{{ $key }}" @selected($report === $key)>{{ $label }}</option>
-                @endforeach
-            </select>
+            <input type="hidden" name="report" value="{{ $report }}">
+            <div><span class="form-label">Report type</span><p class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">{{ $reportLabel }}</p></div>
             @if(in_array('academic_year_id', $reportFilters, true))<div><label class="form-label">Academic year</label><select aria-label="Academic year" name="academic_year_id"><option value="">All academic years</option>
                 @foreach ($years as $year)
                     <option value="{{ $year->id }}" @selected(($filters['academic_year_id'] ?? null) == $year->id)>{{ $year->name }}</option>

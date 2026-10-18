@@ -38,6 +38,12 @@ class ReportsController extends Controller
 
     public function index(Request $request): View
     {
+        if (! $request->filled('report')) {
+            return view('reports.directory', [
+                'reportGroups' => $this->reportDirectory($request),
+            ]);
+        }
+
         [$report, $rows, $filters] = $this->reportData($request);
         $selectionKey = $this->selectionKey($report);
         $canViewOperationalReports = $request->user()->hasPermission('inventory.view');
@@ -54,7 +60,86 @@ class ReportsController extends Controller
             'studentInformationFieldOptions' => self::STUDENT_INFORMATION_FIELDS,
             'selectableReportRows' => $selectionKey !== null,
             'selectionKey' => $selectionKey,
+            'reportLabel' => $this->reportLabel($report),
         ]);
+    }
+
+    /** @return list<array{title:string,description:string,reports:list<array<string,mixed>>}> */
+    private function reportDirectory(Request $request): array
+    {
+        $user = $request->user();
+        $reports = [
+            [
+                'title' => 'Student reports',
+                'description' => 'Student information, registrations, and class lists.',
+                'reports' => [
+                    ['title' => 'Student information', 'description' => 'Identity, contact, enrollment, and latest-class information.', 'route' => 'reports.index', 'params' => ['report' => 'student_information']],
+                    ['title' => 'Student registrations', 'description' => 'Registration history with academic year, grade, section, and status.', 'route' => 'reports.index', 'params' => ['report' => 'students']],
+                    ['title' => 'Classes and sections', 'description' => 'Students grouped by academic year, grade, and section.', 'route' => 'reports.index', 'params' => ['report' => 'class_sections']],
+                ],
+            ],
+            [
+                'title' => 'School records',
+                'description' => 'Attendance, wellbeing, coverage, timetable, and academic-year records.',
+                'reports' => [
+                    ['title' => 'Student attendance', 'description' => 'Attendance by student, class, section, and date.', 'route' => 'reports.school', 'params' => ['report' => 'student_attendance'], 'permission' => 'reports.attendance.view'],
+                    ['title' => 'Teacher attendance', 'description' => 'Teacher attendance records for the selected period.', 'route' => 'reports.school', 'params' => ['report' => 'teacher_attendance'], 'permission' => 'reports.attendance.view'],
+                    ['title' => 'Student incidents and actions', 'description' => 'Student incidents, actions, and follow-up records.', 'route' => 'reports.school', 'params' => ['report' => 'incidents'], 'permission' => 'reports.discipline.view'],
+                    ['title' => 'Student observations', 'description' => 'Observations recorded for students and classes.', 'route' => 'reports.school', 'params' => ['report' => 'student_observations'], 'permission' => 'reports.observations.view'],
+                    ['title' => 'Medical records', 'description' => 'Medical information recorded for students.', 'route' => 'reports.school', 'params' => ['report' => 'medical_records'], 'permission' => 'reports.medical.view'],
+                    ['title' => 'Exam absences', 'description' => 'Students absent from examinations by class and subject.', 'route' => 'reports.school', 'params' => ['report' => 'exam_absences'], 'permission' => 'exam-absences.view'],
+                    ['title' => 'Teacher substitutions', 'description' => 'Temporary coverage assigned for timetable periods.', 'route' => 'reports.school', 'params' => ['report' => 'substitutions'], 'permission' => 'substitutions.view'],
+                    ['title' => 'Teacher workload', 'description' => 'Normal timetable periods and temporary coverage totals.', 'route' => 'reports.school', 'params' => ['report' => 'teacher_workload']],
+                    ['title' => 'Timetable', 'description' => 'Scheduled lessons by teacher, subject, class, and period.', 'route' => 'reports.school', 'params' => ['report' => 'timetable']],
+                    ['title' => 'Academic years and terms', 'description' => 'Academic year and term configuration records.', 'route' => 'reports.school', 'params' => ['report' => 'academic_years']],
+                ],
+            ],
+            [
+                'title' => 'Finance and operations',
+                'description' => 'Inventory, book distribution, invoices, and payments.',
+                'reports' => [
+                    ['title' => 'Stock on hand', 'description' => 'Current stock, reserved quantities, and available quantities.', 'route' => 'reports.index', 'params' => ['report' => 'stock'], 'permission' => 'inventory.view'],
+                    ['title' => 'Book distributions', 'description' => 'Books distributed to students and their distribution dates.', 'route' => 'reports.index', 'params' => ['report' => 'distributions'], 'permission' => 'inventory.view'],
+                    ['title' => 'Invoices', 'description' => 'Invoices, payment status, balances, and issuing users.', 'route' => 'reports.index', 'params' => ['report' => 'invoices'], 'financial' => true],
+                    ['title' => 'Payments', 'description' => 'Payments by invoice, student, method, and status.', 'route' => 'reports.index', 'params' => ['report' => 'payments'], 'financial' => true],
+                ],
+            ],
+            [
+                'title' => 'Academic',
+                'description' => 'Official school report cards.',
+                'reports' => [
+                    ['title' => 'Report Card', 'description' => 'Generate official annual or partial report cards.', 'route' => 'admin.report-cards', 'params' => [], 'permission' => 'report-card.view'],
+                ],
+            ],
+        ];
+
+        return array_values(array_filter(array_map(function (array $group) use ($user): ?array {
+            $group['reports'] = array_values(array_filter($group['reports'], function (array $report) use ($user): bool {
+                if (($report['financial'] ?? false) && ! $user->canViewFinancials()) {
+                    return false;
+                }
+                if (($report['permission'] ?? null) && ! $user->hasPermission($report['permission'])) {
+                    return false;
+                }
+
+                return true;
+            }));
+
+            return $group['reports'] === [] ? null : $group;
+        }, $reports)));
+    }
+
+    private function reportLabel(string $report): string
+    {
+        return [
+            'student_information' => 'Student general information',
+            'students' => 'Student registrations',
+            'class_sections' => 'Classes and sections',
+            'stock' => 'Stock on hand',
+            'invoices' => 'Invoices',
+            'distributions' => 'Book distributions',
+            'payments' => 'Payments',
+        ][$report] ?? str($report)->replace('_', ' ')->headline()->toString();
     }
 
     public function print(Request $request): View

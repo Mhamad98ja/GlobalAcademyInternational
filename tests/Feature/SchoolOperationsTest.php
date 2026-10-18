@@ -714,22 +714,61 @@ class SchoolOperationsTest extends TestCase
     {
         $administrator = $this->administrator();
         [$year, $grade, $section] = $this->classRegistration($administrator);
+        $subject = Subject::create(['name' => 'Operations subject', 'is_active' => true]);
+        $teacher = Teacher::create(['first_name' => 'Operations', 'last_name' => 'Teacher', 'is_active' => true]);
+        TeacherAssignment::create([
+            'academic_year_id' => $year->id,
+            'teacher_id' => $teacher->id,
+            'subject_id' => $subject->id,
+            'grade_id' => $grade->id,
+            'section_id' => $section->id,
+            'weekly_period_limit' => 20,
+            'is_active' => true,
+        ]);
 
         $this->actingAs($administrator)->get(route('dashboard'))->assertOk()->assertSee('Student Profile')->assertSee('Report Card')->assertSee('Administration')->assertSee('Online Collaboration');
         $this->actingAs($administrator)->get(route('workspaces.show', 'students'))->assertOk()->assertSee('Number of students and families')->assertSee('Remarks')->assertSee('Registrations by class');
         $this->actingAs($administrator)->get(route('workspaces.show', 'teachers'))->assertOk()->assertSee('Teacher IN / OUT')->assertSee('Substitution desk')->assertSee('Teacher subject assignments');
-        $this->actingAs($administrator)->get(route('workspaces.show', 'academic'))->assertOk()->assertSee('Users')->assertSee('Teacher Subject Assignments')->assertDontSee('Users Access');
+        $this->actingAs($administrator)->get(route('workspaces.show', 'academic'))->assertOk()->assertSee('Users')->assertSee('Teacher Subject Assignments')->assertDontSee('Users Access')->assertDontSee('Grade entry')->assertDontSee('Individual Transcript');
         $this->actingAs($administrator)->get(route('workspaces.show', 'operations'))->assertOk()
             ->assertSee('Administration & Operations')->assertSee('Users and Access')->assertSee('References')
             ->assertSee('aria-label="References"', false)
             ->assertSee('School structure')->assertSee('Branches')
             ->assertSee('Distribute books')->assertSee('Distribution history')->assertSee('Inventory ledger');
-        $this->actingAs($administrator)->get(route('school-academic.index'))->assertOk()->assertSee('Academic operations');
-        $this->actingAs($administrator)->get(route('school-academic.subjects'))->assertOk()->assertSee('Subjects')->assertSee('Add subject');
+        $this->actingAs($administrator)->get(route('school-academic.index'))
+            ->assertOk()
+            ->assertSee('Academic operations')
+            ->assertSee('href="'.route('school-academic.subjects').'"', false)
+            ->assertSee('href="'.route('school-academic.assignments').'"', false)
+            ->assertDontSee('Operations overview');
+        $this->actingAs($administrator)->get(route('school-academic.subjects'))
+            ->assertOk()
+            ->assertSee('Subjects')
+            ->assertSee('Add subject')
+            ->assertDontSee('Teacher subject assignments');
         $this->actingAs($administrator)->get(route('school-academic.terms'))->assertRedirect(route('academic.index').'#terms-semesters');
         $this->actingAs($administrator)->post(route('school-academic.terms.store'), ['name' => 'Unauthorized term'])->assertForbidden();
         $this->actingAs($administrator)->put(route('school-academic.terms.update', ['term' => 1]), ['name' => 'Unauthorized term'])->assertForbidden();
-        $this->actingAs($administrator)->get(route('school-academic.assignments'))->assertOk()->assertSee('Teacher subject assignments')->assertSee('Assign subject to teacher');
+        $this->actingAs($administrator)->get(route('school-academic.assignments'))
+            ->assertOk()
+            ->assertSee('Teachers')
+            ->assertSee('Operations Teacher')
+            ->assertDontSee('<th>Subject</th>', false)
+            ->assertDontSee('Subject periods per week')
+            ->assertDontSee('href="'.route('school-academic.subjects').'"', false);
+        $this->actingAs($administrator)->get(route('school-academic.teacher-assignments', $teacher))
+            ->assertOk()
+            ->assertSee('Operations Teacher')
+            ->assertSee('Add subject')
+            ->assertSee('Actions')
+            ->assertSee('<th>Subject</th>', false)
+            ->assertSee('Edit assignment')
+            ->assertSee('Delete');
+        $this->actingAs($administrator)->get(route('school-academic.assignments.create', ['teacher_id' => $teacher->id]))
+            ->assertOk()
+            ->assertSee('Add subject assignment')
+            ->assertSee('Operations Teacher')
+            ->assertSee('Teacher maximum periods per week');
         $this->actingAs($administrator)->get(route('school-academic.assessments'))->assertRedirect(route('collaboration.section', ['section' => 'modification-requests']));
         $this->actingAs($administrator)->get(route('collaboration.section', ['section' => 'modification-requests']))->assertOk()->assertSee('Evaluation Requests');
         $this->actingAs($administrator)->get(route('attendance.students', ['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'section_id' => $section->id]))->assertOk()->assertSee('Student attendance');
@@ -741,6 +780,60 @@ class SchoolOperationsTest extends TestCase
             ->assertOk()->assertSee('Graphical timetable')->assertSee('Subjects to schedule')->assertSee('Class schedule')
             ->assertSee('href="'.route('school-academic.assignments').'"', false)->assertDontSee('Course cards');
         $this->actingAs($administrator)->get(route('reports.school'))->assertOk()->assertSee('School operations reports');
+    }
+
+    public function test_teacher_subject_assignment_can_be_deleted_when_unused(): void
+    {
+        $administrator = $this->administrator();
+        [$year, $grade, $section] = $this->classRegistration($administrator);
+        $subject = Subject::create(['name' => 'Deletable subject', 'is_active' => true]);
+        $teacher = Teacher::create(['first_name' => 'Delete', 'last_name' => 'Teacher', 'is_active' => true]);
+        $assignment = TeacherAssignment::create([
+            'academic_year_id' => $year->id,
+            'teacher_id' => $teacher->id,
+            'subject_id' => $subject->id,
+            'grade_id' => $grade->id,
+            'section_id' => $section->id,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($administrator)->delete(route('school-academic.assignments.destroy', $assignment))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('teacher_assignments', ['id' => $assignment->id]);
+    }
+
+    public function test_teacher_subject_assignment_correction_keeps_teacher_and_year_fixed(): void
+    {
+        $administrator = $this->administrator();
+        [$year, $grade, $section] = $this->classRegistration($administrator);
+        $firstSubject = Subject::create(['name' => 'Original subject', 'is_active' => true]);
+        $replacementSubject = Subject::create(['name' => 'Corrected subject', 'is_active' => true]);
+        $teacher = Teacher::create(['first_name' => 'Fixed', 'last_name' => 'Teacher', 'is_active' => true]);
+        $assignment = TeacherAssignment::create([
+            'academic_year_id' => $year->id,
+            'teacher_id' => $teacher->id,
+            'subject_id' => $firstSubject->id,
+            'grade_id' => $grade->id,
+            'section_id' => $section->id,
+            'weekly_period_limit' => 20,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($administrator)->put(route('school-academic.assignments.update', $assignment), [
+            'subject_id' => $replacementSubject->id,
+            'grade_id' => $grade->id,
+            'section_id' => $section->id,
+            'is_active' => 0,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('teacher_assignments', [
+            'id' => $assignment->id,
+            'academic_year_id' => $year->id,
+            'teacher_id' => $teacher->id,
+            'subject_id' => $replacementSubject->id,
+            'is_active' => false,
+        ]);
     }
 
     public function test_administration_workspace_has_tasks_for_an_admin_without_book_permissions(): void
@@ -844,8 +937,8 @@ class SchoolOperationsTest extends TestCase
             ->assertSee('name="attachment"', false);
         $this->actingAs($administrator)->get(route('students.show', $registration->student))
             ->assertOk()
-            ->assertSee('Performance follow-up')
-            ->assertSee('Thoughtful contributions during group reading.');
+            ->assertDontSee('Performance follow-up')
+            ->assertDontSee('Thoughtful contributions during group reading.');
     }
 
     public function test_internal_messages_are_delivered_and_can_be_marked_as_read(): void
@@ -853,8 +946,9 @@ class SchoolOperationsTest extends TestCase
         $administrator = $this->administrator();
         $messageView = Permission::firstOrCreate(['name' => 'messages.view'], ['label' => 'View messages']);
         $messageSend = Permission::firstOrCreate(['name' => 'messages.send'], ['label' => 'Send messages']);
+        $collaborationView = Permission::firstOrCreate(['name' => 'collaboration.view'], ['label' => 'View online collaboration']);
         $recipientRole = Role::create(['name' => 'message-recipient', 'label' => 'Message recipient']);
-        $recipientRole->permissions()->attach([$messageView->id, $messageSend->id]);
+        $recipientRole->permissions()->attach([$messageView->id, $messageSend->id, $collaborationView->id]);
         $recipient = User::factory()->create(['is_active' => true, 'has_all_branch_access' => true]);
         $recipient->roles()->attach($recipientRole);
 
@@ -867,6 +961,11 @@ class SchoolOperationsTest extends TestCase
         $this->assertDatabaseHas('school_message_recipients', ['recipient_id' => $recipient->id]);
 
         $inbox = $this->actingAs($recipient)->get(route('messages.index'))
+            ->assertOk()
+            ->assertSee('Administrators (1)')
+            ->assertSee('Parent-teacher evening')
+            ->assertSee('Please prepare the room before 16:00.');
+        $this->actingAs($recipient)->get(route('collaboration.section', ['section' => 'messages']))
             ->assertOk()
             ->assertSee('Parent-teacher evening')
             ->assertSee('Please prepare the room before 16:00.');

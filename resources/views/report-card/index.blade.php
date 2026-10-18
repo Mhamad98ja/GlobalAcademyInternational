@@ -1,9 +1,9 @@
-@extends('layouts.app', ['title' => 'Annual & Partial Report Cards'])
+@extends('layouts.app', ['title' => 'Report Card'])
 
 @section('content')
 <section class="admin-report-card-page">
     <div class="page-header">
-        <div><div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.1em] text-slate-500"><a class="link" href="{{ route('workspaces.show', ['workspace' => 'operations']) }}">Administration &amp; Operations</a><span aria-hidden="true">/</span><span>Report cards</span></div><h1 class="page-title">Annual &amp; Partial Report Cards</h1><p class="page-subtitle">Generate official report cards from earned grades that are published or locked, for one student or an entire class.</p></div>
+        <div><div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.1em] text-slate-500"><a class="link" href="{{ route('workspaces.show', ['workspace' => 'operations']) }}">Administration &amp; Operations</a><span aria-hidden="true">/</span><span>Report Card</span></div><h1 class="page-title">Report Card</h1><p class="page-subtitle">Generate official report cards from earned grades that are published or locked, for one student or an entire class.</p></div>
         <div class="flex flex-wrap gap-2"><a class="btn btn-secondary" href="{{ route('workspaces.show', ['workspace' => 'operations']) }}">Back to administration</a>@if($generated && $cards->isNotEmpty())<a class="btn btn-primary" href="{{ route('admin.report-cards.print', ['period' => $period, 'academic_year_id' => $year?->id, 'academic_term_id' => $termId, 'grade_id' => $filters['grade_id'] ?? null, 'section_id' => $filters['section_id'] ?? null, 'student_id' => $filters['student_id'] ?? null]) }}" target="_blank" rel="noopener">Print report cards</a>@endif</div>
     </div>
 

@@ -17,7 +17,7 @@
 @if(isset($studentOverview))@include('students.dossier.dashboard')@endif
 @if($workspace === 'academic')@include('workspaces.report-card')@endif
 
-@if(in_array($workspace, ['students', 'academic'], true) && $tasks->isNotEmpty())
+@if($workspace === 'students' && $tasks->isNotEmpty())
 <section class="mt-6" aria-label="Quick access">
     <div class="mb-3"><h2 class="text-lg font-semibold text-slate-900">Quick access</h2><p class="mt-1 text-sm text-slate-500">Choose where to continue. Each option opens one clear work area.</p></div>
     <div class="workspace-task-grid">

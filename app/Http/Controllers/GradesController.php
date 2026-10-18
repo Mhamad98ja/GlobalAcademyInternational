@@ -322,7 +322,8 @@ class GradesController extends Controller
     /** @return Collection<int, TeacherAssignment> */
     private function assignmentsFor(User $user)
     {
-        $activeAcademicYearId = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->value('id');
+        $activeAcademicYearId = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->value('id')
+            ?? AcademicYear::query()->orderByDesc('starts_on')->value('id');
 
         return TeacherAssignment::query()
             ->with('teacher', 'subject', 'grade', 'section', 'academicYear')
@@ -345,7 +346,8 @@ class GradesController extends Controller
 
     private function ensureCurrentAcademicYear(TeacherAssignment $assignment): void
     {
-        $activeAcademicYearId = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->value('id');
+        $activeAcademicYearId = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->value('id')
+            ?? AcademicYear::query()->orderByDesc('starts_on')->value('id');
         if (! $activeAcademicYearId || (int) $assignment->academic_year_id !== (int) $activeAcademicYearId) {
             throw ValidationException::withMessages(['teacher_assignment_id' => 'Grades can only be managed in the current active academic year.']);
         }

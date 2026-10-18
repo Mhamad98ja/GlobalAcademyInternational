@@ -11,7 +11,6 @@ use App\Models\Book;
 use App\Models\BookDistribution;
 use App\Models\ExamAbsence;
 use App\Models\Grade;
-use App\Models\GradeEntry;
 use App\Models\ResponsiblePerson;
 use App\Models\StockMovement;
 use App\Models\StudentAttendance;
@@ -147,7 +146,6 @@ class WorkspaceController extends Controller
                 $this->task('students.view', 'Student directory', 'Search profiles, registrations, and student history.', 'students.index', 'students', 'Open students'),
                 $this->task('students.view', 'File', 'Open student files, families, photos, and section changes.', 'students.tools', 'students', 'Open file', ['section' => 'file']),
                 $this->task('reports.view', 'Attestations', 'Select students and print enrolment or attendance attestations.', 'students.attestations', 'reports', 'Prepare attestations'),
-                $this->task('reports.view', 'Reports', 'Open student, class, attendance, action, medical, exam, and grade reports from one organised report centre.', 'reports.school', 'reports', 'Open report centre', ['report' => 'student_attendance']),
                 $this->task('people.manage', 'Responsible persons', 'Link family and guardian contacts to student records.', 'responsible.index', 'responsible', 'Open contacts'),
                 $this->task('attendance.student.manage', 'Daily attendance', 'Record class attendance and review absences.', 'attendance.students', 'students', 'Take attendance'),
                 $this->task('discipline.view', 'Student actions', 'Document incidents, positive actions, and follow-up.', 'discipline.index', 'students', 'Open actions'),
@@ -215,10 +213,6 @@ class WorkspaceController extends Controller
         $assessments = $user->hasPermission('academic_year.manage') && $yearId ? Assessment::query()->where('academic_year_id', $yearId)->count() : 0;
         $assignments = $user->hasPermission('academic_year.manage') && $yearId ? TeacherAssignment::query()->where('academic_year_id', $yearId)->where('is_active', true)->count() : 0;
         $timetableEntries = $user->hasPermission('timetable.view') && $yearId ? TimetableEntry::query()->where('academic_year_id', $yearId)->count() : 0;
-        $gradeEntries = $user->hasPermission('grades.enter') && $yearId
-            ? GradeEntry::query()->whereHas('assessment', fn ($query) => $query->where('academic_year_id', $yearId))->count()
-            : 0;
-
         return $this->page(
             $user,
             'Academic & Report Card',
@@ -233,12 +227,10 @@ class WorkspaceController extends Controller
             ],
             [
                 $this->task('academic_year.manage', 'Academic operations', 'Configure subjects and teacher assignments in focused pages.', 'school-academic.index', 'academic', 'Open operations'),
-                $this->task('grades.enter', 'Grade entry', $gradeEntries ? number_format($gradeEntries).' grade records are available in your permitted assignments.' : 'Enter marks only for your permitted teacher assignments.', 'grades.index', 'academic', 'Enter grades', ['view' => 'evaluations']),
                 $this->task('timetable.view', 'Graphical timetable', 'Build class schedules and prevent teacher conflicts.', 'timetable.index', 'academic', 'Open timetable'),
             ],
             [
                 $this->activity('academic_year.manage', 'Evaluation requests', $assessments ? number_format($assessments).' assessment requests are available for review.' : 'Open Online Collaboration to review assessment requests.', 'collaboration.section', 'academic', ['section' => 'modification-requests']),
-                $this->activity('grades.enter', 'Grade work', $gradeEntries ? number_format($gradeEntries).' grade entries are saved in permitted assignments.' : 'No grade entries are saved in your permitted assignments yet.', 'grades.index', 'academic', ['view' => 'evaluations']),
                 $this->activity('timetable.view', 'Timetable work', $timetableEntries ? number_format($timetableEntries).' lessons are currently placed in the timetable.' : 'No lessons are placed in the timetable yet.', 'timetable.index', 'academic'),
             ],
         );
@@ -276,12 +268,10 @@ class WorkspaceController extends Controller
             [
                 $this->task('admin.manage', 'Users and Access', 'Find users and manage each person’s account permissions.', 'admin.users', 'administration', 'Manage users'),
                 ...($user->isControllerAdministrator() ? [$this->task('admin.manage', 'Branches', 'Manage school branches and their access.', 'branches.index', 'administration', 'Manage branches')] : []),
-                $this->task('report-card.view', 'Annual & partial report cards', 'Generate official report cards from published or locked grades, then print them in the school format.', 'admin.report-cards', 'reports', 'Open report cards'),
                 $this->task('students.view', 'References', 'Manage academic structure and other school codes in one place.', 'students.references.show', 'administration', 'Open codes', ['reference' => 'codes']),
                 $this->task('academic.manage', 'School structure', 'View academic years, terms, levels, grades, and sections read-only.', 'academic.index', 'academic', 'View structure'),
                 $this->task('attendance.teacher.view', 'Teacher attendance', 'Record today’s teacher attendance and trigger period-level coverage for absences.', 'attendance.teachers', 'administration', 'Record attendance'),
                 $this->task('substitutions.view', 'Temporary teacher coverage', 'Review recommendations and assign a substitute for every affected period today.', 'substitutions.index', 'administration', 'Open coverage board'),
-                $this->task('reports.view', 'Teacher workload', 'Review planned, timetabled, extra coverage, and total periods taken by each teacher.', 'reports.school', 'reports', 'Open workload report', ['report' => 'teacher_workload']),
                 $this->task('distributions.create', 'Distribute books', 'Issue a package or individual books to an active student using barcode scanning.', 'distributions.create', 'distribution', 'Start distribution'),
                 $this->task('distributions.create', 'Distribution history', 'Find completed distributions by student, class, year, or date.', 'distributions.index', 'distribution', 'View history'),
                 $this->task('books.view', 'Book catalogue', 'Manage titles, shelves, stock levels, and book details.', 'books.index', 'books', 'Open catalogue'),
@@ -289,7 +279,6 @@ class WorkspaceController extends Controller
                 $this->task('inventory.view', 'Inventory ledger', 'Review all controlled stock movements and balances.', 'inventory.ledger', 'inventory', 'Open ledger'),
                 $this->task('suppliers.view', 'Suppliers', 'Manage supplier records and the purchasing workflow.', 'suppliers.index', 'suppliers', 'Open suppliers'),
                 $this->task('inventory.transfer', 'Book transfers', 'Move controlled stock between branches or custodians.', 'transfers.index', 'inventory', 'Manage transfers'),
-                $this->task('reports.view', 'School reports', 'Review operational, academic, and distribution reports.', 'reports.school', 'reports', 'Open reports'),
             ],
             [
                 $this->activity('distributions.create', 'Book distribution', $distributionsToday ? number_format($distributionsToday).' student book distributions have been completed today.' : 'No student book distributions have been completed today.', 'distributions.index', 'distribution'),

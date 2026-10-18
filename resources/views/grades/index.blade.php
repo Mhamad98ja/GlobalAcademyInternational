@@ -8,7 +8,7 @@
         <form method="GET" action="{{ route('grades.index') }}" class="dars-evaluation-assignment-picker">
             <input type="hidden" name="view" value="{{ $view }}">
             <select name="teacher_assignment_id" onchange="this.form.submit()" aria-label="Filter class subject">
-                <option value="">All assigned class subjects</option>
+                <option value="">All assigned classes and subjects</option>
                 @foreach($assignments as $item)
                     <option value="{{ $item->id }}" @selected($assignment?->id === $item->id)>{{ $item->grade?->name }}{{ $item->section ? ' / '.$item->section->name : '' }} · {{ $item->subject?->name }}</option>
                 @endforeach
@@ -17,7 +17,7 @@
         <nav class="dars-evaluation-action-links" aria-label="Evaluation tools">
             <a class="{{ $view === 'evaluations' ? 'is-active' : '' }}" href="{{ route('grades.index', ['view' => 'evaluations']) }}">Evaluation</a>
             <a href="{{ route('collaboration.section', ['section' => 'evaluation-dashboard']) }}">Dashboard</a>
-            @if($activeTerm)<a class="dars-evaluation-add" href="{{ route('grades.assessments.create', ['teacher_assignment_id' => $assignment?->id]) }}">+ New evaluation</a>@else<span class="dars-evaluation-context">Configure an active academic term</span>@endif
+            @if($activeTerm && $assignments->isNotEmpty())<a class="dars-evaluation-add" href="{{ route('grades.assessments.create', ['teacher_assignment_id' => $assignment?->id ?: $assignments->first()->id]) }}">+ New evaluation</a>@elseif($assignments->isEmpty())<span class="dars-evaluation-context">No assigned classes or subjects</span>@else<span class="dars-evaluation-context">Configure an active academic term</span>@endif
         </nav>
     </div>
     @if($view === 'evaluations')

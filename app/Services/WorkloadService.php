@@ -13,7 +13,7 @@ use Carbon\Carbon;
 
 final class WorkloadService
 {
-    /** @return array{daily_periods:int,weekly_periods:int,free_periods:int,substitution_count:int} */
+    /** @return array{daily_periods:int,weekly_periods:int,total_weekly_periods:int,free_periods:int,substitution_count:int} */
     public function summary(Teacher $teacher, int $academicYearId, ?Carbon $date = null): array
     {
         $date ??= today();
@@ -34,12 +34,14 @@ final class WorkloadService
         $substitutions = TeacherSubstitution::query()
             ->where('substitute_teacher_id', $teacher->id)
             ->whereIn('status', ['assigned', 'completed'])
+            ->whereHas('entry', fn ($entries) => $entries->where('academic_year_id', $academicYearId))
             ->whereBetween('substitution_date', [$date->copy()->startOfWeek()->toDateString(), $date->copy()->endOfWeek()->toDateString()])
             ->count();
 
         return [
             'daily_periods' => $dailyPeriods,
             'weekly_periods' => $weeklyPeriods,
+            'total_weekly_periods' => $weeklyPeriods + $substitutions,
             'free_periods' => max(0, $lessonPeriods - $dailyPeriods),
             'substitution_count' => $substitutions,
         ];

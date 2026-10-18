@@ -132,6 +132,7 @@ class SchoolReportsController extends Controller
     {
         return [
             'report' => $report,
+            'reportLabel' => self::REPORTS[$report] ?? 'School report',
             'reports' => array_filter(self::REPORTS, fn ($key) => ! in_array($key, self::HIDDEN_REPORTS, true) && match ($key) {
                 'medical_records' => auth()->user()->hasPermission('reports.medical.view'),
                 'incidents' => auth()->user()->hasPermission('reports.discipline.view'),

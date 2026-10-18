@@ -41,7 +41,6 @@ final class PermissionCatalog
             'students.attestations.print' => 'Print student attestations',
             'students.reports.view' => 'View student reports',
             'students.reports.export' => 'Export student reports',
-            'students.observations.view' => 'View student observations',
 
             'books.view' => 'View books',
             'books.create' => 'Create books',
@@ -258,7 +257,6 @@ final class PermissionCatalog
             'students.attestations.print' => ['reports.print', 'reports.view'],
             'students.reports.view' => ['reports.view'],
             'students.reports.export' => ['reports.export'],
-            'students.observations.view' => ['performance.view'],
             'books.create' => ['books.manage'], 'books.edit' => ['books.manage'], 'books.delete' => ['books.manage'],
             'class-lists.create' => ['class-lists.manage'], 'class-lists.edit' => ['class-lists.manage'], 'class-lists.print' => ['class-lists.view'],
             'suppliers.create' => ['suppliers.manage'], 'suppliers.edit' => ['suppliers.manage'], 'suppliers.delete' => ['suppliers.manage'],

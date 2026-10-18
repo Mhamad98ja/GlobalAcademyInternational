@@ -2,7 +2,7 @@
 
 @section('content')
 <div class="page-header">
-    <div><h1 class="page-title">Messages</h1><p class="page-subtitle">Internal school communication between staff members in the active branch.</p></div>
+    <div><h1 class="page-title">Messages</h1><p class="page-subtitle">{{ auth()->user()->hasGlobalBranchAccess() ? 'Internal communication between all active school accounts.' : 'Internal communication between active school accounts in the current branch.' }}</p></div>
 </div>
 
 <div class="grid gap-5 xl:grid-cols-[1.35fr_.85fr]">
@@ -24,10 +24,41 @@
     </section>
 
     <section class="panel h-fit">
-        <div class="panel-header"><div><h2 class="panel-title">Compose message</h2><p class="mt-0.5 text-xs text-slate-500">Select one or more colleagues in this branch.</p></div></div>
+        <div class="panel-header"><div><h2 class="panel-title">Compose message</h2><p class="mt-0.5 text-xs text-slate-500">Every recipient is listed individually and grouped by role or student grade.</p></div></div>
         <form method="POST" action="{{ route('messages.store') }}" class="space-y-4 p-5" data-submit-lock>
             @csrf
-            <div><label class="form-label" for="recipient_ids">Recipients *</label><select id="recipient_ids" name="recipient_ids[]" multiple required size="8">@foreach ($recipients as $recipient)<option value="{{ $recipient->id }}">{{ $recipient->name }} — {{ $recipient->email }}</option>@endforeach</select><p class="mt-1 text-xs text-slate-500">Use Ctrl / Cmd to select more than one recipient.</p></div>
+            <div data-recipient-picker>
+                <div class="flex items-center justify-between gap-3">
+                    <label class="form-label" for="recipient-search">Recipients *</label>
+                    <span class="text-xs font-semibold text-slate-500" data-recipient-summary>0 selected</span>
+                </div>
+                <div class="recipient-picker-toolbar mt-2">
+                    <input id="recipient-search" type="search" placeholder="Search an individual by name or email" autocomplete="off" data-recipient-search>
+                    <button type="button" class="btn btn-secondary btn-small" data-recipient-clear>Clear</button>
+                </div>
+                <div class="recipient-picker-groups mt-3">
+                    @forelse ($recipientGroups as $groupLabel => $groupRecipients)
+                        <section class="recipient-picker-group" data-recipient-group>
+                            <div class="recipient-picker-group-header">
+                                <div><strong>{{ $groupLabel }} ({{ $groupRecipients->count() }})</strong><span>Recipients in this group</span></div>
+                                <button type="button" class="btn btn-secondary btn-small" data-recipient-group-toggle>Select all</button>
+                            </div>
+                            <div class="recipient-picker-options">
+                                @foreach ($groupRecipients as $recipient)
+                                    <label class="recipient-picker-option" data-recipient-option data-recipient-searchable="{{ mb_strtolower($recipient->name.' '.$recipient->email) }}">
+                                        <input type="checkbox" name="recipient_ids[]" value="{{ $recipient->id }}" data-recipient-checkbox @checked(in_array((int) $recipient->id, $selectedRecipientIds, true))>
+                                        <span><strong>{{ $recipient->name }}</strong><small>{{ $recipient->email }}</small></span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </section>
+                    @empty
+                        <p class="empty">No active recipients are available.</p>
+                    @endforelse
+                </div>
+                <p class="mt-2 text-xs text-slate-500" data-recipient-help>Select a whole group with one click, or search and select individual people.</p>
+                <p class="form-error" hidden data-recipient-error>Select at least one recipient.</p>
+            </div>
             <div><label class="form-label" for="subject">Subject *</label><input id="subject" name="subject" maxlength="180" required value="{{ old('subject') }}"></div>
             <div><label class="form-label" for="body">Message *</label><textarea id="body" name="body" rows="7" maxlength="10000" required>{{ old('body') }}</textarea></div>
             <div class="flex justify-end"><button class="btn btn-primary">Send message</button></div>

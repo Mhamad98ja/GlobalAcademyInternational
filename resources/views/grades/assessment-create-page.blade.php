@@ -7,7 +7,7 @@
     </div>
     <section class="dars-assessment-create dars-assessment-create-page">
         <form method="GET" action="{{ route('grades.assessments.create') }}" class="dars-assessment-assignment-picker" data-evaluation-assignment-picker>
-            <label>Class
+            <label>Class / section
                 <select id="evaluation-grade-picker" aria-label="Choose class">
                     @foreach($assignments->unique(fn ($item) => $item->grade_id.'-'.$item->section_id) as $item)
                         <option value="{{ $item->grade_id.'-'.$item->section_id }}" @selected($assignment && $assignment->grade_id === $item->grade_id && $assignment->section_id === $item->section_id)>{{ $item->grade?->name }}{{ $item->section ? ' / '.$item->section->name : '' }}</option>

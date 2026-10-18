@@ -42,7 +42,8 @@ class CollaborationController extends Controller
         $user = $request->user();
         abort_unless($user instanceof User, 403);
 
-        $activeAcademicYear = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->first();
+        $activeAcademicYear = AcademicYear::query()->where('status', 'open')->orderByDesc('starts_on')->first()
+            ?? AcademicYear::query()->orderByDesc('starts_on')->first();
         $activeAcademicTerm = AcademicTerm::activeForYear($activeAcademicYear?->id);
         $section = (string) $request->route('section', $request->query('section', ''));
         $search = trim((string) $request->query('q', ''));
@@ -73,7 +74,7 @@ class CollaborationController extends Controller
         $assignmentStudentCounts = $this->assignmentStudentCounts($assignments, $activeAcademicYear?->id);
         $isTeacherAgenda = (bool) $user->teacher_id && ! $this->canManageAllAssignments($user);
         $canManage = $user->hasPermission('collaboration.manage');
-        $canManagePerformance = $user->hasPermission('performance.manage');
+        $canManagePerformance = $user->hasPermission('performance.manage') || $user->hasPermission('performance.create');
         $canViewPerformance = $user->hasPermission('performance.view') || $canManagePerformance;
 
         $announcements = SchoolAnnouncement::query()
@@ -162,7 +163,12 @@ class CollaborationController extends Controller
                 ->orWhereInsensitiveLike('last_name', $search)
                 ->orWhereInsensitiveLike('employee_number', $search)))
             ->orderBy('first_name')->orderBy('last_name')->take(30)->get();
-        $messages = SchoolMessage::query()->with('sender')->latest('sent_at')->latest('id')->take(30)->get();
+        $messages = SchoolMessage::withoutGlobalScopes()
+            ->whereHas('recipients', fn (Builder $query) => $query
+                ->where('recipient_id', $user->id)
+                ->where('is_archived', false))
+            ->with('sender')
+            ->latest('sent_at')->latest('id')->take(30)->get();
         $assessmentTerms = $activeAcademicTerm ? collect([$activeAcademicTerm]) : collect();
         $isEvaluationAdministrator = $this->canManageAllAssignments($user);
         $submittedEvaluations = $section === 'modification-requests'

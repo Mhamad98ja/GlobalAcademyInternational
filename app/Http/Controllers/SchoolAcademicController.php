@@ -12,6 +12,8 @@ use App\Models\Section;
 use App\Models\Subject;
 use App\Models\Teacher;
 use App\Models\TeacherAssignment;
+use App\Models\TeacherSubstitution;
+use App\Models\TimetableEntry;
 use App\Models\StudentRegistration;
 use App\Services\AuditService;
 use App\Notifications\StudentPortalNotification;
@@ -43,17 +45,58 @@ class SchoolAcademicController extends Controller
         return $this->operationsPage('assignments');
     }
 
-    private function operationsPage(string $activeSection): View
+    public function teacherAssignments(Teacher $teacher): View
     {
+        return $this->operationsPage('assignments', $teacher->id, $teacher);
+    }
+
+    public function createAssignment(Request $request): View
+    {
+        $teachers = Teacher::query()->where('is_active', true)->orderBy('first_name')->orderBy('last_name')->get();
+        $selectedTeacherId = $request->integer('teacher_id') ?: null;
+
+        return view('school-academic.assignment-create', [
+            'years' => AcademicYear::query()->orderByDesc('starts_on')->get(),
+            'grades' => Grade::query()->with('sections')->orderBy('sort_order')->get(),
+            'teachers' => $teachers,
+            'subjects' => Subject::query()->where('is_active', true)->orderBy('name')->get(),
+            'selectedTeacher' => $teachers->firstWhere('id', $selectedTeacherId),
+        ]);
+    }
+
+    private function operationsPage(string $activeSection, ?int $selectedTeacherId = null, ?Teacher $selectedTeacher = null): View
+    {
+        $teachers = Teacher::query()->where('is_active', true)->orderBy('first_name')->orderBy('last_name')->get();
+        $assignmentQuery = TeacherAssignment::query()->with('academicYear', 'teacher', 'subject', 'grade', 'section')->latest();
+        if ($selectedTeacherId !== null) {
+            $assignmentQuery->where('teacher_id', $selectedTeacherId);
+        }
+
         return view('school-academic.index', [
             'activeSection' => $activeSection,
             'years' => AcademicYear::query()->orderByDesc('starts_on')->get(),
             'grades' => Grade::query()->with('sections')->orderBy('sort_order')->get(),
-            'teachers' => Teacher::query()->where('is_active', true)->orderBy('first_name')->orderBy('last_name')->get(),
+            'teachers' => $teachers,
             'subjects' => Subject::query()->orderBy('name')->get(),
             'terms' => AcademicTerm::query()->with('academicYear')->orderByDesc('starts_on')->orderBy('sort_order')->get(),
             'assessments' => Assessment::query()->with('academicYear', 'term', 'assignment.teacher', 'assignment.subject', 'assignment.grade', 'assignment.section', 'subject', 'grade', 'section')->latest('assessment_date')->get(),
-            'assignments' => TeacherAssignment::query()->with('academicYear', 'teacher', 'subject', 'grade', 'section')->latest()->get(),
+            'assignments' => $assignmentQuery->get(),
+            'selectedTeacherId' => $selectedTeacherId,
+            'selectedTeacher' => $selectedTeacher ?? $teachers->firstWhere('id', $selectedTeacherId),
+            'timetableCounts' => TimetableEntry::query()
+                ->selectRaw('academic_year_id, teacher_id, COUNT(*) as total')
+                ->groupBy('academic_year_id', 'teacher_id')
+                ->get()
+                ->mapWithKeys(fn (TimetableEntry $entry): array => [$entry->teacher_id.'-'.$entry->academic_year_id => (int) $entry->total]),
+            'substitutionCounts' => TeacherSubstitution::query()
+                ->with('entry:id,academic_year_id')
+                ->whereIn('status', ['assigned', 'completed'])
+                ->whereBetween('substitution_date', [today()->startOfWeek()->toDateString(), today()->endOfWeek()->toDateString()])
+                ->whereNotNull('substitute_teacher_id')
+                ->get()
+                ->filter(fn (TeacherSubstitution $substitution): bool => $substitution->entry !== null)
+                ->groupBy(fn (TeacherSubstitution $substitution): string => $substitution->substitute_teacher_id.'-'.$substitution->entry->academic_year_id)
+                ->map->count(),
         ]);
     }
 
@@ -154,16 +197,37 @@ class SchoolAcademicController extends Controller
         $assignment = TeacherAssignment::create($this->assignmentData($request));
         $audit->log('teacher_assignment.created', $assignment, [], $assignment->only(['teacher_id', 'subject_id', 'grade_id', 'section_id']));
 
-        return back()->with('success', 'Teacher subject assignment created.');
+        return redirect()->route('school-academic.assignments', ['teacher_id' => $assignment->teacher_id])->with('success', 'Teacher subject assignment created.');
     }
 
     public function updateAssignment(Request $request, TeacherAssignment $assignment, AuditService $audit): RedirectResponse
     {
         $old = $assignment->only(['academic_year_id', 'teacher_id', 'subject_id', 'grade_id', 'section_id', 'required_periods_per_week', 'weekly_period_limit', 'is_active']);
-        $assignment->update($this->assignmentData($request, $assignment));
+        $assignment->update($this->assignmentCorrectionData($request, $assignment));
         $audit->log('teacher_assignment.updated', $assignment, $old, $assignment->only(array_keys($old)));
 
         return back()->with('success', 'Teacher subject assignment updated.');
+    }
+
+    public function destroyAssignment(TeacherAssignment $assignment, AuditService $audit): RedirectResponse
+    {
+        $linkedRecords = collect([
+            'timetable entries' => $assignment->timetableEntries()->exists(),
+            'grade entries' => $assignment->gradeEntries()->exists(),
+            'course content' => $assignment->courseContents()->exists(),
+            'performance evaluations' => $assignment->performanceEvaluations()->exists(),
+            'assessments' => Assessment::query()->where('teacher_assignment_id', $assignment->id)->exists(),
+        ])->filter()->keys()->implode(', ');
+
+        if ($linkedRecords !== '') {
+            return back()->with('error', "This assignment cannot be deleted because it has {$linkedRecords}. Deactivate it instead.");
+        }
+
+        $old = $assignment->only(['academic_year_id', 'teacher_id', 'subject_id', 'grade_id', 'section_id', 'weekly_period_limit', 'is_active']);
+        $assignment->delete();
+        $audit->log('teacher_assignment.deleted', $assignment, $old);
+
+        return back()->with('success', 'Teacher subject assignment deleted.');
     }
 
     /** @return array<string, mixed> */
@@ -184,6 +248,9 @@ class SchoolAcademicController extends Controller
             'status' => ['required', Rule::in(['draft', 'open', 'closed'])],
             'notes' => ['nullable', 'string', 'max:3000'],
         ]);
+        if (! $request->has('required_periods_per_week')) {
+            unset($data['required_periods_per_week']);
+        }
 
         if (! empty($data['teacher_assignment_id'])) {
             $assignment = TeacherAssignment::query()->findOrFail($data['teacher_assignment_id']);
@@ -199,6 +266,43 @@ class SchoolAcademicController extends Controller
         $data['weight'] = $data['weight'] ?? 1;
 
         return $data;
+    }
+
+    /** @return array<string, mixed> */
+    private function assignmentCorrectionData(Request $request, TeacherAssignment $assignment): array
+    {
+        $data = $request->validate([
+            'subject_id' => ['required', 'integer', 'exists:subjects,id'],
+            'grade_id' => ['required', 'integer', 'exists:grades,id'],
+            'section_id' => ['nullable', 'integer', 'exists:sections,id'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        if (! Subject::query()->whereKey($data['subject_id'])->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages(['subject_id' => 'Choose an active subject for this teacher assignment.']);
+        }
+
+        $this->ensureSectionBelongsToGrade($data['section_id'] ?? null, $data['grade_id']);
+
+        $duplicate = TeacherAssignment::query()
+            ->where('academic_year_id', $assignment->academic_year_id)
+            ->where('teacher_id', $assignment->teacher_id)
+            ->where('subject_id', $data['subject_id'])
+            ->where('grade_id', $data['grade_id'])
+            ->where('section_id', $data['section_id'] ?? null)
+            ->whereKeyNot($assignment->id)
+            ->exists();
+
+        if ($duplicate) {
+            throw ValidationException::withMessages(['subject_id' => 'This teacher assignment already exists.']);
+        }
+
+        return [
+            'subject_id' => $data['subject_id'],
+            'grade_id' => $data['grade_id'],
+            'section_id' => $data['section_id'] ?? null,
+            'is_active' => $request->boolean('is_active'),
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -219,6 +323,28 @@ class SchoolAcademicController extends Controller
             throw ValidationException::withMessages(['subject_id' => 'Choose an active subject for this teacher assignment.']);
         }
         $this->ensureSectionBelongsToGrade($data['section_id'] ?? null, $data['grade_id']);
+        $data['is_active'] = $request->boolean('is_active', true);
+        $existingAssignments = TeacherAssignment::query()
+            ->where('academic_year_id', $data['academic_year_id'])
+            ->where('teacher_id', $data['teacher_id'])
+            ->when($assignment, fn ($query) => $query->whereKeyNot($assignment->id));
+        $existingLimit = $existingAssignments->where('is_active', true)->whereNotNull('weekly_period_limit')->min('weekly_period_limit');
+        if ($existingLimit !== null) {
+            if ($data['weekly_period_limit'] === null) {
+                $data['weekly_period_limit'] = (int) $existingLimit;
+            } elseif ((int) $data['weekly_period_limit'] !== (int) $existingLimit) {
+                throw ValidationException::withMessages(['weekly_period_limit' => 'Use the same weekly maximum for all assignments of this teacher.']);
+            }
+        }
+        if ($data['is_active'] && array_key_exists('required_periods_per_week', $data) && $data['weekly_period_limit'] !== null) {
+            $existingRequiredPeriods = (clone $existingAssignments)->where('is_active', true)->sum('required_periods_per_week');
+            $totalRequiredPeriods = $existingRequiredPeriods + (int) ($data['required_periods_per_week'] ?? 0);
+            if ($totalRequiredPeriods > (int) $data['weekly_period_limit']) {
+                throw ValidationException::withMessages([
+                    'required_periods_per_week' => "This teacher would have {$totalRequiredPeriods} required periods per week, exceeding the maximum of {$data['weekly_period_limit']}.",
+                ]);
+            }
+        }
         $duplicate = TeacherAssignment::query()
             ->where('academic_year_id', $data['academic_year_id'])
             ->where('teacher_id', $data['teacher_id'])
@@ -230,7 +356,6 @@ class SchoolAcademicController extends Controller
         if ($duplicate) {
             throw ValidationException::withMessages(['teacher_id' => 'This teacher assignment already exists.']);
         }
-        $data['is_active'] = $request->boolean('is_active', true);
 
         return $data;
     }

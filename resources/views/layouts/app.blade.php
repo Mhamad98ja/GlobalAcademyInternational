@@ -24,10 +24,8 @@
             'items' => [
                 ['route' => 'students.index', 'label' => 'Student Search', 'icon' => 'students', 'permission' => 'students.view'],
                 ['route' => 'attendance.students', 'label' => 'Manipulation absence', 'icon' => 'students', 'permission' => 'attendance.student.view'],
-                ['route' => 'reports.school', 'params' => ['report' => 'student_attendance'], 'label' => 'Attendance Reports', 'icon' => 'reports', 'permission' => 'reports.attendance.view'],
-                ['route' => 'medical.index', 'label' => 'Medical Reports', 'icon' => 'reports', 'permission' => 'reports.medical.view'],
-                ['route' => 'discipline.index', 'label' => 'Observations & Issues', 'icon' => 'reports', 'permission' => 'reports.discipline.view'],
-                ['route' => 'students.observations', 'label' => 'Observations Registry', 'icon' => 'reports', 'permission' => 'students.observations.view'],
+                ['route' => 'medical.index', 'label' => 'Medical Records', 'icon' => 'reports', 'permission' => 'reports.medical.view'],
+                ['route' => 'discipline.index', 'label' => 'Issues & Actions', 'icon' => 'reports', 'permission' => 'reports.discipline.view'],
                 ['route' => 'students.attestations', 'label' => 'Attestations', 'icon' => 'reports', 'permission' => 'students.attestations.view'],
             ],
             'groups' => [],
@@ -35,52 +33,7 @@
         'reports' => [
             'home' => ['route' => 'workspaces.show', 'params' => ['workspace' => 'academic'], 'label' => 'Dashboard', 'icon' => 'dashboard', 'permission' => 'dashboard.view'],
             'items' => [],
-            'groups' => [
-                ['label' => 'Reports', 'items' => [
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Report Card', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Individual Transcript', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Remarks Summary', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'General Transcript', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Progress Transcript', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Subjects List per Class', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Transcript by Subject Choice', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Student Ranking per Subject', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Subjects Transcript', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Official Statement', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Official Statement (MEHE)', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Student Performance', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Subject Averages per Class', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Failure per Subject', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Underachievers by Subject', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Annual Progression of Class Average', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Top 5 Students per Division', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Highest Grade per Subject', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Export Bacc Francais', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Best Annual Columns Transcript', 'icon' => 'reports', 'permission' => 'reports.view'],
-                ]],
-                ['label' => 'Statistical Reports', 'items' => [
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Students Transcript', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Grade Distribution', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Class Average Evolution', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Statistical Calculation', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Results Comparison Table', 'icon' => 'reports', 'permission' => 'reports.view'],
-                ]],
-                ['label' => 'Student Lists', 'items' => [
-                    ['route' => 'reports.index', 'params' => ['report' => 'student_information'], 'label' => 'Student Directory', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.index', 'params' => ['report' => 'students'], 'label' => 'Registration List', 'icon' => 'reports', 'permission' => 'reports.view'],
-                ]],
-                ['label' => 'School Records', 'items' => [
-                    ['route' => 'reports.school', 'params' => ['report' => 'student_attendance'], 'label' => 'Student Attendance', 'icon' => 'reports', 'permission' => 'reports.attendance.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'teacher_attendance'], 'label' => 'Teacher Attendance', 'icon' => 'reports', 'permission' => 'reports.attendance.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'incidents'], 'label' => 'Student Incidents and Actions', 'icon' => 'reports', 'permission' => 'reports.discipline.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'medical_records'], 'label' => 'Medical Records', 'icon' => 'reports', 'permission' => 'reports.medical.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'student_observations'], 'label' => 'Student Observations', 'icon' => 'reports', 'permission' => 'reports.observations.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'exam_absences'], 'label' => 'Exam Absences', 'icon' => 'reports', 'permission' => 'exam-absences.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'substitutions'], 'label' => 'Teacher Substitutions', 'icon' => 'reports', 'permission' => 'substitutions.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'teacher_workload'], 'label' => 'Teacher Workload', 'icon' => 'reports', 'permission' => 'reports.view'],
-                    ['route' => 'reports.school', 'params' => ['report' => 'grades'], 'label' => 'Grade Results', 'icon' => 'reports', 'permission' => 'grades.view'],
-                ]],
-            ],
+            'groups' => [],
         ],
         'administration' => [
             'home' => ['route' => 'workspaces.show', 'params' => ['workspace' => 'operations'], 'label' => 'Administration & Operations', 'icon' => 'dashboard', 'permission' => 'admin.view'],
@@ -89,9 +42,7 @@
                 ['route' => 'teachers.index', 'label' => 'Teachers List', 'icon' => 'teachers', 'permission' => 'people.view'],
                 ['route' => 'attendance.teachers', 'label' => 'Teacher Attendance', 'icon' => 'reports', 'permission' => 'attendance.teacher.view'],
                 ['route' => 'substitutions.index', 'label' => 'Teacher Substitutions', 'icon' => 'teachers', 'permission' => 'substitutions.view'],
-                ['route' => 'reports.school', 'params' => ['report' => 'teacher_workload'], 'label' => 'Teacher Workload', 'icon' => 'reports', 'permission' => 'reports.view'],
                 ['route' => 'timetable.index', 'label' => 'Timetable & Period Setup', 'icon' => 'academic', 'permission' => 'timetable.view'],
-                ['route' => 'admin.report-cards', 'label' => 'Annual & Partial Report Cards', 'icon' => 'reports', 'permission' => 'report-card.view'],
             ],
             'groups' => [
                 ['label' => 'References', 'items' => [
@@ -120,51 +71,6 @@
     ];
     $moduleMenus['students']['groups'] = collect(\App\Support\StudentDossierNavigation::sections())
         ->map(fn (array $section) => ['label' => $section['label'], 'items' => $section['items']])->values()->all();
-    $reportMenu = [
-        'Report Card' => ['key' => 'report-card', 'label' => 'Bulletin Scolaire'],
-        'Individual Transcript' => ['key' => 'individual-transcript', 'label' => 'Livret Individuel'],
-        'Remarks Summary' => ['key' => 'remarks-summary', 'label' => 'Relevé des Observations'],
-        'General Transcript' => ['key' => 'general-transcript', 'label' => 'Relevé des Notes'],
-        'Progress Transcript' => ['key' => 'progress-transcript', 'label' => 'Relevé du Progrès'],
-        'Subjects List per Class' => ['key' => 'subjects-list-per-class', 'label' => 'Relevé des Matières par Classe'],
-        'Transcript by Subject Choice' => ['key' => 'transcript-by-subject-choice', 'label' => 'Relevé par Choix de Matières'],
-        'Student Ranking per Subject' => ['key' => 'student-ranking-per-subject', 'label' => 'Rang des Étudiants par Matière'],
-        'Subjects Transcript' => ['key' => 'subjects-transcript', 'label' => 'Relevé des Matières'],
-        'Official Statement' => ['key' => 'official-statement', 'label' => 'Relevé Officiel'],
-        'Official Statement (MEHE)' => ['key' => 'official-statement-mehe', 'label' => 'Relevé Officiel (MEHE)'],
-        'Student Performance' => ['key' => 'student-performance', 'label' => 'Performance des Étudiants'],
-        'Subject Averages per Class' => ['key' => 'subject-averages-per-class', 'label' => 'Moyenne des Matières par Classe'],
-        'Failure per Subject' => ['key' => 'failure-per-subject', 'label' => 'Échec par Matière'],
-        'Underachievers by Subject' => ['key' => 'underachievers-by-subject', 'label' => 'Sous-Performances par Matière'],
-        'Annual Progression of Class Average' => ['key' => 'annual-progression-of-class-average', 'label' => 'Progression Annuelle de la Moyenne de la Classe'],
-        'Top 5 Students per Division' => ['key' => 'top-5-students-per-division', 'label' => 'Meilleurs 5 Élèves par Division'],
-        'Highest Grade per Subject' => ['key' => 'highest-grade-per-subject', 'label' => 'La Plus Haute Note par Matière'],
-        'Export Bacc Francais' => ['key' => 'export-bacc-francais', 'label' => 'Export Bacc Francais'],
-        'Best Annual Columns Transcript' => ['key' => 'best-annual-columns-transcript', 'label' => 'Relevé des meilleures colonnes annuelles'],
-        'Students Transcript' => ['key' => 'students-transcript', 'label' => 'Relevé des Notes des Élèves'],
-        'Grade Distribution' => ['key' => 'grade-distribution', 'label' => 'Répartition des Notes'],
-        'Class Average Evolution' => ['key' => 'class-average-evolution', 'label' => 'Évolution de la Moyenne'],
-        'Statistical Calculation' => ['key' => 'statistical-calculation', 'label' => 'Calcul Statistique'],
-        'Results Comparison Table' => ['key' => 'results-comparison-table', 'label' => 'Tableau Comparatif des Résultats'],
-    ];
-    $moduleMenus['reports']['home'] = ['route' => 'reports.school', 'params' => ['report' => 'student_attendance'], 'label' => 'Accueil', 'icon' => 'dashboard', 'permission' => 'reports.view'];
-    foreach ($moduleMenus['reports']['groups'] as &$reportGroup) {
-        $reportGroup['label'] = match ($reportGroup['label']) {
-            'Reports' => 'Rapports',
-            'Statistical Reports' => 'Rapports Statistiques',
-            'Student Lists' => 'Listes des élèves',
-            'School Records' => 'Dossiers scolaires',
-            default => $reportGroup['label'],
-        };
-        foreach ($reportGroup['items'] as &$reportItem) {
-            if (isset($reportMenu[$reportItem['label']])) {
-                $reportItem['report'] = $reportMenu[$reportItem['label']]['key'];
-                $reportItem['label'] = $reportMenu[$reportItem['label']]['label'];
-            }
-        }
-        unset($reportItem);
-    }
-    unset($reportGroup);
     $adminMenu = [
         'School Year' => ['page' => 'school-year', 'label' => 'Année Scolaire'],
         'Menu' => ['page' => 'menu', 'label' => 'Menu'],
@@ -251,34 +157,6 @@
         unset($collaborationItem);
     }
     unset($collaborationGroup);
-    // The legacy navigation definitions above retain their original route labels,
-    // but every label displayed by SBM is normalized to English here.
-    $reportLabels = [
-        'report-card' => 'Report Card', 'individual-transcript' => 'Individual Transcript', 'remarks-summary' => 'Remarks Summary',
-        'general-transcript' => 'General Transcript', 'progress-transcript' => 'Progress Transcript', 'subjects-list-per-class' => 'Subjects List per Class',
-        'transcript-by-subject-choice' => 'Transcript by Subject Choice', 'student-ranking-per-subject' => 'Student Ranking per Subject',
-        'subjects-transcript' => 'Subjects Transcript', 'official-statement' => 'Official Statement', 'official-statement-mehe' => 'Official Statement (MEHE)',
-        'student-performance' => 'Student Performance', 'subject-averages-per-class' => 'Subject Averages per Class', 'failure-per-subject' => 'Failure per Subject',
-        'underachievers-by-subject' => 'Underachievers by Subject', 'annual-progression-of-class-average' => 'Annual Progression of Class Average',
-        'top-5-students-per-division' => 'Top 5 Students per Division', 'highest-grade-per-subject' => 'Highest Grade per Subject',
-        'export-bacc-francais' => 'Export French Baccalaureate', 'best-annual-columns-transcript' => 'Best Annual Columns Transcript',
-        'students-transcript' => 'Students Transcript', 'grade-distribution' => 'Grade Distribution', 'class-average-evolution' => 'Class Average Evolution',
-        'statistical-calculation' => 'Statistical Calculation', 'results-comparison-table' => 'Results Comparison Table',
-    ];
-    foreach ($moduleMenus['reports']['groups'] as &$group) {
-        $group['label'] = match ($group['label']) {
-            'Rapports' => 'Reports',
-            'Rapports Statistiques' => 'Statistical Reports',
-            'Listes des élèves' => 'Student Lists',
-            'Dossiers scolaires' => 'School Records',
-            default => $group['label'],
-        };
-        foreach ($group['items'] as &$item) {
-            if (isset($item['report'], $reportLabels[$item['report']])) $item['label'] = $reportLabels[$item['report']];
-        }
-        unset($item);
-    }
-    unset($group);
     $moduleMenus['reports']['home']['label'] = 'Home';
     $adminLabels = ['school-year' => 'School Year', 'menu' => 'Menu', 'pages' => 'Pages', 'report-header' => 'Report Header', 'configuration' => 'Configuration', 'dynamic-fields' => 'Dynamic Fields', 'dictionary' => 'Dictionary', 'family-type' => 'Family Type', 'family-remark-type' => 'Family Remark Type', 'colleges' => 'Schools', 'import' => 'Import', 'file-category' => 'File Category', 'mail-type' => 'Message Type'];
     foreach ($moduleMenus['administration']['groups'] as &$group) {
@@ -318,7 +196,7 @@
     $moduleMenus['reports'] = [
         'home' => ['route' => 'workspaces.show', 'params' => ['workspace' => 'academic'], 'label' => 'Academic & Report Card', 'icon' => 'dashboard', 'permission' => 'dashboard.view'],
         'items' => [
-            ['route' => 'reports.index', 'label' => 'Academic Reports', 'icon' => 'reports', 'permission' => 'reports.view'],
+            ['route' => 'reports.index', 'label' => 'Reports', 'icon' => 'reports', 'permission' => 'reports.view'],
             ['route' => 'school-academic.index', 'label' => 'Academic Operations', 'icon' => 'academic', 'permission' => 'academic_year.manage'],
         ],
         'groups' => [],
@@ -353,9 +231,6 @@
         'Registration Report' => url('/StudentProfile/Reports/RptInsReports.aspx?pid=2128'),
         'Dynamic Reports' => url('/StudentProfile/Reports/StudentFamilyReport.aspx'),
     ];
-    $darsReportPaths = [
-        'Report Card' => '/ReportCard/Reports/PreviewReportCard.aspx', 'Individual Transcript' => '/ReportCard/NotBulletinRechercheEleve.aspx', 'Remarks Summary' => '/ReportCard/Reports/rptNotRemarques.aspx', 'General Transcript' => '/ReportCard/Reports/rptNotReleveGen.aspx', 'Progress Transcript' => '/ReportCard/Reports/rptNotReleveGenProgress.aspx', 'Subjects List per Class' => '/ReportCard/Reports/rptNotBulletinCondensee.aspx', 'Transcript by Subject Choice' => '/ReportCard/Reports/rptNotBulletinCondenseChoix.aspx', 'Student Ranking per Subject' => '/ReportCard/Reports/RptNotListeClassement.aspx', 'Subjects Transcript' => '/ReportCard/Reports/rptNotReleveMatiere.aspx', 'Official Statement' => '/ReportCard/Reports/rptNotReleveMatiere_Ar.aspx', 'Official Statement (MEHE)' => '/ReportCard/Reports/RptNotNoteOfficielle.aspx', 'Student Performance' => '/ReportCard/Reports/RptNotAchievement.aspx', 'Subject Averages per Class' => '/ReportCard/Reports/rptNotMoyenneClasseMatiere.aspx', 'Failure per Subject' => '/ReportCard/Reports/rptNotNbFailures.aspx', 'Underachievers by Subject' => '/ReportCard/Reports/RptNotUnderachievers.aspx', 'Annual Progression of Class Average' => '/ReportCard/Reports/Not_Rpt_MoyenneEvolution.aspx', 'Top 5 Students per Division' => '/ReportCard/Reports/Not_Rpt_ClassTop5.aspx', 'Highest Grade per Subject' => '/ReportCard/Reports/RptClassTop1BySubject.aspx', 'Export Bacc Francais' => '/ReportCard/Reports/ExportBaccFrancais.aspx', 'Best Annual Columns Transcript' => '/ReportCard/Reports/rptMeilleureColonneAnnuelle.aspx', 'Students Transcript' => '/ReportCard/Reports/rptNotStatNotePerClasse.aspx', 'Grade Distribution' => '/ReportCard/Reports/rptNotCalculStatistiqueColonne.aspx', 'Class Average Evolution' => '/ReportCard/Reports/rptNotStatMoyenneClasse.aspx', 'Statistical Calculation' => '/ReportCard/Reports/RptNotCalculStatistique.aspx', 'Results Comparison Table' => '/ReportCard/Reports/rptNotStatMatiereEvolution.aspx',
-    ];
     $darsAdministrationPaths = ['Users and Roles' => '/Admin/Users.aspx', 'School Year' => '/StudentProfile/References/SchoolYear.aspx', 'Menu' => '/Admin/UsrMenu.aspx', 'Pages' => '/Admin/UsrManagePages.aspx', 'Report Header' => '/Admin/HeaderParameter.aspx', 'Configuration' => '/Admin/UserConfig.aspx', 'Dynamic Fields' => '/Admin/UsrDynamicFields.aspx', 'Dictionary' => '/Admin/Dictionary.aspx', 'Family Type' => '/StudentProfile/References/FamilyType.aspx', 'Family Remark Type' => '/StudentProfile/References/ParentRemarkType.aspx', 'Colleges' => '/Admin/Usrcollege.aspx', 'Import' => '/Admin/ImportData.aspx', 'File Category' => '/Admin/UsrFileCategory.aspx', 'Mail Type' => '/Admin/Ent_MailType.aspx'];
     $darsCollaborationPaths = ['Home' => '/Online/Admin/admHome.aspx', 'Teachers List' => '/Online/Front/TeachersList.aspx', 'Course Content' => '/Online/Timeline/CourseContent.aspx', 'Messages' => '/Online/Mail/MailBox.aspx', 'Calendar' => '/Online/mail/Calendar.aspx', 'Performance Appraisals' => '/Online/Eval/evalPaRecords.aspx', 'Students' => '/Online/Front/SearchStudent.aspx', 'Performance Dashboard' => '/Online/PerformanceDashboard/PerformanceDashboard.aspx', 'Dashboard' => '/Online/Eval/evalTeacherDashboard.aspx', 'Evaluation Grades' => '/Online/Eval/evalList.aspx', 'Grade Book' => '/Online/Eval/evalTeacher.aspx', 'Evaluations List' => '/Online/eval/evalRptListEvaluations.aspx', 'Student Failures' => '/Online/Eval/EvalRptEleveEchoue.aspx', 'Modification Requests' => '/Online/Eval/evalEleveEvaluationLog.aspx', 'Transcript by Subject Choice' => '/Online/Eval/EvalRptClasseMatieresColonne.aspx', 'Evaluation Statement' => '/Online/front/evalparclasse.aspx', 'Homework' => '/Online/Agenda/agendaTeacherPrincipal.aspx', 'Homework Report' => '/Online/Agenda/RptAgenda.aspx', 'Homework Report Totals' => '/Online/Agenda/RptAgendaProfCount.aspx', 'Homework Comparison' => '/Online/Agenda/RptAgendaComparaison.aspx', 'Skills per Student' => '/Online/Competence/CmpEleves.aspx', 'Skills to Approve' => '/Online/Competence/CmpFillCompetencePrincipal.aspx', 'Remarks to Approve' => '/Online/Competence/CmpFillRemarquePrincipal.aspx', 'Item Remarks' => '/Online/Competence/CmpFillRemarks.aspx', 'Remarks per Class' => '/Online/Front/RptEleveClasseRemarque.aspx', 'Cycle Principal Appreciations' => '/Online/Front/RemarquePrincipalParClasse.aspx', 'Remarks Entry' => '/Online/Front/RemarquePrincipalParClasseManipulation.aspx', 'Attendance Management' => '/Online/Front/StudentsAttendance.aspx', 'Standards' => '/Online/Admin/courseStandard.aspx', 'Report Card Acknowledgment of Receipt' => '/Online/Admin/RptReportCardView.aspx', 'Icons' => '/Online/Admin/AdmEntFileTypeIcon.aspx', 'System Error Log' => '/Online/Admin/admUsrErrorLog.aspx', 'Bulk Message' => '/Online/Mail/TemplateMessage.aspx'];
     // The sidebar is the primary way through the application. Always use the
@@ -367,8 +242,6 @@
             $url = route('collaboration.section', ['section' => $item['collabPage']]);
         } elseif (! $url && $module === 'administration' && isset($item['adminPage'])) {
             $url = route('admin.dars.show', ['page' => $item['adminPage']]);
-        } elseif (! $url && $module === 'reports' && isset($item['report'])) {
-            $url = route('report-card.show', ['report' => $item['report']]);
         } else {
             $url ??= route($item['route'], $item['params'] ?? []);
         }
@@ -383,10 +256,8 @@
          ? request()->routeIs('admin.dars.show') && request()->route('page') === $item['adminPage']
          : (($module === 'administration' && in_array($item['label'], $darsAdministrationLabels, true))
          ? request()->routeIs('admin.dars.show') && request()->route('page') === \Illuminate\Support\Str::slug($item['label'])
-         : (($module === 'reports' && isset($item['report']))
-             ? request()->routeIs('report-card.show') && request()->route('report') === $item['report']
-             : request()->routeIs($item['route']) && !isset($item['url']))))))
-        && (isset($item['report']) || collect($item['params'] ?? [])->every(fn ($value, $key) => (string) (request()->route($key) ?? request($key)) === (string) $value));
+         : request()->routeIs($item['route']) && !isset($item['url'])))))
+        && collect($item['params'] ?? [])->every(fn ($value, $key) => (string) (request()->route($key) ?? request($key)) === (string) $value);
     $moduleContext = match ($module) {
         'students' => ['label' => 'Student Records', 'route' => route('students.index')],
         'reports' => ['label' => 'Academic & Report Card', 'route' => route('workspaces.show', ['workspace' => 'academic'])],

@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\Assessment;
 use App\Models\CourseContent;
 use App\Models\SchoolAnnouncement;
+use App\Models\SchoolMessageRecipient;
 use App\Models\Student;
 use App\Models\StudentRegistration;
 use App\Models\SchoolEvent;
@@ -29,6 +30,13 @@ class StudentPortalController extends Controller
             ->where('status', 'active')
             ->whereHas('academicYear', fn (Builder $years) => $years->where('status', 'open'))
             ->latest('registered_on')
+            ->get();
+        $registrationHistory = StudentRegistration::query()
+            ->with('academicYear', 'grade', 'section')
+            ->where('student_id', $student->id)
+            ->where('status', 'active')
+            ->latest('registered_on')
+            ->latest('id')
             ->get();
         $exemptions = $student->subjectExemptions()->get();
         $isExempt = static fn (int $registrationId, ?int $subjectId): bool => $subjectId !== null
@@ -147,6 +155,15 @@ class StudentPortalController extends Controller
             ->reject(fn ($notification) => $isExempt((int) ($notification->data['student_registration_id'] ?? 0), isset($notification->data['subject_id']) ? (int) $notification->data['subject_id'] : null))
             ->take(20);
 
-        return view('student-portal.index', compact('student', 'registrations', 'contents', 'assessments', 'publishedGrades', 'notifications', 'announcements', 'events'));
+        $messages = SchoolMessageRecipient::query()
+            ->where('recipient_id', $user->id)
+            ->where('is_archived', false)
+            ->with(['message' => fn ($messages) => $messages->withoutGlobalScopes()->with('sender')])
+            ->latest('id')
+            ->take(12)
+            ->get();
+        $unreadMessages = $messages->whereNull('read_at')->count();
+
+        return view('student-portal.index', compact('student', 'registrations', 'registrationHistory', 'contents', 'assessments', 'publishedGrades', 'notifications', 'announcements', 'events', 'messages', 'unreadMessages'));
     }
 }
